@@ -1,6 +1,6 @@
 # [PROJET EN COURS]
 
-# Appariateur d'entités 
+# The Magical CSV Merge Machine
 
 [Objectif](http://www.gouvernement.fr/entrepreneur-interet-general) (onglet Ministère de la recherche)
 
