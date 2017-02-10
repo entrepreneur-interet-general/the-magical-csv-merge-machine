@@ -20,7 +20,7 @@ Vous pouvez trouver [la définition officielle de l'objectif du projet](http://w
 
 ## Qu'est ce qu'on a pour l'instant?
 
-Ce README...
+Ce README... Vous pouvez [suivre les travaux en cours](https://github.com/eig-2017/the-magical-csv-merge-machine/projects) et [faire des remarques (laisser des issues)](https://github.com/eig-2017/the-magical-csv-merge-machine/issues).
 
 # Contexte
 Ce projet est développé de Janvier à Novembre 2017 dans le cadre du [programme d'entrepreneur d'intérêt général](https://www.etalab.gouv.fr/decouvrez-la-1e-promotion-des-entrepreneurs-dinteret-general) au sein du département outils d'aide à la décision du Ministere de l'éducation nationale, de l'enseignement supérieur et de la recherche.
