@@ -8,7 +8,7 @@ Dans le contexte d'études statistiques, il est souvent nécessaire de recouper 
 
 ## Objectif
 
-L'objectif de ce projet est de créer une **API** ainsi qu'une **interface web** permettant d'apparier automatiquement des données csv sales à un réferentiel propre. Le service devra aussi pouvoir être installé et tourner localement (pour les utilisateurs ayant des données confidentielles). Nous projettons de proposer plusieurs sous-services:
+L'objectif de ce projet est de créer une **API** ainsi qu'une **interface web** permettant d'apparier automatiquement des données csv sales à un réferentiel propre. Le service devra aussi pouvoir être installé et **tourner localement** (pour les utilisateurs ayant des données confidentielles). Nous projettons de proposer plusieurs sous-services:
 
 - Détection (et remplacement) de valeurs représentant des valeurs manquantes (remplacer "no value" par "")
 - Identification du type sémantique des colonnes (adresse, nom de personne, nom d'entreprise, téléphone, etc.)
