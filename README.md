@@ -18,8 +18,6 @@ L'objectif de ce projet est de créer une API ainsi qu'une interface web permett
 
 Vous pouvez trouver [la définition officielle de l'objectif du projet](http://www.gouvernement.fr/entrepreneur-interet-general) (onglet Ministère de la recherche). 
 
-# [Wiki](https://github.com/eig-2017/the-magical-csv-merge-machine/wiki)
-
 ## Qu'est ce qu'on a pour l'instant?
 
 Ce README...
