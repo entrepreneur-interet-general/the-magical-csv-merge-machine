@@ -6,6 +6,19 @@
 
 Dans le contexte d'études statistiques, il est souvent nécessaire de recouper des données issues de sources diverses. Cependant, trop souvent, deux tables de données ne possèdent pas de clé en commun et les données qui permettraient une jointure ne sont pas exprimées de façon identique (fautes d'ortographe, abbréviations, etc.), ce qui rend difficile l'exploitation des données. Le nettoyage manuel est très chronophage voire impossible dans certains cas...
 
+Concrètement: Comment apparier automatiquement
+
+|Nom officiel | Adresse  | Ville |
+|---|---|---|
+| Société Française de Ramonage | 2 rue du Beffroy | Orsay |
+
+et
+
+| NOM | RUE | VILLE |
+|---|---|---|
+|s.f. rammonage| rue du beffroy, 2 | orsay |
+
+
 ## Objectif
 
 L'objectif de ce projet est de créer une **API** ainsi qu'une **interface web** permettant d'apparier automatiquement des données csv sales à un réferentiel propre. Le service devra aussi pouvoir être installé et **tourner localement** (pour les utilisateurs ayant des données confidentielles). Nous projettons de proposer plusieurs sous-services:
