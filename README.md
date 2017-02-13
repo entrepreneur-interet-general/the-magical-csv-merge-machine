@@ -6,7 +6,7 @@
 
 Dans le contexte d'études statistiques, il est souvent nécessaire de recouper des données issues de sources diverses. Cependant, trop souvent, deux tables de données ne possèdent pas de clé en commun et les données qui permettraient une jointure ne sont pas exprimées de façon identique (fautes d'ortographe, abbréviations, etc.), ce qui rend difficile l'exploitation des données. Le nettoyage manuel est très chronophage voire impossible dans certains cas...
 
-**Concrètement**: Comment apparier automatiquement
+**Concrètement**: Comment apparier automatiquement ?
 
 |Nom officiel | Adresse  | Ville | /// | NOM | RUE | VILLE |
 |---|---|---|---|---|---|---|
