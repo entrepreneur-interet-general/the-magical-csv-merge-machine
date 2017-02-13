@@ -8,15 +8,13 @@ Dans le contexte d'études statistiques, il est souvent nécessaire de recouper 
 
 **Concrètement**: Comment apparier automatiquement
 
-|Nom officiel | Adresse  | Ville |
-|---|---|---|
-| Société Française de Ramonage | 2 rue du Beffroy | Orsay |
+|Nom officiel | Adresse  | Ville | /// | NOM | RUE | VILLE |
+|---|---|---|---|---|---|---|
+| Société Française de Ramonage | 2 rue du Beffroy | Orsay | avec |s.f. rammonage| rue du beffroy, 2 | orsay |
 
-**et**
 
-| NOM | RUE | VILLE |
-|---|---|---|
-|s.f. rammonage| rue du beffroy, 2 | orsay |
+
+
 
 
 ## Objectif
