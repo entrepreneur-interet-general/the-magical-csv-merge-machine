@@ -8,9 +8,9 @@ Dans le contexte d'études statistiques, il est souvent nécessaire de recouper 
 
 **Concrètement**: Comment apparier automatiquement ?
 
-|Nom officiel | Adresse  | Ville | /// | NOM | RUE | VILLE |
-|---|---|---|---|---|---|---|
-| Société Française de Ramonage | 2 rue du Beffroy | Orsay | avec |s.f. rammonage| rue du beffroy, 2 | orsay |
+|Nom officiel | Adresse  | Ville |   | avec |  | NOM | RUE | VILLE |
+|---|---|---|---|---|---|---|---|---|
+| Société Française de Ramonage | 2 rue du Beffroy | Orsay |  | ... |  | s.f. rammonage| rue du beffroy, 2 | orsay |
 
 
 
