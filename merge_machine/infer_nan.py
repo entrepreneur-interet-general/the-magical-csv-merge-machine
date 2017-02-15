@@ -6,17 +6,14 @@ Created on Thu Feb  2 12:11:07 2017
 @author: leo
 
 Take table data and infer values that represent missing data to replace by 
-standard missing data.
+standard values for missing data.
 
 Examples of missing data that can be found:
-    - "XXX"
-    - "NO_ADDR"
-    - "999999"
-    - "NONE"
-    - "-"
-    
-    
-    
+    - 'XXX'
+    - 'NO_ADDR'
+    - '999999'
+    - 'NONE'
+    - '-' 
 """
 
 import string
@@ -62,7 +59,7 @@ def mv_from_len_diff(top_values, score=1):
     return []
 
 def mv_from_len_ratio(top_values, score=0.2):
-    """Check if value is much shorter than others"""
+    """Check if one value is much shorter than others"""
     # Compute lengths of values
     lengths = pd.Series([len(x) for x in top_values.index], index=top_values.index)
     
@@ -76,7 +73,7 @@ def mv_from_len_ratio(top_values, score=0.2):
 
 
 def mv_from_not_digit(top_values, score=1):
-    """Check if value is the only not digit"""
+    """Check if one value is the only not digit"""
     is_digit = pd.Series([x.replace(',', '').replace('.', '').isdigit() 
                         for x in top_values.index], index=top_values.index)
     if len(top_values) >= 3:
@@ -162,9 +159,12 @@ def correct_score(list_of_possible_mvs, probable_mvs):
     new_list_of_possible_mvs_tmp = dict()
     for (val, coef, orig) in list_of_possible_mvs:
         if val not in new_list_of_possible_mvs_tmp:
-            new_list_of_possible_mvs_tmp[val] = coef
+            new_list_of_possible_mvs_tmp[val] = dict()
+            new_list_of_possible_mvs_tmp[val]['score'] = coef
+            new_list_of_possible_mvs_tmp[val]['origin'] = [orig] 
         else:
-            new_list_of_possible_mvs_tmp[val] += coef
+            new_list_of_possible_mvs_tmp[val]['score'] += coef
+            new_list_of_possible_mvs_tmp[val]['origin'].append(orig)                           
                                     
     # NB: Taken care of in mv_from_usual_forms
     #        # If the value is a known form of mv, increase probability 
@@ -173,8 +173,8 @@ def correct_score(list_of_possible_mvs, probable_mvs):
 
     # Reformat output like input
     new_list_of_possible_mvs = []
-    for val, coef in new_list_of_possible_mvs_tmp.iteritems():
-        new_list_of_possible_mvs.append((val, coef, 'unknown'))
+    for val, _dict in new_list_of_possible_mvs_tmp.iteritems():
+        new_list_of_possible_mvs.append((val, _dict['score'], _dict['origin']))
     
     return new_list_of_possible_mvs
 
@@ -239,7 +239,7 @@ def replace_mvs(tab, mvs_dict, thresh=0.6):
 
 if __name__ == '__main__':
     
-    file_paths = ['data/test_dedupe/participants.csv']
+    file_paths = ['../../data/test_dedupe/participants.csv']
     file_path = file_paths[-1] # Path to file to test
     
     nrows = 100000 # How many lines of the file to read for inference
