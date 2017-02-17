@@ -188,6 +188,8 @@ def infer_mvs(tab, probable_mvs=[u'nan'], always_mvs=[u''], num_top_values=10):
     # Look at each column and infer mv
     for col, top_values in all_top_values.iteritems():
         col_mvs[col] = []
+        if top_values.iloc[0] == 1:
+            continue
         col_mvs[col].extend(mv_from_len_diff(top_values))
         col_mvs[col].extend(mv_from_len_ratio(top_values))
         col_mvs[col].extend(mv_from_not_digit(top_values))
@@ -239,7 +241,7 @@ def replace_mvs(tab, mvs_dict, thresh=0.6):
 
 if __name__ == '__main__':
     
-    file_paths = ['../../data/test_dedupe/participants.csv']
+    file_paths = ['../../data/test_dedupe/participants.csv', '../../data/test/etablissements/bce_data_norm.csv']
     file_path = file_paths[-1] # Path to file to test
     
     nrows = 100000 # How many lines of the file to read for inference
