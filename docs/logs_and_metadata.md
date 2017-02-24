@@ -4,12 +4,15 @@
 
 ```
 {
-timestamp: 1487940990.422995 # Creation time
-user_id: ??? # If we track users
-log:[ # List of modules that were executed with what source files (from what module). was there an error
+timestamp: 1487940990.422995, # Creation time
+user_id: ???, # If we track users
+use_internal_ref: True,
+internal_ref_name: sirene,
+source_log:[ # List of modules that were executed with what source files (from what module). was there an error
     {source_file: "source_id_1", module: "load", timestamp: 1487949990.422995, origin: "source_file", error:False},
     {source_file: "source_id_1", module: "missing_values", timestamp: 1487949990.422995, origin: "load", error:False}
     ]
+ref_log:[]
 ]
 }
 ```
