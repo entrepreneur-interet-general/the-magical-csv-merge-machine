@@ -19,7 +19,7 @@ request_json = {
                         [
                         {name: load, infer:False, params:{encoding:'utf-8', separator:';'}},
                         {name: missing_values, infer: False, params:{...}},
-                        # no recoding will be done as we did not include this module
+                        # no "recoding" will be done as we did not include this module
                         ], 
                     # Pre-processing for ref (only if referential is not internal)
                      (ref:
