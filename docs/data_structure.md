@@ -5,9 +5,11 @@ data/
     projects/
         proj_1/ # Unique Id for each project (1 referential and 1 type of source)
             source/
-                source_id.csv # Initial file uploaded by user
-                (source_id_2.csv) # Tbd later (if we want to re-use infered and user params)
                 metadata.json # Original file name / list of modules that were completed, in what order / list of file names
+                INIT/ # Raw files as they were uploaded
+                    source_id.csv # Initial file uploaded by user
+                    (source_id_2.csv) # Tbd later (if we want to re-use infered and user params)
+                    run_info.json
                 load/ # Encoding + separator
                     infered_params.json
                     user_params.json
@@ -30,7 +32,8 @@ data/
                     run_info.json
         
             (ref/) # Only if user uploads his own referential # Same structure as source/
-                ref_id.csv
+                INIT/
+                    ref_id.csv
                 [...] # Same as source
                 
             dedupe/
