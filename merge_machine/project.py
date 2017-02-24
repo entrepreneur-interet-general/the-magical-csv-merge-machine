@@ -22,6 +22,15 @@ project_id:347a7ba113a8cb3863b0c40246ec9098
 ]
 }
 
+IDEAS:
+    - split file
+    - 
+
+TODO:
+    - File load
+    - Module transform
+    - Make generic api call for single module
+    - delete 
 """
 
 import hashlib
@@ -30,12 +39,14 @@ import os
 import random
 import time
 
+DATA_PATH = 'data'
+
 def path_to_ref(referential_name, module_name='', file_name=''):
     '''
     Return path to directory that stores specific information for stored
     canonical_data
     '''
-    dir_path = os.path.join('data', 'referentials', referential_name, module_name, file_name)
+    dir_path = os.path.join(DATA_PATH, 'referentials', referential_name, module_name, file_name)
     return os.path.abspath(dir_path)
 
 def gen_proj_id():
@@ -46,11 +57,15 @@ def gen_proj_id():
     project_id = h.hexdigest()
     return project_id
 
-
-
 def check_file_role(file_role):
     if file_role not in ['ref', 'source']:
         raise Exception('"file_role" is either "source" or "ref"')
+
+def allowed_file(filename):
+    '''Check if file name is correct'''
+    # Check if extension is .csv
+    return filename[-4:] == '.csv'
+    
 
 class Project():
     def __init__(self, project_id=None):
@@ -82,6 +97,11 @@ class Project():
         # Create metadata
         self.metadata = self.create_metadata()
         self.write_metadata()   
+
+    def delete_project(self):
+        '''Deletes entire folder containing the project'''
+        path_to_proj = self.path_to()
+        os.remove(path_to_proj)
     
     def path_to(self, file_role='', module_name='', file_name=''):
         '''
@@ -89,7 +109,7 @@ class Project():
         module
         '''
         #assert all((not x[-1]) or all(x[:-1]) for i in [[project_id, file_role, module_name, file_name][:i] for i in range(4)]) 
-        dir_path = os.path.join('data', 'projects', self.project_id, file_role, module_name, file_name)
+        dir_path = os.path.join(DATA_PATH, 'projects', self.project_id, file_role, module_name, file_name)
         return os.path.abspath(dir_path)
     
     def add_table(self, file, file_role, file_name):
@@ -132,7 +152,6 @@ class Project():
         '''
         check_file_role(file_role)
 
-            
         # Check that original source file exists (TODO: should check in log instead ?)
         if not os.path.isfile(self.path_to(file_role=file_role, file_name=file_name)):
             raise Exception('{0} (as: {1}) could not be found in project'.format(file_name, file_role))
@@ -146,14 +165,18 @@ class Project():
                 break
         return module_name
             
-    
-    def run_single_module(self):
+    def run_on_single_file(self, file_role, module_name, file_name):
         '''Run module on single file'''
         print ''
+        
+        
+        
+        
+        # TODO: update metadata and write
         
     
 if __name__ == '__main__':
     # Try creating a project
-    proj = Project()
-    project_id = proj.project_id
-    proj_2 = Project(project_id)
+    
+    project_id = "347a7ba113a8cb3863b0c40246ec9098"
+    proj = Project(project_id)
