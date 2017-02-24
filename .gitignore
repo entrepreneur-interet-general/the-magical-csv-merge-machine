@@ -4,3 +4,4 @@ data*
 *.xml
 *.pyc
 secret_key.txt
+local_test_data
