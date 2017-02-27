@@ -7,33 +7,33 @@ data/
             metadata.json # Original file name / list of modules that were completed, in what order / list of file names
             source/
                 INIT/ # Raw files as they were uploaded
-                    source_id.csv # Initial file uploaded by user
-                    (source_id_2.csv) # Tbd later (if we want to re-use infered and user params)
+                    source_name.csv # Initial file uploaded by user
+                    (source_2.csv) # Tbd later (if we want to re-use infered and user params)
                     run_info.json
                 load/ # Encoding + separator
                     infered_params.json
                     user_params.json
-                    source_id.csv # File after transformation
+                    source_name.csv # File after transformation
                     run_info.json
                 missing_values/
                     infered_params.json
                     user_params.json
-                    source_id.csv
+                    source_name.csv
                     run_info.json                    
                 recoding/ # Cleaning & normalisation
                     infered_params.json
-                    user_params.json
-                    source_id.csv
+                    source_name.json
+                    source.csv
                     run_info.json
                 (other_pre_processing/)
                     infered_params.json
                     user_params.json
-                    source_id.csv
+                    source_name.csv
                     run_info.json
         
             (ref/) # Only if user uploads his own referential # Same structure as source/
                 INIT/
-                    ref_id.csv
+                    ref.csv
                 [...] # Same as source
                 
             dedupe/
