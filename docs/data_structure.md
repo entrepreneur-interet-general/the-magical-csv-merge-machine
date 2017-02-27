@@ -4,8 +4,8 @@
 data/
     projects/
         proj_1/ # Unique Id for each project (1 referential and 1 type of source)
+            metadata.json # Original file name / list of modules that were completed, in what order / list of file names
             source/
-                metadata.json # Original file name / list of modules that were completed, in what order / list of file names
                 INIT/ # Raw files as they were uploaded
                     source_id.csv # Initial file uploaded by user
                     (source_id_2.csv) # Tbd later (if we want to re-use infered and user params)
