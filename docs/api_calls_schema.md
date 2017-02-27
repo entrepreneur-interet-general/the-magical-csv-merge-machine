@@ -1,13 +1,19 @@
 # Pseudo API request for the main recoding service
 
+Use `POST` request to post the following fields:
+
+- `request_json`: (see below) json with the run parameters
+- `source`: (optional) csv file to upload to source
+- `ref`: (optional) csv file to upload to reference
+
 ```
 request_json = {
                 # What data to use / can be combined with passing file through POST
                 data:{
                       project_id:ABC, 
                       # Use source from given project, as was computed in module (or by default, in last module)
-                      source: {name: my_source, (module:example_module)}, 
-                      ref: {name: sirene, internal:True}
+                      source: {file_name: my_source, (module:example_module)}, 
+                      ref: {file_name: sirene, internal:True}
                       }
                 
                 # Module params (indicates what modules to use, with what parameters) 
@@ -17,8 +23,8 @@ request_json = {
                     # Pre-processing for source
                     source:
                         [
-                        {name: load, infer:False, params:{encoding:'utf-8', separator:';'}},
-                        {name: missing_values, infer: False, params:{...}},
+                        {module_name: load, infer:False, params:{encoding:'utf-8', separator:';'}},
+                        {module_name: missing_values, infer: False, params:{...}},
                         # no "recoding" will be done as we did not include this module
                         ], 
                     # Pre-processing for ref (only if referential is not internal)
@@ -26,7 +32,7 @@ request_json = {
                          [])
                     # For transformations that apply to both files
                     shared: 
-                        {name: dedupe, infer:False, params:{...}}
+                        {module_name: dedupe, infer:False, params:{...}}
                     }                
                 }
 ```
