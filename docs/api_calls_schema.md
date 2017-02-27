@@ -1,5 +1,11 @@
 # Pseudo API request for the main recoding service
 
+Use `POST` request to post the following fields:
+
+- `request_json`: (see below) json with the run parameters
+- `source`: (optional) csv file to upload to source
+- `ref`: (optional) csv file to upload to reference
+
 ```
 request_json = {
                 # What data to use / can be combined with passing file through POST
