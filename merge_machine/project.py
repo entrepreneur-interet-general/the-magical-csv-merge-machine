@@ -102,8 +102,22 @@ class Project():
             
         # No data in memory initially
         self.mem_data = None
-        self.mem_data_info = None
-        self.log_buffer = init_log_buffer()
+        self.mem_data_info = None # Information on data in memory
+        self.log_buffer = init_log_buffer() # List of logs not yet written to metadata.json
+
+    def init_log(self, module_name):
+        log = {'file_name': self.mem_data_info['file_name'], 
+               'origin': self.mem_data_info['module'],
+               'module': module_name, 
+               'start_timestamp': time.time(), 
+               'end_timestamp': None, 'error':None, 'error_msg':None, 'written': False}
+        return log
+        
+    def end_log(self, log, error=False):
+        log['end_timestamp'] = time.time()
+        log['error'] = False
+        return log
+    
 
     def check_mem_data(self):
         if self.mem_data is None:
@@ -154,24 +168,23 @@ class Project():
         """
         check_file_role(file_role)
         
-        file_path = self.path_to(file_role, 'INIT', file_name=file_name)
+        #
+        self.mem_data_info = {'file_role': file_role, 
+                               'file_name': file_name,
+                               'module': 'INIT'}
+        log = self.init_log('INIT')
         
-        if os.path.isfile(file_path):
-            print ''
-            # raise Exception('{0} (as: {1}) already exists'.format(file_name, file_role))
+        # TODO: add separator detection
+        self.mem_data = pd.read_csv(file, encoding=None, dtype='unicode')
 
-        try:
-            # Write file
-            dir_path = self.path_to(file_role, 'INIT')
-            if not os.path.isdir(dir_path):
-                os.makedirs(dir_path)
-            with open(file_path, 'wb') as w:
-                w.write(file.read())
-        except:
-            if os.path.isfile(file_path):
-                os.remove(file_path)
-            raise Exception('Problem loading file {0} (as {1})'.format(file_name, file_role))
-            
+        # Complete log
+        log = self.end_log(log, error=False)
+                          
+        # Update log buffer
+        self.log_buffer[self.mem_data_info['file_role'] + '_log'].append(log)
+        
+        self.write_data()
+        self.clear_memory()
     
     def remove_data(self, file_role, module_name='', file_name=''):
         '''Removes the corresponding data file'''
@@ -192,9 +205,14 @@ class Project():
         path_to_metadata = self.path_to(file_name='metadata.json')
         json.dump(self.metadata, open(path_to_metadata, 'w'))
     
+    def clean_metadata(self, file_role, file_name):
+        '''Remove all mentions of a file in metadata'''
+        check_file_role(file_role)
+        log_name = file_role + '_log'
+        self.metadata[log_name] = filter(lambda x: x['file_name']!=file_name, self.metadata[log_name])
     
     def get_arb(self):
-        '''List directories in project'''
+        '''List directories and files in project'''
         path_to_proj = self.path_to()
         return get_arb(path_to_proj)
         
@@ -213,8 +231,8 @@ class Project():
         check_file_role(file_role)
 
         # Check that original source file exists (TODO: should check in log instead ?)
-        if not os.path.isfile(self.path_to(file_role=file_role, file_name=file_name)):
-            raise Exception('{0} (as: {1}) could not be found in project'.format(file_name, file_role))
+        if not os.path.isfile(self.path_to(file_role=file_role, module_name='INIT', file_name=file_name)):
+            raise Exception('{0} (as: {1}) could not be found in INIT folder (not uploaded?)'.format(file_name, file_role))
             
         log_name = file_role + '_log'
         
@@ -266,7 +284,6 @@ class Project():
         gc.collect()
     
     # TODO: infer parameters
-    
     def transform(self, module_name, params):
         '''Run module on pandas DataFrame in memory and update '''
         
@@ -276,24 +293,23 @@ class Project():
         self.check_mem_data()        
         
         # Initiate log
-        log = {'file_name': self.mem_data_info['file_name'], 
-               'origin': self.mem_data_info['module'],
-               'module': module_name, 
-               'start_timestamp': time.time(), 
-               'end_timestamp': None, 'error':None, 'error_msg':None, 'written': False}
-    
+        log = self.init_log(module_name)
+
         # TODO: catch module errors and add to log
         # Run module on pandas DataFrame 
         self.mem_data = MODULES[module_name](self.mem_data, params)
         self.mem_data_info['module'] = module_name
         
         # Complete log
-        log['end_timestamp'] = time.time()
-        log['error'] = False
+        log = self.end_log(log, error=False)
                           
         # Update log buffer
         self.log_buffer[self.mem_data_info['file_role'] + '_log'].append(log)
  
+    
+    
+    
+    
 if __name__ == '__main__':
     # Create/Load a project
     project_id = "347a7ba113a8cb3863b0c40246ec9098"
@@ -317,4 +333,8 @@ if __name__ == '__main__':
     
     # Remove previously uploaded file
     # proj.remove_data('source', 'INIT', 'source.csv')    
-    print(proj.get_arb())
+    import pprint
+    pprint.pprint(proj.get_arb())
+    pprint.pprint(proj.metadata)
+    
+    proj.clean_metadata('source', 'source.csv') 
