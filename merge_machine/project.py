@@ -26,6 +26,10 @@ IDEAS:
     - split file
     - 
 
+
+DEV GUIDELINES:
+    - Modules take as input (pd.DataFrame, dict_for_parameters)
+
 TODO:
     - File load
     - Module transform
@@ -33,11 +37,19 @@ TODO:
     - delete 
 """
 
+import gc
 import hashlib
 import json
 import os
 import random
 import time
+
+import pandas as pd
+
+# IMPORT MODULES
+from infer_nan import infer_mvs, replace_mvs
+
+
 
 DATA_PATH = 'data'
 
@@ -66,6 +78,19 @@ def allowed_file(filename):
     # Check if extension is .csv
     return filename[-4:] == '.csv'
     
+def get_arb(dir_path):
+    '''Return arborescence as dict'''
+    to_return = dict()
+    for name in os.listdir(dir_path):
+        if os.path.isdir(os.path.join(dir_path, name)):
+            to_return[name] = get_arb(os.path.join(dir_path, name))
+        else:
+            to_return[name] = {}
+    return to_return
+
+def init_log_buffer():
+    return {'source_log': [], 'ref_log': []}
+
 
 class Project():
     def __init__(self, project_id=None):
@@ -74,6 +99,15 @@ class Project():
         else:
             self.project_id = project_id
             self.metadata = self.read_metadata()
+            
+        # No data in memory initially
+        self.mem_data = None
+        self.mem_data_info = None
+        self.log_buffer = init_log_buffer()
+
+    def check_mem_data(self):
+        if self.mem_data is None:
+            raise Exception('No data in memory: use `load_data` at least once')        
 
     def create_metadata(self):
         metadata = dict()
@@ -108,23 +142,39 @@ class Project():
         Return path to directory that stores specific information for a project 
         module
         '''
+        assert file_role in ['', 'source', 'ref']
         #assert all((not x[-1]) or all(x[:-1]) for i in [[project_id, file_role, module_name, file_name][:i] for i in range(4)]) 
         dir_path = os.path.join(DATA_PATH, 'projects', self.project_id, file_role, module_name, file_name)
         return os.path.abspath(dir_path)
     
-    def add_table(self, file, file_role, file_name):
+    def add_init_data(self, file, file_role, file_name):
         """
         Add source or reference to the project. Will write. Can only add table 
         as INIT (not in modules) by design.
         """
         check_file_role(file_role)
         
-        file_path = self.path_to(file_role, file_name=file_name)
+        file_path = self.path_to(file_role, 'INIT', file_name=file_name)
         
         if os.path.isfile(file_path):
-            raise Exception('{0} (as: {1}) already exists'.format(file_name, file_role))
+            print ''
+            # raise Exception('{0} (as: {1}) already exists'.format(file_name, file_role))
+
+        try:
+            # Write file
+            dir_path = self.path_to(file_role, 'INIT')
+            if not os.path.isdir(dir_path):
+                os.makedirs(dir_path)
+            with open(file_path, 'wb') as w:
+                w.write(file.read())
+        except:
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+            raise Exception('Problem loading file {0} (as {1})'.format(file_name, file_role))
+            
     
-    def remove_table(self, file_role, module_name='', file_name=''):
+    def remove_data(self, file_role, module_name='', file_name=''):
+        '''Removes the corresponding data file'''
         check_file_role(file_role)
         file_path = self.path_to(file_role, module_name, file_name)
         if os.path.isfile(file_path):
@@ -142,11 +192,21 @@ class Project():
         path_to_metadata = self.path_to(file_name='metadata.json')
         json.dump(self.metadata, open(path_to_metadata, 'w'))
     
-    def get_last_successful_module_name(self, file_role, file_name):
+    
+    def get_arb(self):
+        '''List directories in project'''
+        path_to_proj = self.path_to()
+        return get_arb(path_to_proj)
+        
+    
+    def get_last_successful_written_module(self, file_role, file_name):
         '''
         Get name of the last module that was run with the given source and file 
         name.
         
+        INPUT:
+            - ...
+
         OUTPUT:
             - module_name ('INIT' if no previous module)
         '''
@@ -164,19 +224,97 @@ class Project():
                 module_name = log['module']
                 break
         return module_name
+        
+    def load_data(self, file_role, module_name, file_name):
+        '''Load data as pandas DataFrame'''
+        file_path = self.path_to(file_role, module_name, file_name)
+        self.mem_data = pd.read_csv(file_path, encoding='utf-8')
+        self.mem_data_info = {'file_role': file_role, 
+                               'file_name': file_name,
+                               'module': module_name}
+        
+    def write_data(self):
+        '''Write data (and metadata) in memory to proper module'''
+        self.check_mem_data()
             
-    def run_on_single_file(self, file_role, module_name, file_name):
-        '''Run module on single file'''
-        print ''
+        # Write data
+        dir_path = self.path_to(self.mem_data_info['file_role'], 
+                                self.mem_data_info['module'])
+        if not os.path.isdir(dir_path):
+            os.makedirs(dir_path)
+        file_path = self.path_to(self.mem_data_info['file_role'], 
+                                 self.mem_data_info['module'], 
+                                 self.mem_data_info['file_name'])
+        self.mem_data.to_csv(file_path, encoding='utf-8', index=False)
         
+        # Add log buffer to metadata
+        for key in ['source_log', 'ref_log']:
+            if self.log_buffer[key]:
+                self.log_buffer[key][-1]['written'] = True
+                self.metadata[key].extend(self.log_buffer[key])
+
+        # Write metadata and clear log buffer
+        self.write_metadata()
+        self.log_buffer = init_log_buffer()
         
-        
-        
-        # TODO: update metadata and write
         
     
+    def clear_memory(self):
+        '''Removes the table loaded in memory'''
+        self.mem_data = None
+        self.mem_data_info = None
+        gc.collect()
+    
+    # TODO: infer parameters
+    
+    def transform(self, module_name, params):
+        '''Run module on pandas DataFrame in memory and update '''
+        
+        MODULES = {'replace_mvs': replace_mvs
+                    }
+
+        self.check_mem_data()        
+        
+        # Initiate log
+        log = {'file_name': self.mem_data_info['file_name'], 
+               'origin': self.mem_data_info['module'],
+               'module': module_name, 
+               'start_timestamp': time.time(), 
+               'end_timestamp': None, 'error':None, 'error_msg':None, 'written': False}
+    
+        # TODO: catch module errors and add to log
+        # Run module on pandas DataFrame 
+        self.mem_data = MODULES[module_name](self.mem_data, params)
+        self.mem_data_info['module'] = module_name
+        
+        # Complete log
+        log['end_timestamp'] = time.time()
+        log['error'] = False
+                          
+        # Update log buffer
+        self.log_buffer[self.mem_data_info['file_role'] + '_log'].append(log)
+ 
 if __name__ == '__main__':
-    # Try creating a project
-    
+    # Create/Load a project
     project_id = "347a7ba113a8cb3863b0c40246ec9098"
     proj = Project(project_id)
+    
+    # Upload source to project
+    file_path = 'local_test_data/source.csv'
+    with open(file_path) as f:
+        proj.add_init_data(f, 'source', 'source.csv')
+        
+    # Load source data to memory
+    proj.load_data(file_role='source', module_name='INIT' , file_name='source.csv')
+    
+    # Try transformation
+    params = {'mvs_dict': {'all': [], 'columns': {u'uai': [(u'NR', 0.2, ['len_ratio'])]}}, 
+            'thresh': 0.6}
+    proj.transform('replace_mvs', params)
+    
+    # Write transformed file
+    proj.write_data()
+    
+    # Remove previously uploaded file
+    # proj.remove_data('source', 'INIT', 'source.csv')    
+    print(proj.get_arb())
