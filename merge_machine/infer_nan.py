@@ -179,8 +179,19 @@ def correct_score(list_of_possible_mvs, probable_mvs):
     return new_list_of_possible_mvs
 
 
-def infer_mvs(tab, probable_mvs=[u'nan'], always_mvs=[u''], num_top_values=10):
-    """Run mv inference processes for each column and for the entire table"""
+def infer_mvs(tab, params):
+    """
+    API MODULE
+    
+    Run mv inference processes for each column and for the entire table
+    """
+    
+    # Set variables and replace by default values
+    probable_mvs = params.get('probable_mvs', [u'nan'])
+    always_mvs = params.get('always_mvs', [u''])
+    num_top_values = params.get('num_top_values', 10)
+    
+    
     # Compute most frequent values per column
     all_top_values = compute_all_top_values(tab, num_top_values)
     
@@ -205,15 +216,17 @@ def infer_mvs(tab, probable_mvs=[u'nan'], always_mvs=[u''], num_top_values=10):
     return {'columns': {key:val for key, val in col_mvs.iteritems() if val}, 
             'all': common_mvs}
 
-def replace_mvs(tab, mvs_dict, thresh=0.6):
+def replace_mvs(tab, params):
     """
+    API MODULE
+    
     Replace the values that should be mvs by actual np.nan. Values in 'all' 
     will be replaced in the entire table whereas values in 'columns' will only
     be replaced in the specified columns.
     
     INPUT:
         tab: pandas DataFrame to modify
-        infered_mvs: dict indicating mv values with scores. For example:
+        mvs_dict: dict indicating mv values with scores. For example:
                 {
                     'all': [],
                     'columns': {u'dech': [(u'-', 2.0, 'unknown')],
@@ -225,13 +238,19 @@ def replace_mvs(tab, mvs_dict, thresh=0.6):
         tab: same table with values replaced by np.nan
     
     """
-    assert infered_mvs.keys() == ['all', 'columns']
     
-    for (val, score, origin) in infered_mvs['all']:
+    # Set variables and replace by default values
+    mvs_dict = params['mvs_dict']
+    thresh = params.get('thresh', 0.6)
+    
+    # Replace
+    assert mvs_dict.keys() == ['all', 'columns']
+    
+    for (val, score, origin) in mvs_dict['all']:
         if score >= thresh:
             tab.replace(val, np.nan, inplace=True)
     
-    for col, mv_values in infered_mvs['columns'].iteritems():
+    for col, mv_values in mvs_dict['columns'].iteritems():
         for (val, score, origin) in mv_values:
             if score >= thresh:
                 tab[col].replace(val, np.nan, inplace=True)
@@ -241,7 +260,9 @@ def replace_mvs(tab, mvs_dict, thresh=0.6):
 
 if __name__ == '__main__':
     
-    file_paths = ['../../data/test_dedupe/participants.csv', '../../data/test/etablissements/bce_data_norm.csv']
+    file_paths = ['../../data/test_dedupe/participants.csv', 
+                  '../../data/test/etablissements/bce_data_norm.csv',
+                  'local_test_data/source.csv']
     file_path = file_paths[-1] # Path to file to test
     
     nrows = 100000 # How many lines of the file to read for inference
@@ -255,8 +276,13 @@ if __name__ == '__main__':
     num_top_values = 15 # Number of most frequent values to look at
          
     # Guess expressions for missing values
-    infered_mvs = infer_mvs(tab, PROBABLE_MISSING_VALUES, ALWAYS_MISSING_VALUES, num_top_values)
+    params = {'probable_mvs': PROBABLE_MISSING_VALUES,
+              'always_mvs': ALWAYS_MISSING_VALUES, 
+              'num_top_values': num_top_values}
+    infered_mvs = infer_mvs(tab, params)
     print(infered_mvs)
     
     # Replace in original table
-    tab = replace_mvs(tab, infered_mvs, thresh=0.6)
+    params = {'mvs_dict': infered_mvs,
+              'thresh': 0.6}
+    tab = replace_mvs(tab, params)
