@@ -5,73 +5,6 @@ Created on Mon Feb  6 15:01:16 2017
 
 @author: leo
 
-Data Structure
-
-data/
-    projects/
-        proj_1/ # Unique Id for each project (1 referential and 1 type of source)
-            source/
-                source_id.csv # Initial file uploaded by user
-                (source_id_2.csv) # tbd later (if we want to re-use infered and user params)
-                metadata.json # Original file name / list of modules that were completed, in what order (last complete filename)
-                load/ # Encoding + separator
-                    infered_params.json
-                    user_params.json
-                    source_id.csv # File after transformation
-                    run_info.json
-                missing_values/
-                    infered_params.json
-                    user_params.json
-                    source_id.csv
-                    run_info.json                    
-                recoding/ # Cleaning & normalisation
-                    infered_params.json
-                    user_params.json
-                    source_id.csv
-                    run_info.json
-                (other_pre_processing/)
-                    infered_params.json
-                    user_params.json
-                    source_id.csv
-                    run_info.json
-        
-            (ref/) # Only if user uploads his own referential # Same structure as source/
-                ref_id.csv
-                [...] # Same as source
-                
-            dedupe/
-                infered_params.json # What columns to pair
-                user_params.json # What columns to pair
-                user_training.json # Training pairs
-                learned_params.txt
-                other_dedupe_generated_files.example 
-                merged_id.csv
-                
-            analysis/
-                analysis.json
-    
-        proj_2/
-            [...]
-        [...]
-        
-    referentials/ # Internal referentials
-        ref_name_1/ # For example "sirene_restreint" # Same structure as source/
-            ref.csv
-            [...] # Same as source
-        ref_name_2/
-            [...]
-        [...]
-        
-    users/ # To be defined ?
-        ???
-        
-    saved_user_data/ # For V2 ? (maybe not file structure ?)
-        ???
-
-
-
-
-
 TODO:
     - Safe file name / not unique per date
     - Generic load module from request + json ()
@@ -103,11 +36,6 @@ DEV GUIDELINES:
     - If bad params are passed to modules, exceptions are raised, it is the APIs role to transform these exceptions in messages
     - functions to check parameters should be named check_{variable_or_function} (ex: check_file_role)
     - all securing will be done in the API paért 
-
-
-NOTES:
-    - Pay for persistant storage?
-
 
 
 curl -i http://127.0.0.1:5000/new_project/ -X POST -F "source=@data/tmp/test_merge.csv" -F "ref=@data/tmp/test_merge_small.csv" -F "request_json=@sample_request.json;type=application/json"
