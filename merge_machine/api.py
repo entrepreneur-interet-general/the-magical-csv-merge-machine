@@ -69,9 +69,6 @@ data/
         ???
 
 
-
-
-
 TODO:
     - Safe file name / not unique per date
     - Generic load module from request + json ()
@@ -81,39 +78,47 @@ TODO:
     - API: Fetch transformed file
     - API: Fetch infered parameters
     - API: Fetch logs
-    
 
 DEV GUIDELINES:
-    - Each module shall take care of creating it's own directory
-    - ADD: By default the API will use the file with the same name in the last 
-            module that was completed. Otherwise, you can specify the module to use file from
-    - Method to retrieve log of source / completed modules / date
+    - By default the API will use the file with the same name in the last 
+      module that was completed. Otherwise, you can specify the module to use file from
     - Suggestion methods shall be prefixed by suggest (ex: suggest_load_params, suggest_missing_values)
     - Suggestion methods shall can be plugged as input as params variable of transformation modules
     - Single file modules shall take as input: (pandas_dataframe, params)
-    - Single file modules suggestion modules shall ouput params, log
-    - Single file modules replacement modules shall ouput pandas_dataframe, log
+    - Single file modules suggestion modules shall ouput (params, log)
+    - Single file modules replacement modules shall ouput (pandas_dataframe, log)
     
     - Multiple file modules shall take as input: (pd_dataframe_1, pd_dataframe_2, params)
     - Multiple file modules suggestion modules shall ouput params, log
     - Multiple file modules merge module shall ouput ???
     
     - Do NOT return files, instead, user can fetch file through api
-    - Should we store intermediate steps?
     - If bad params are passed to modules, exceptions are raised, it is the APIs role to transform these exceptions in messages
-    - functions to check parameters should be named check_{variable_or_function} (ex: check_file_role)
-    - all securing will be done in the API paért 
+    - Functions to check parameters should be named check_{variable_or_function} (ex: check_file_role)
+    - All securing will be done in the API part
+    - Always return {"error": ..., "project_id": ..., "response": ...}
 
 
 NOTES:
     - Pay for persistant storage?
 
+# Transform 
+curl -i http://127.0.0.1:5000/transform/ -X POST -F "source=@data/tmp/test_merge.csv" -F "ref=@data/tmp/test_merge_small.csv" -F "request_json=@sample_request.json;type=application/json"
+
+# Upload data
+curl -i http://127.0.0.1:5000/download/ -X POST -F "request_json=@sample_download_request.json;type=application/json"
+
+# Download data
+curl -i http://127.0.0.1:5000/download/ -X POST -F "request_json=@sample_download_request.json;type=application/json"
+
+# Download metadata
+curl -i http://127.0.0.1:5000/metadata/ -X POST -F "request_json=@sample_download_request.json;type=application/json"
 
 
-curl -i http://127.0.0.1:5000/new_project/ -X POST -F "source=@data/tmp/test_merge.csv" -F "ref=@data/tmp/test_merge_small.csv" -F "request_json=@sample_request.json;type=application/json"
+
 """
 
-from flask import Flask, json, jsonify, redirect, request, url_for
+from flask import Flask, json, jsonify, redirect, request, url_for, send_file
 from werkzeug.utils import secure_filename
 
 from project import Project
@@ -127,10 +132,80 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 # Check that files are not t
           
 @app.route('/')
 def index():
-    return "The project is here: https://github.com/eig-2017/the-magical-csv-merge-machine"
+    return "Info here: https://github.com/eig-2017/the-magical-csv-merge-machine"
     
+def check_request():
+    '''Check that input request is valid'''
+    pass
+
+def init_project():
+    '''Initialize project and parse request'''  
+    # Parse request
+    params = json.loads(request.files['request_json'].stream.read())
     
-@app.route('/main/', methods=['POST'])
+    # Load project object
+    if params['data'].setdefault('project_id', None) is not None:   
+        proj = Project(params['data']['project_id'])
+    else:
+        proj = Project()
+    return proj, params
+    
+@app.route('/metadata/', methods=['POST'])
+def metadata():
+    '''Fetch metadata for project ID'''
+    proj, params = init_project()
+    return jsonify(error=False,
+                   metadata=proj.metadata, 
+                   project_id=proj.project_id)
+
+@app.route('/download/', methods=['POST'])
+def download():
+    '''
+    Download file from project.
+    
+    If just project_id: return last modified file
+    If variables are specified, return the last file modified with specific variables
+    
+    request_json = {project_id: ..., file_role: ..., (module: ...), file_name: ...}
+    '''
+    proj, params = init_project()
+    
+    file_role = secure_filename(params['file_role'])
+    file_name = secure_filename(params['file_name'])
+    if 'module' in params:
+        module = secure_filename(params['module'])
+    else:
+        module = proj.get_last_successful_written_module(file_role, file_name)
+        
+    if module == 'INIT':
+        return jsonify(error=True,
+               message='No changes were made since upload. Download is not \
+                       permitted. Please do not use this service for storage')
+    
+    file_path = proj.path_to(params['file_role'], module, file_name)
+    return send_file(file_path)
+
+
+@app.route('/upload/', methods=['POST'])
+def upload(proj=None):
+    '''
+    Uploads source and reference files to project either passed as variable or
+    loaded from request parameters
+    '''
+    if proj is None:
+        proj, _ = init_project()
+    
+    for key in ['source', 'ref']:
+        if key in request.files:
+            file = request.files[key]
+            proj.add_init_data(file.stream, key, file.filename)    
+    
+    return jsonify(error=False,
+                   metadata=proj.metadata,
+                   project_id=proj.project_id)
+
+
+@app.route('/run/main/', methods=['POST'])
 def main():
     '''
     Runs all modules at once (avoids having to call all modules separately + 
@@ -151,28 +226,19 @@ def main():
     # Check that form input is valid
     #==========================================================================
     
-    # TODO: do this
+    check_request()
     
     #==========================================================================
-    # Load project 
+    # Load project and parameters
     #==========================================================================
 
-    params = json.loads(request.files['request_json'].stream.read())
-    
-    if params['data'].setdefault('project_id', None) is not None:
-        proj = Project(params['data']['project_id'])
-    else:
-        proj = Project()
-    
+    proj, params = init_project()
     
     #==========================================================================
-    # Load data
+    # Upload data if any
     #==========================================================================
     
-    for key in ['source', 'ref']:
-        if key in request.files:
-            file = request.files[key]
-            proj.add_init_data(file.stream, key, file.filename)
+    upload(proj)
 
     #==========================================================================
     # Execute transformations on table(s)
@@ -206,8 +272,6 @@ def main():
     return jsonify(error=False, 
                    metadata=proj.metadata,
                    project_id=proj.project_id)
-
-
 
 
 
