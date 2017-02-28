@@ -24,17 +24,19 @@ project_id:347a7ba113a8cb3863b0c40246ec9098
 
 IDEAS:
     - split file
-    - 
-
 
 DEV GUIDELINES:
     - Modules take as input (pd.DataFrame, dict_for_parameters)
+    - Current state should be fully understandable from metadata
+    - Each module shall take care of creating it's own directory
 
 TODO:
     - File load
     - Module transform
     - Make generic api call for single module
     - delete 
+    - Change log structure ?
+    - Make function to fetch last file conditional to arguments.
 """
 
 import gc
@@ -48,7 +50,6 @@ import pandas as pd
 
 # IMPORT MODULES
 from infer_nan import infer_mvs, replace_mvs
-
 
 
 DATA_PATH = 'data'
@@ -243,6 +244,14 @@ class Project():
                 break
         return module_name
         
+    #    def get_last_written(self, file_role=None, module_name=None, file_name=None, error=False):
+    #
+    #        if 
+    #        for log in self.metadata[log_name][::-1]:
+    #            if not log['error'] and (log['file_name'] == file_name):
+    #                module_name = log['module']
+    #                break        
+    
     def load_data(self, file_role, module_name, file_name):
         '''Load data as pandas DataFrame'''
         file_path = self.path_to(file_role, module_name, file_name)
