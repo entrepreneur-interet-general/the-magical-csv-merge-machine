@@ -14,6 +14,7 @@ source_log:[ # List of modules that were executed with what source files (from w
     {file_name: "source_1", module: "missing_values", start_timestamp: 1497949990.422995, end_timestamp: 1997949990.42299, origin: "load", error:False, error_msg=None, written: True}
     ]
 ref_log:[]
+shared_log:[]
 metadata['project_id'] = 347a7ba113a8cb8023b0c40246ec9098
 ]
 }
