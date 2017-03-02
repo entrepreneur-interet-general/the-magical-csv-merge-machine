@@ -48,6 +48,7 @@ paths:
       operationId: downloadProjectData
       produces:
         - text/csv
+        - application/json
       parameters:
         - in: path
           name: project_id
@@ -99,8 +100,9 @@ paths:
   /project/run/{project_id}:
     post:
       tags:
-        - store
-        - run
+        - infer
+        - transform
+        - project
       summary: Upload data and run modules for project
       description: Handles uploading data and running modules in an order specified by parameters
       operationId: runModules
@@ -130,15 +132,18 @@ definitions:
   ProjectDownloadParams:
     type: object
     properties:
-      project_id:
-        type: string
-        description: Project ID
       file_role:
         type: string
+        enum: 
+          - source
+          - ref
         description: Should be source or ref
       module: 
         type: string
         description: What module to fetch from (optional)
+        enum:
+          - replace_mvs
+          - other_module
       file_name:
         type: string
         description: Original name of the file to fetch
@@ -158,6 +163,7 @@ definitions:
             description: Unique project identifier as returned by upload
           source: 
             type: object
+            description: Data to use as source
             properties:
               file_name:
                 type: string
@@ -165,6 +171,7 @@ definitions:
                 type: string
           ref: 
             type: object
+            description: Data to use as reference
             properties:
               file_name:
                 type: string
@@ -175,14 +182,17 @@ definitions:
         properties:
           source: 
             type: array
+            description: Modules to execute on source
             items:
               $ref: "#/definitions/ModuleParams"
           ref: 
             type: array
+            description: Modules to execute on reference
             items:
               $ref: "#/definitions/ModuleParams"          
           shared: 
             type: array
+            description: Modules that use both source and reference simultaneously
             items:
               $ref: "#/definitions/ModuleParams"
   
@@ -192,10 +202,14 @@ definitions:
       module_name:
         type: string
         description: Name of module to run
+        enum:
+          - replace_mvs
+          - other_module
       infer:
         type: boolean
         description: Not yet implemented
       params:
         type: object
         description: Parameters to pass for module run
+
 
