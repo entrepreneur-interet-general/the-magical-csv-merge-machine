@@ -1,0 +1,201 @@
+swagger: "2.0"
+info:
+  description: |
+    Magical CSV Merge Machine!
+
+    [See our github](https://github.com/eig-2017/the-magical-csv-merge-machine)
+
+    Handle keys ??
+  version: "0.0.1"
+  title: The Merge Machine
+  termsOfService: ???
+  contact:
+    name: leo@bouloc.eu
+  license:
+    name: ???
+    url: ???
+host: 127.0.0.1:5000
+basePath: /
+schemes:
+  - http
+paths:
+
+  /project/metadata/{project_id}:
+    get:
+      tags:
+        - metadata
+        - project
+      summary: Fetch metadata for given project ID
+      description: "test"
+      operationId: getMetadata
+      parameters:
+        - in: path
+          name: project_id
+          description: Unique project identifier as returned by upload
+          type: string
+          required: true      
+      responses:
+        default:
+          description: successful operation
+          
+  /project/download/{project_id}:
+    post:
+      tags:
+        - data
+        - project
+      summary: Download data files from project
+      description: Download data files from the project. You can specify from which module you want to fetch the file or download the last file that has been modified. If no json is passed, the last file will be returned by default.
+      operationId: downloadProjectData
+      produces:
+        - text/csv
+      parameters:
+        - in: path
+          name: project_id
+          description: Unique project identifier as returned by upload
+          type: string
+          required: true    
+        - in: body
+          name: body
+          description: Parameters for download
+          required: false
+          schema:
+            $ref: "#/definitions/ProjectDownloadParams"
+      responses:
+        default:
+          description: successful operation
+
+  /project/upload/{project_id}:
+    post:
+      tags:
+        - project
+      summary: Upload initial file to project
+      description: Upload CSV files to project. The files can then be analysed and modified using this API. By design, files cannot be uploaded to specific modules, only to the project root (INIT).
+      
+        If a project id is specified. The files will be uploaded to the corresponding project_id. If not, a new project will be created and the files uploaded.
+      operationId: uploadData
+      consumes:
+        - multipart/form-data
+      produces:
+        - application/json
+      parameters:
+        - in: path
+          name: project_id
+          description: Unique project identifier as returned by upload
+          type: string
+          required: true
+        - in: formData
+          name: source
+          description: CSV file to upload as a source (see [here](xxx) for explanations on source/ref)
+          type: file
+        - in: formData
+          name: ref
+          description: CSV file to upload as a reference (see [here](xxx) for explanations on source/ref)
+          type: file
+
+      responses:
+        default:
+          description: successful operation
+
+  /project/run/{project_id}:
+    post:
+      tags:
+        - store
+        - run
+      summary: Upload data and run modules for project
+      description: Handles uploading data and running modules in an order specified by parameters
+      operationId: runModules
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          type: string
+        - in: body
+          name: body
+          description: Parameters for global run
+          required: true
+          schema:
+            $ref: "#/definitions/RunParams"
+
+      responses:
+        default:
+          description: successful operation
+
+
+definitions:
+  
+  ProjectDownloadParams:
+    type: object
+    properties:
+      project_id:
+        type: string
+        description: Project ID
+      file_role:
+        type: string
+        description: Should be source or ref
+      module: 
+        type: string
+        description: What module to fetch from (optional)
+      file_name:
+        type: string
+        description: Original name of the file to fetch
+
+
+  RunParams:
+    type: object
+    required: 
+      - data
+      - modules
+    properties:
+      data:
+        type: object
+        properties:
+          project_id:
+            type: string
+            description: Unique project identifier as returned by upload
+          source: 
+            type: object
+            properties:
+              file_name:
+                type: string
+              module:
+                type: string
+          ref: 
+            type: object
+            properties:
+              file_name:
+                type: string
+              module:
+                type: string
+      modules:
+        type: object
+        properties:
+          source: 
+            type: array
+            items:
+              $ref: "#/definitions/ModuleParams"
+          ref: 
+            type: array
+            items:
+              $ref: "#/definitions/ModuleParams"          
+          shared: 
+            type: array
+            items:
+              $ref: "#/definitions/ModuleParams"
+  
+  ModuleParams:
+    type: object
+    properties:
+      module_name:
+        type: string
+        description: Name of module to run
+      infer:
+        type: boolean
+        description: Not yet implemented
+      params:
+        type: object
+        description: Parameters to pass for module run
+
