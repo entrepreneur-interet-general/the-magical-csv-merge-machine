@@ -15,6 +15,8 @@ TODO:
     - API: Fetch transformed file
     - API: Fetch infered parameters
     - API: Fetch logs
+    
+    - Separate upload and main run
 
 DEV GUIDELINES:
     - By default the API will use the file with the same name in the last 
@@ -50,15 +52,21 @@ curl -i http://127.0.0.1:5000/download/ -X POST -F "request_json=@sample_downloa
 
 # Download metadata
 curl -i http://127.0.0.1:5000/metadata/ -X POST -F "request_json=@sample_download_request.json;type=application/json"
-
 """
 
 from flask import Flask, json, jsonify, redirect, request, url_for, send_file
+from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
 
 from project import Project
 
+
+
+
 app = Flask(__name__)
+cors = CORS(app)
+app.config['CORS_HEADERS'] = 'Content-Type'
+
 app.debug = True
 app.secret_key = open('secret_key.txt').read() # TODO: change this, obviously!
 #app.config['TMP_UPLOAD'] = '/home/leo/Documents/eig/test_api/data/tmp'
@@ -66,6 +74,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 # Check that files are not t
           
           
 @app.route('/')
+@cross_origin()
 def index():
     return "Info here: https://github.com/eig-2017/the-magical-csv-merge-machine"
     
@@ -73,28 +82,35 @@ def check_request():
     '''Check that input request is valid'''
     pass
 
-def init_project():
+
+def init_project(project_id=None, existing_only=False):
     '''Initialize project and parse request'''  
     # Parse request
-    params = json.loads(request.files['request_json'].stream.read())
+    params = None
+    if 'body' in request.files:
+        params = json.loads(request.files['body'].stream.read())
     
-    # Load project object
-    if params['data'].setdefault('project_id', None) is not None:   
-        proj = Project(params['data']['project_id'])
-    else:
-        proj = Project()
+    if (project_id is None) and existing_only:
+        raise Exception('Cannot pass None to project_id. No project can be created here')
+        
+    proj = Project(project_id)
     return proj, params
     
-@app.route('/metadata/', methods=['POST'])
-def metadata():
+@app.route('/project/metadata/<project_id>', methods=['GET', 'POST'])
+@cross_origin()
+def metadata(project_id):
     '''Fetch metadata for project ID'''
-    proj, params = init_project()
-    return jsonify(error=False,
+    print project_id
+    proj, params = init_project(project_id, True)
+    resp = jsonify(error=False,
                    metadata=proj.metadata, 
                    project_id=proj.project_id)
+    print resp
+    return resp
 
-@app.route('/download/', methods=['POST'])
-def download():
+@app.route('/project/download/<project_id>', methods=['POST'])
+@cross_origin()
+def download(project_id):
     '''
     Download file from project.
     
@@ -103,45 +119,57 @@ def download():
     
     request_json = {project_id: ..., file_role: ..., (module: ...), file_name: ...}
     '''
-    proj, params = init_project()
-    
-    file_role = secure_filename(params['file_role'])
-    file_name = secure_filename(params['file_name'])
-    if 'module' in params:
-        module = secure_filename(params['module'])
-    else:
-        module = proj.get_last_successful_written_module(file_role, file_name)
+    try:
+        proj, params = init_project(project_id, True)
         
-    if module == 'INIT':
+        file_role = secure_filename(params['file_role'])
+        file_name = secure_filename(params['file_name'])
+        if 'module' in params:
+            module = secure_filename(params['module'])
+        else:
+            module = proj.get_last_successful_written_module(file_role, file_name)
+            
+        if module == 'INIT':
+            return jsonify(error=True,
+                   message='No changes were made since upload. Download is not \
+                           permitted. Please do not use this service for storage')
+        
+        file_path = proj.path_to(params['file_role'], module, file_name)
+        return send_file(file_path)
+    except Exception, e:
         return jsonify(error=True,
-               message='No changes were made since upload. Download is not \
-                       permitted. Please do not use this service for storage')
-    
-    file_path = proj.path_to(params['file_role'], module, file_name)
-    return send_file(file_path)
+                       message=e)
+        
 
 
-@app.route('/upload/', methods=['POST'])
-def upload(proj=None):
+@app.route('/project/upload', methods=['POST'])
+@app.route('/project/upload/<project_id>', methods=['POST'])
+@cross_origin()
+def upload(project_id=None):
     '''
     Uploads source and reference files to project either passed as variable or
     loaded from request parameters
     '''
-    if proj is None:
-        proj, _ = init_project()
+    if project_id.lower() == 'new_project':
+        project_id = None # TODO: Dirty fix bc swagger doesnt take optional path parameters
     
+    # Create or Load project
+    proj, _ = init_project(project_id)
+    
+    # 
     for key in ['source', 'ref']:
         if key in request.files:
             file = request.files[key]
             proj.add_init_data(file.stream, key, file.filename)    
     
     return jsonify(error=False,
-                   metadata=proj.metadata,
-                   project_id=proj.project_id)
+               metadata=proj.metadata,
+               project_id=proj.project_id)
 
 
-@app.route('/run/main/', methods=['POST'])
-def main():
+@app.route('/project/run/<project_id>', methods=['POST'])
+@cross_origin()
+def main(project_id):
     '''
     Runs all modules at once (avoids having to call all modules separately + 
     avoids writing unnecessary data).
@@ -167,13 +195,7 @@ def main():
     # Load project and parameters
     #==========================================================================
 
-    proj, params = init_project()
-    
-    #==========================================================================
-    # Upload data if any
-    #==========================================================================
-    
-    upload(proj)
+    proj, params = init_project(project_id, True)
 
     #==========================================================================
     # Execute transformations on table(s)
