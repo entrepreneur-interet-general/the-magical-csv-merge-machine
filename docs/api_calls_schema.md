@@ -3,8 +3,6 @@
 Use `POST` request to post the following fields:
 
 - `request_json`: (see below) json with the run parameters
-- `source`: (optional) csv file to upload to source
-- `ref`: (optional) csv file to upload to reference
 
 ```
 request_json = {
@@ -36,3 +34,8 @@ request_json = {
                     }                
                 }
 ```
+
+# Upload
+
+- `source`: (optional) csv file to upload to source
+- `ref`: (optional) csv file to upload to reference
