@@ -139,8 +139,6 @@ def download(project_id):
     except Exception, e:
         return jsonify(error=True,
                        message=e)
-        
-
 
 @app.route('/project/upload', methods=['POST'])
 @app.route('/project/upload/<project_id>', methods=['POST'])
@@ -167,10 +165,34 @@ def upload(project_id=None):
                project_id=proj.project_id)
 
 
-@app.route('/project/run/<project_id>', methods=['POST'])
+
+def load_from_params(proj, params):
+    '''Load data to project using the parameters received in request'''
+    
+    if (params is None) or (not params):
+        raise Exception('No params passed: should default to last file. NOT YET IMPLEMENTED')
+        
+    file_role = params['data']['file_role']
+    # Skip processing for internal referentials
+    if file_role == 'ref' and params['data'].setdefault('internal', False):
+        raise Exception('Internal data NOT YET IMPLEMENTED')
+    
+    # Load data from last run (or from user specified)
+    file_name = params['data']['file_name']
+    module_name = params['data'].setdefault('module', None)
+    if module_name is None:
+        module_name = proj.get_last_successful_written_module(file_role, file_name)
+        
+    proj.load_data(file_role, module_name, file_name)
+
+    
+
+@app.route('/project/run_all/<project_id>', methods=['POST'])
 @cross_origin()
 def main(project_id):
     '''
+    DEPRECATED
+    
     Runs all modules at once (avoids having to call all modules separately + 
     avoids writing unnecessary data).
     
@@ -201,20 +223,11 @@ def main(project_id):
     # Execute transformations on table(s)
     #==========================================================================
     
-    for key in ['source', 'ref']:
-        # Skip processing for internal referentials
-        if key == 'ref' and params['data'][key].setdefault('internal', False):
-            continue
+    
+    for file_role in ['source', 'ref']:
+
         
-        # Load data from last run (or from user specified)
-        file_name = params['data'][key]['file_name']
-        module_name = params['data'][key].setdefault('module', None)
-        if module_name is None:
-            module_name = proj.get_last_successful_written_module(key, file_name)
-            
-        proj.load_data(key, module_name, file_name)
-        
-        for command in params['modules'][key]: 
+        for command in params['modules'][file_role]: 
             module_name = command['module_name']
             module_params = command['params']
             proj.transform(module_name, module_params)
@@ -229,6 +242,47 @@ def main(project_id):
     return jsonify(error=False, 
                    metadata=proj.metadata,
                    project_id=proj.project_id)
+
+
+
+
+#==============================================================================
+# MODULES
+#==============================================================================
+
+@app.route('/project/modules/', methods=['GET', 'POST'])
+@cross_origin()
+def list_modules():
+    '''Runs the infer_mvs module'''
+    return jsonify(error=True,
+                   message='This should list the available modules') #TODO: <--
+
+
+@app.route('/project/modules/infer_mvs/<project_id>', methods=['GET', 'POST'])
+@cross_origin()
+def infer_mvs(project_id):
+    '''Runs the infer_mvs module'''
+    proj, params = init_project(project_id, True)
+    load_from_params(proj, params)
+    
+    proj.infer('infer_mvs', params)
+    proj.write_log_buffer()
+    
+    
+@app.route('/project/modules/replace_mvs/<project_id>', methods=['POST'])
+@cross_origin()
+def replace_mvs(project_id):
+    '''Runs the mvs replacement module'''
+    proj, params = init_project(project_id, True)
+    load_from_params(proj, params)
+    
+    proj.transform('infer_mvs', params)
+    proj.write_log_buffer()
+
+    # Write transformations
+    proj.write_data()    
+    proj.write_log_buffer()
+
 
 
 

@@ -212,9 +212,17 @@ def infer_mvs(tab, params):
         col_mvs[col].sort(key=lambda x: x[1], reverse=True)
         
     
-    common_mvs = mv_from_common_values_2(col_mvs)
-    return {'columns': {key:val for key, val in col_mvs.iteritems() if val}, 
-            'all': common_mvs}
+ 
+
+    # Transfer output to satisfy API standards
+    def triplet_to_dict(val):
+
+        return {'val': val[0], 'score': val[1], 'origin': val[2]}
+
+    common_mvs = [triplet_to_dict(val) for val in mv_from_common_values_2(col_mvs)]
+    columns_mvs = [{'col_name':key, 'missing_vals': [triplet_to_dict(val) for val in vals]} for key, vals in col_mvs.iteritems() if vals]
+    infered_mvs = {'columns': columns_mvs, 'all': common_mvs}
+    return {'mvs_dict': infered_mvs, 'thresh': 0.6} # TODO: remove harcode
 
 def replace_mvs(tab, params):
     """
@@ -246,12 +254,16 @@ def replace_mvs(tab, params):
     # Replace
     assert mvs_dict.keys() == ['all', 'columns']
     
-    for (val, score, origin) in mvs_dict['all']:
+    for mv in mvs_dict['all']:
+        val, score = mv['val'], mv['score']
         if score >= thresh:
             tab.replace(val, np.nan, inplace=True)
     
-    for col, mv_values in mvs_dict['columns'].iteritems():
-        for (val, score, origin) in mv_values:
+    for resp in mvs_dict['columns']:
+        col = resp.get('col_name')
+        mv_values = resp.get('missing_vals')
+        for mv in mv_values:
+            val, score = mv['val'], mv['score']
             if score >= thresh:
                 tab[col].replace(val, np.nan, inplace=True)
     return tab
@@ -279,10 +291,10 @@ if __name__ == '__main__':
     params = {'probable_mvs': PROBABLE_MISSING_VALUES,
               'always_mvs': ALWAYS_MISSING_VALUES, 
               'num_top_values': num_top_values}
-    infered_mvs = infer_mvs(tab, params)
-    print(infered_mvs)
+    infered_params = infer_mvs(tab, params)
+    print(infered_params)
     
     # Replace in original table
-    params = {'mvs_dict': infered_mvs,
+    params = {'mvs_dict': infered_params['mvs_dict'],
               'thresh': 0.6}
     tab = replace_mvs(tab, params)

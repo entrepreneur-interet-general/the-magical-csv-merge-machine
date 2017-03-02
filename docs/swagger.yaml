@@ -10,7 +10,7 @@ info:
   title: The Merge Machine
   termsOfService: ???
   contact:
-    name: leo@bouloc.eu
+    name: leo@bouloc.eu	
   license:
     name: ???
     url: ???
@@ -60,7 +60,7 @@ paths:
           description: Parameters for download
           required: false
           schema:
-            $ref: "#/definitions/ProjectDownloadParams"
+            $ref: "#/definitions/Data"
       responses:
         default:
           description: successful operation
@@ -68,6 +68,7 @@ paths:
   /project/upload/{project_id}:
     post:
       tags:
+        - data
         - project
       summary: Upload initial file to project
       description: Upload CSV files to project. The files can then be analysed and modified using this API. By design, files cannot be uploaded to specific modules, only to the project root (INIT).
@@ -92,17 +93,72 @@ paths:
           name: ref
           description: CSV file to upload as a reference (see [here](xxx) for explanations on source/ref)
           type: file
-
       responses:
         default:
           description: successful operation
 
-  /project/run/{project_id}:
+
+  /project/modules/infer_mvs/{project_id}:
     post:
       tags:
         - infer
-        - transform
+        - data
         - project
+      summary: Infer values in columns by NaNs
+      description: Replace values in columns by NaNs. FILL HERE
+      operationId: inferMVs
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          type: string
+        - in: body
+          name: body
+          description: Parameters for Infer Missing Values
+          required: true
+          schema:
+            $ref: "#/definitions/InferMVsParams"      
+      responses:
+        default:
+          description: successful operation
+
+
+  /project/modules/replace_mvs/{project_id}:
+    post:
+      tags:
+        - transform
+        - data
+        - project
+      summary: Replace values in columns by NaNs
+      description: Replace values in columns by NaNs. FILL HERE
+      operationId: replaceMVs
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          type: string
+        - in: body
+          name: body
+          description: Parameters for Replacing Missing Values
+          required: true
+          schema:
+            $ref: "#/definitions/ReplaceMVsParams"      
+      responses:
+        default:
+          description: successful operation
+
+
+  /project/run_all/{project_id}:
+    post:
+      deprecated: true
       summary: Upload data and run modules for project
       description: Handles uploading data and running modules in an order specified by parameters
       operationId: runModules
@@ -129,7 +185,7 @@ paths:
 
 definitions:
   
-  ProjectDownloadParams:
+  Data:
     type: object
     properties:
       file_role:
@@ -143,12 +199,112 @@ definitions:
         description: What module to fetch from (optional)
         enum:
           - replace_mvs
-          - other_module
+          - other_moduleTBD
       file_name:
         type: string
         description: Original name of the file to fetch
 
 
+  ModuleParams:
+    type: object
+    properties:
+      module_name:
+        type: string
+        description: Name of module to run
+        enum:
+          - replace_mvs
+          - other_module
+      infer:
+        type: boolean
+        description: Not yet implemented
+      params:
+        type: object
+        description: Parameters to pass for module run
+
+
+  InferMVsParams:
+    type: object
+    required:
+      - data
+    properties:
+      data:
+        $ref: '#/definitions/Data'
+      params:
+        type: object
+        description: Parameters on how to perform missing value inference
+        properties:
+          probable_mvs:
+            type: array
+            description: Values more likely to represent missing values 
+                    (will probably be considered missing values if found)
+            items: 
+              type: string
+          always_mvs:
+            type: array
+            description: Values that always represent missing values 
+                        (use this to avoid manual json modification)
+            items: 
+              type: string
+          num_top_values:
+            type: integer
+ 
+ 
+  ReplaceMVsParams:
+    type: object
+    properties:
+      data:
+        $ref: '#/definitions/Data'
+      params:
+        type: object
+        description: Parameters on how to perform missing value inference
+        required: ['mvs_dict']
+        properties:
+          mvs_dict:
+            type: object
+            properties:
+              all:
+                type: array
+                items:
+                  $ref: '#/definitions/MissingValueDescription'
+              columns:
+                type: object
+                properties:
+                  col_name:
+                    type: string
+                    description: Name of column to which information applies
+                  missing_vals:
+                    $ref: '#/definitions/MissingValueDescription'
+          thresh:
+            type: number
+            format: float
+
+            
+  MissingValueDescription:
+    type: object
+    description: Describe possible representations of missing values.
+    properties:
+      val:
+        type: string
+        description: possible missing value (NA, missing_value, ...)
+      score:
+        type: number
+        format: float
+        description: reflects the confidence we have that the value should be replaced by NaN (should be above `thresh` for replacement)
+  RemovedFromMissingValueDescription:
+    type: object
+    properties:
+      origin:
+        type: array
+        description: remainder of inference and can be set to null; it is a list of the sub_modules that flagged the value as a potential missing value.
+        items:
+          type: string
+        
+      
+
+ 
+  
+    
+    
   RunParams:
     type: object
     required: 
@@ -194,22 +350,6 @@ definitions:
             type: array
             description: Modules that use both source and reference simultaneously
             items:
-              $ref: "#/definitions/ModuleParams"
-  
-  ModuleParams:
-    type: object
-    properties:
-      module_name:
-        type: string
-        description: Name of module to run
-        enum:
-          - replace_mvs
-          - other_module
-      infer:
-        type: boolean
-        description: Not yet implemented
-      params:
-        type: object
-        description: Parameters to pass for module run
-
+              $ref: "#/definitions/ModuleParams"    
+    
 

@@ -232,8 +232,10 @@ class Project():
         check_file_role(file_role)
 
         # Check that original source file exists (TODO: should check in log instead ?)
-        if not os.path.isfile(self.path_to(file_role=file_role, module_name='INIT', file_name=file_name)):
-            raise Exception('{0} (as: {1}) could not be found in INIT folder (not uploaded?)'.format(file_name, file_role))
+        if not os.path.isfile(self.path_to(file_role=file_role, module_name='INIT', 
+                                           file_name=file_name)):
+            raise Exception('{0} (as: {1}) could not be found in INIT folder \
+                            (not uploaded?)'.format(file_name, file_role))
             
         log_name = file_role + '_log'
         
@@ -259,6 +261,25 @@ class Project():
         self.mem_data_info = {'file_role': file_role, 
                                'file_name': file_name,
                                'module': module_name}
+    
+    def write_log_buffer(self, written):
+        '''
+        Appends log buffer to metadata, writes metadata and clears log_buffer.
+        
+        INPUT: 
+            - written: weather or not the output was written somewhere
+        
+        '''
+        # Add log buffer to metadata
+        for key in ['source_log', 'ref_log']:
+            if self.log_buffer[key]:
+                self.log_buffer[key][-1]['written'] = True
+                self.metadata[key].extend(self.log_buffer[key])
+
+        # Write metadata and clear log buffer
+        self.write_metadata()
+        self.log_buffer = init_log_buffer()
+
         
     def write_data(self):
         '''Write data (and metadata) in memory to proper module'''
@@ -273,28 +294,16 @@ class Project():
                                  self.mem_data_info['module'], 
                                  self.mem_data_info['file_name'])
         self.mem_data.to_csv(file_path, encoding='utf-8', index=False)
-        
-        # Add log buffer to metadata
-        for key in ['source_log', 'ref_log']:
-            if self.log_buffer[key]:
-                self.log_buffer[key][-1]['written'] = True
-                self.metadata[key].extend(self.log_buffer[key])
 
-        # Write metadata and clear log buffer
-        self.write_metadata()
-        self.log_buffer = init_log_buffer()
         
-        
-    
     def clear_memory(self):
         '''Removes the table loaded in memory'''
         self.mem_data = None
         self.mem_data_info = None
         gc.collect()
     
-    # TODO: infer parameters
     def transform(self, module_name, params):
-        '''Run module on pandas DataFrame in memory and update '''
+        '''Run module on pandas DataFrame in memory and update memory state'''
         
         MODULES = {'replace_mvs': replace_mvs
                     }
@@ -315,9 +324,21 @@ class Project():
         # Update log buffer
         self.log_buffer[self.mem_data_info['file_role'] + '_log'].append(log)
  
+   def infer(self, module_name, params):
+       '''Just runs the module name and returns answer'''
+       MODULES = {'infer_mvs': infer_mvs
+                  }
+       
+       self.check_mem_data()  
+       # Initiate log
+       log = self.init_log(module_name)
     
+       infered_params = MODULES[module_name](self.mem_data, params)
+
+        # Update log buffer
+        self.log_buffer[self.mem_data_info['file_role'] + '_log'].append(log)    
     
-    
+        # TODO: write result of inference
     
 if __name__ == '__main__':
     # Create/Load a project
