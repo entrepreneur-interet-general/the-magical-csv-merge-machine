@@ -57,6 +57,7 @@ if __name__ == '__main__':
     _id = '347a7ba113a8cb3863b0c40246ec9098'
     
     for _id in admin.list_projects():
+        #admin.remove_project(_id)
         proj = Project(_id)
         print(proj.time_since_last_action())
             

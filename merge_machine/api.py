@@ -60,7 +60,9 @@ from flask import Flask, json, jsonify, redirect, request, url_for, send_file
 from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
 
+from admin import Admin
 from project import Project
+
 
 # Change current path to path of api.py
 curdir = os.path.dirname(os.path.realpath(__file__))
@@ -88,23 +90,31 @@ def check_request():
 
 def init_project(project_id=None, existing_only=False):
     '''Initialize project and parse request'''  
-    # Parse request
-    params = None
-    if 'body' in request.files:
-        params = json.loads(request.files['body'].stream.read())
     
     if (project_id is None) and existing_only:
         raise Exception('Cannot pass None to project_id. No project can be created here')
-        
     proj = Project(project_id)
-    return proj, params
+    
+    # Parse json request
+    data_params = None
+    module_params = None
+    if request.json:
+        params = request.json
+        assert isinstance(params, dict)
+    
+        if 'data' in params:
+            data_params = params['data']
+        if 'params' in params:
+            module_params = params['params']
+    
+    return proj, data_params, module_params
     
 @app.route('/project/metadata/<project_id>', methods=['GET', 'POST'])
 @cross_origin()
 def metadata(project_id):
     '''Fetch metadata for project ID'''
     print project_id
-    proj, params = init_project(project_id, True)
+    proj, _, _ = init_project(project_id, True)
     resp = jsonify(error=False,
                    metadata=proj.metadata, 
                    project_id=proj.project_id)
@@ -125,20 +135,27 @@ def download(project_id):
     try:
         proj, params = init_project(project_id, True)
         
-        file_role = secure_filename(params['file_role'])
-        file_name = secure_filename(params['file_name'])
-        if 'module' in params:
-            module = secure_filename(params['module'])
-        else:
-            module = proj.get_last_successful_written_module(file_role, file_name)
+        file_role = params.get('file_role', None)
+        module = params.get('module', 'None')
+        file_name = params.get('file_name', None)
+        
+        if file_role is not None:
+            file_role = secure_filename(file_role)
+        if module is not None:
+            module = secure_filename(module)
+        if file_name is not None:
+            file_name = secure_filename(file_name)
+            
+        (file_role, module, file_name) = proj.get_last_written(file_role, module, file_name)
             
         if module == 'INIT':
             return jsonify(error=True,
                    message='No changes were made since upload. Download is not \
                            permitted. Please do not use this service for storage')
         
-        file_path = proj.path_to(params['file_role'], module, file_name)
+        file_path = proj.path_to(file_role, module, file_name)
         return send_file(file_path)
+    
     except Exception, e:
         return jsonify(error=True,
                        message=e)
@@ -169,26 +186,29 @@ def upload(project_id=None):
 
 
 
-def load_from_params(proj, params):
+def load_from_params(proj, data_params=None):
     '''Load data to project using the parameters received in request'''
-    
-    if (params is None) or (not params):
-        raise Exception('No params passed: should default to last file. NOT YET IMPLEMENTED')
+    if data_params is None:
+        file_role = None
+        module_name = None
+        file_name = None
+    else:
+        file_role = data_params.setdefault('file_role', None)
+        # Skip processing for internal referentials
+        if file_role == 'ref' and data_params.setdefault('internal', False):
+            raise Exception('Internal data NOT YET IMPLEMENTED')
         
-    file_role = params['data']['file_role']
-    # Skip processing for internal referentials
-    if file_role == 'ref' and params['data'].setdefault('internal', False):
-        raise Exception('Internal data NOT YET IMPLEMENTED')
-    
-    # Load data from last run (or from user specified)
-    file_name = params['data']['file_name']
-    module_name = params['data'].setdefault('module', None)
-    if module_name is None:
-        module_name = proj.get_last_successful_written_module(file_role, file_name)
+        # Load data from last run (or from user specified)
+        file_name = data_params.setdefault('file_name', None)
+        module_name = data_params.setdefault('module', None)
+        
+    if not all(x is not None for x in [file_role, module_name, file_name]):
+        (file_role, module_name, file_name) = proj.get_last_written(\
+                                        file_role, module_name, file_name)
         
     proj.load_data(file_role, module_name, file_name)
 
-    
+
 
 @app.route('/project/run_all/<project_id>', methods=['POST'])
 @cross_origin()
@@ -249,6 +269,7 @@ def main(project_id):
 
 
 
+
 #==============================================================================
 # MODULES
 #==============================================================================
@@ -256,7 +277,7 @@ def main(project_id):
 @app.route('/project/modules/', methods=['GET', 'POST'])
 @cross_origin()
 def list_modules():
-    '''Runs the infer_mvs module'''
+    '''List available modules'''
     return jsonify(error=True,
                    message='This should list the available modules') #TODO: <--
 
@@ -265,26 +286,48 @@ def list_modules():
 @cross_origin()
 def infer_mvs(project_id):
     '''Runs the infer_mvs module'''
-    proj, params = init_project(project_id, True)
-    load_from_params(proj, params)
+    proj, data_params, module_params = init_project(project_id, True)
+    load_from_params(proj, data_params)
     
-    proj.infer('infer_mvs', params)
-    proj.write_log_buffer()
+    result = proj.infer('infer_mvs', module_params)
+    
+    # Write log
+    proj.write_log_buffer(False)
+    
+    return jsonify(error=False,
+                   response=result)
     
     
 @app.route('/project/modules/replace_mvs/<project_id>', methods=['POST'])
 @cross_origin()
 def replace_mvs(project_id):
     '''Runs the mvs replacement module'''
-    proj, params = init_project(project_id, True)
-    load_from_params(proj, params)
+    proj, data_params, module_params = init_project(project_id, True)
+    load_from_params(proj, data_params)
     
-    proj.transform('infer_mvs', params)
-    proj.write_log_buffer()
+    proj.transform('replace_mvs', module_params)
 
-    # Write transformations
+    # Write transformations and log
     proj.write_data()    
-    proj.write_log_buffer()
+    proj.write_log_buffer(True)
+    
+    return jsonify(error=False)
+
+
+
+#==============================================================================
+# Admin
+#==============================================================================
+
+
+@app.route('/admin/list_projects', methods=['GET', 'POST'])
+@cross_origin()
+def list_projects():
+    '''Lists all project id_s'''
+    admin = Admin()
+    list_of_projects = admin.list_projects()
+    return jsonify(error=False,
+                   response=list_of_projects)
 
 
 

@@ -71,7 +71,7 @@ def gen_proj_id():
     return project_id
 
 def check_file_role(file_role):
-    if file_role not in ['ref', 'source']:
+    if (file_role not in ['ref', 'source']) and (file_role is not None):
         raise Exception('"file_role" is either "source" or "ref"')
 
 def allowed_file(filename):
@@ -90,7 +90,7 @@ def get_arb(dir_path):
     return to_return
 
 def init_log_buffer():
-    return {'source_log': [], 'ref_log': []}
+    return []
 
 
 class Project():
@@ -106,17 +106,22 @@ class Project():
         self.mem_data_info = None # Information on data in memory
         self.log_buffer = init_log_buffer() # List of logs not yet written to metadata.json
 
-    def init_log(self, module_name):
-        log = {'file_name': self.mem_data_info['file_name'], 
+    def init_log(self, module_name, module_type):
+        assert module_type in ['transform', 'infer']
+        log = { # Data being modified
+               'file_name': self.mem_data_info['file_name'], 
                'origin': self.mem_data_info['module'],
-               'module': module_name, 
-               'start_timestamp': time.time(), 
+               'file_role': self.mem_data_info['file_role'],
+                # Modification at hand                        
+               'module': module_name, # Module to be executed
+               'module_type': module_type, # Type 
+               'start_timestamp': time.time(),
                'end_timestamp': None, 'error':None, 'error_msg':None, 'written': False}
         return log
         
     def end_log(self, log, error=False):
         log['end_timestamp'] = time.time()
-        log['error'] = False
+        log['error'] = error
         return log
     
     
@@ -127,10 +132,8 @@ class Project():
     # TODO: add shared to metadata
     def time_since_last_action(self):
         last_time = float(self.metadata['timestamp'])
-        for file_role in ['source', 'ref']:
-            log_name = file_role + '_log'
-            if self.metadata[log_name]:
-                last_time = max(last_time, float(self.metadata[log_name][-1]['end_timestamp']))
+        if self.metadata['log']:
+            last_time = max(last_time, float(self.metadata['log'][-1]['end_timestamp']))
         return time.time() - last_time
 
     def check_mem_data(self):
@@ -144,8 +147,7 @@ class Project():
         metadata['use_internal_ref'] = None
         metadata['internal_ref_name'] = None
         metadata['source_names'] = []
-        metadata['source_log'] = []
-        metadata['ref_log'] = []
+        metadata['log'] = []
         metadata['project_id'] = self.project_id
         return metadata
 
@@ -184,9 +186,9 @@ class Project():
         
         #
         self.mem_data_info = {'file_role': file_role, 
-                               'file_name': file_name,
-                               'module': 'INIT'}
-        log = self.init_log('INIT')
+                              'file_name': file_name,
+                              'module': 'INIT'}
+        log = self.init_log('INIT', 'transform')
         
         # TODO: add separator detection
         self.mem_data = pd.read_csv(file, encoding=None, dtype='unicode')
@@ -195,9 +197,10 @@ class Project():
         log = self.end_log(log, error=False)
                           
         # Update log buffer
-        self.log_buffer[self.mem_data_info['file_role'] + '_log'].append(log)
+        self.log_buffer.append(log)
         
         self.write_data()
+        self.write_log_buffer(written=True)
         self.clear_memory()
     
     def remove_data(self, file_role, module_name='', file_name=''):
@@ -222,8 +225,8 @@ class Project():
     def clean_metadata(self, file_role, file_name):
         '''Remove all mentions of a file in metadata'''
         check_file_role(file_role)
-        log_name = file_role + '_log'
-        self.metadata[log_name] = filter(lambda x: x['file_name']!=file_name, self.metadata[log_name])
+        self.metadata['log'] = filter(lambda x: (x['file_name']!=file_name) \
+                         and (x['file_role']!=file_role), self.metadata['log'])
     
     def get_arb(self):
         '''List directories and files in project'''
@@ -231,46 +234,37 @@ class Project():
         return get_arb(path_to_proj)
         
     
-    def get_last_successful_written_module(self, file_role, file_name):
+    def get_last_written(self, file_role=None, module=None, file_name=None):
         '''
-        Get name of the last module that was run with the given source and file 
-        name.
+        Return info on data that was last successfully written
         
         INPUT:
-            - ...
-
+            - file_role: filter on file role (last data with given file_role)
+            - module: filter on given module
+            - file_name: filter on file_name
+            
         OUTPUT:
             - module_name ('INIT' if no previous module)
         '''
         check_file_role(file_role)
 
-        # Check that original source file exists (TODO: should check in log instead ?)
-        if not os.path.isfile(self.path_to(file_role=file_role, module_name='INIT', 
-                                           file_name=file_name)):
-            raise Exception('{0} (as: {1}) could not be found in INIT folder \
-                            (not uploaded?)'.format(file_name, file_role))
-            
-        log_name = file_role + '_log'
-        
-        module_name = 'INIT'
-        for log in self.metadata[log_name][::-1]:
-            if not log['error'] and (log['file_name'] == file_name):
-                module_name = log['module']
+        for log in self.metadata['log'][::-1]:
+            if (not log['error']) and log['written'] \
+                      and ((log['file_role'] == file_role) or file_role is None) \
+                      and ((log['module'] == module) or module is None) \
+                      and ((log['file_name'] == file_name) or file_name is None):
                 break
-        return module_name
+        else:
+            raise Exception('No written data could be found in logs')
+        file_role = log['file_role']
+        module = log['module']
+        file_name = log['file_name']        
+        return (file_role, module, file_name)
         
-    #    def get_last_written(self, file_role=None, module_name=None, file_name=None, error=False):
-    #
-    #        if 
-    #        for log in self.metadata[log_name][::-1]:
-    #            if not log['error'] and (log['file_name'] == file_name):
-    #                module_name = log['module']
-    #                break        
-    
     def load_data(self, file_role, module_name, file_name):
         '''Load data as pandas DataFrame'''
         file_path = self.path_to(file_role, module_name, file_name)
-        self.mem_data = pd.read_csv(file_path, encoding='utf-8')
+        self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype='unicode')
         self.mem_data_info = {'file_role': file_role, 
                                'file_name': file_name,
                                'module': module_name}
@@ -280,22 +274,28 @@ class Project():
         Appends log buffer to metadata, writes metadata and clears log_buffer.
         
         INPUT: 
-            - written: weather or not the output was written somewhere
+            - written: weather or not the data was written
         
         '''
-        # Add log buffer to metadata
-        for key in ['source_log', 'ref_log']:
-            if self.log_buffer[key]:
-                self.log_buffer[key][-1]['written'] = True
-                self.metadata[key].extend(self.log_buffer[key])
-
+        if not self.log_buffer:
+            raise Exception('No log buffer ot write; no operations since last write')
+        
+        # Indicate if any data was written
+        if written:
+            for log in self.log_buffer[::-1]:
+                if log['module_type'] == 'transform':
+                    log['written'] = True
+                       
+        # Add buffer to metadata  
+        self.metadata['log'].extend(self.log_buffer)
+    
         # Write metadata and clear log buffer
         self.write_metadata()
         self.log_buffer = init_log_buffer()
 
         
     def write_data(self):
-        '''Write data (and metadata) in memory to proper module'''
+        '''Write data in memory to proper module'''
         self.check_mem_data()
             
         # Write data
@@ -324,7 +324,7 @@ class Project():
         self.check_mem_data()        
         
         # Initiate log
-        log = self.init_log(module_name)
+        log = self.init_log(module_name, 'transform')
 
         # TODO: catch module errors and add to log
         # Run module on pandas DataFrame 
@@ -335,7 +335,8 @@ class Project():
         log = self.end_log(log, error=False)
                           
         # Update log buffer
-        self.log_buffer[self.mem_data_info['file_role'] + '_log'].append(log)
+        self.log_buffer.append(log)
+        return log
  
     def infer(self, module_name, params):
         '''Just runs the module name and returns answer'''
@@ -344,12 +345,12 @@ class Project():
        
         self.check_mem_data()  
         # Initiate log
-        log = self.init_log(module_name)
+        log = self.init_log(module_name, 'infer')
             
         infered_params = MODULES[module_name](self.mem_data, params)
         
         # Update log buffer
-        self.log_buffer[self.mem_data_info['file_role'] + '_log'].append(log)    
+        self.log_buffer.append(log)    
                 
         # TODO: write result of inference
         return infered_params
@@ -357,28 +358,35 @@ class Project():
     
 if __name__ == '__main__':
     # Create/Load a project
-    project_id = "347a7ba113a8cb3863b0c40246ec9098"
-    proj = Project(project_id)
+    project_id = "f87cf0519b713abd8f40cdd11d564f98"
+    proj = Project(None)
     
     # Upload source to project
-    file_path = 'local_test_data/source.csv'
+    file_name = 'source.csv'
+    file_path = os.path.join('local_test_data', file_name)
     with open(file_path) as f:
-        proj.add_init_data(f, 'source', 'source.csv')
+        proj.add_init_data(f, 'source', file_name)
         
     # Load source data to memory
-    proj.load_data(file_role='source', module_name='INIT' , file_name='source.csv')
+    proj.load_data(file_role='source', module_name='INIT' , file_name=file_name)
     
     # Try transformation
-    params = {'mvs_dict': {'all': [], 'columns': {u'uai': [(u'NR', 0.2, ['len_ratio'])]}}, 
-            'thresh': 0.6}
-    proj.transform('replace_mvs', params)
+    params = {'mvs_dict': {'all': [],
+              'columns': [{'col_name': u'uai',
+                           'missing_vals': [{'origin': ['len_ratio'],
+                                             'score': 0.2,
+                                             'val': u'NR'}]}]},
+                'thresh': 0.6}
+    log = proj.transform('replace_mvs', params)
     
     # Write transformed file
     proj.write_data()
+    proj.write_log_buffer(written=True)
     
     # Remove previously uploaded file
     # proj.remove_data('source', 'INIT', 'source.csv')    
     import pprint
+    pprint.pprint(log)
     pprint.pprint(proj.get_arb())
     pprint.pprint(proj.metadata)
     

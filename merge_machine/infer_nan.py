@@ -47,7 +47,6 @@ def mv_from_usual_forms(top_values, probable_missing_values, score=0.5):
 
 def mv_from_len_diff(top_values, score=1):
     """Check if all values have the same length except one"""
-    
     # Compute lengths of values
     lengths = pd.Series([len(x) for x in top_values.index], index=top_values.index)
     # Check if all values have the same length except one:
@@ -179,12 +178,14 @@ def correct_score(list_of_possible_mvs, probable_mvs):
     return new_list_of_possible_mvs
 
 
-def infer_mvs(tab, params):
+def infer_mvs(tab, params=None):
     """
     API MODULE
     
     Run mv inference processes for each column and for the entire table
     """
+    if params is None:
+        params = {}
     
     # Set variables and replace by default values
     probable_mvs = params.get('probable_mvs', [u'nan'])
