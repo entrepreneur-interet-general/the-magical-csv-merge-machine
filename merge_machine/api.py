@@ -133,11 +133,14 @@ def download(project_id):
     request_json = {project_id: ..., file_role: ..., (module: ...), file_name: ...}
     '''
     try:
-        proj, params = init_project(project_id, True)
+        proj, data_params, _ = init_project(project_id, True)
         
-        file_role = params.get('file_role', None)
-        module = params.get('module', 'None')
-        file_name = params.get('file_name', None)
+        if data_params is None:
+            data_params = {}
+        
+        file_role = data_params.get('file_role', None)
+        module = data_params.get('module', None)
+        file_name = data_params.get('file_name', None)
         
         if file_role is not None:
             file_role = secure_filename(file_role)
@@ -157,6 +160,8 @@ def download(project_id):
         return send_file(file_path)
     
     except Exception, e:
+        import pdb
+        pdb.set_trace()
         return jsonify(error=True,
                        message=e)
 

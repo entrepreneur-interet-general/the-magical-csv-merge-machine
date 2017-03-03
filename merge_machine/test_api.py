@@ -9,8 +9,6 @@ Created on Fri Mar  3 15:48:18 2017
 import json
 import requests
 
-import urllib2
-
 protocol = 'http://'
 host = '127.0.0.1:5000/'
 

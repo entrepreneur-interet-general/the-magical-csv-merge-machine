@@ -255,6 +255,8 @@ class Project():
                       and ((log['file_name'] == file_name) or file_name is None):
                 break
         else:
+            import pdb
+            pdb.set_trace()
             raise Exception('No written data could be found in logs')
         file_role = log['file_role']
         module = log['module']
