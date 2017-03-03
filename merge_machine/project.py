@@ -44,6 +44,7 @@ import hashlib
 import json
 import os
 import random
+import shutil
 import time
 
 import pandas as pd
@@ -51,8 +52,7 @@ import pandas as pd
 # IMPORT MODULES
 from infer_nan import infer_mvs, replace_mvs
 
-
-DATA_PATH = 'data'
+from CONFIG import DATA_PATH
 
 def path_to_ref(referential_name, module_name='', file_name=''):
     '''
@@ -119,6 +119,19 @@ class Project():
         log['error'] = False
         return log
     
+    
+    def time_since_created(self):
+        return time.time() - float(self.metadata['timestamp'])
+    
+    
+    # TODO: add shared to metadata
+    def time_since_last_action(self):
+        last_time = float(self.metadata['timestamp'])
+        for file_role in ['source', 'ref']:
+            log_name = file_role + '_log'
+            if self.metadata[log_name]:
+                last_time = max(last_time, float(self.metadata[log_name][-1]['end_timestamp']))
+        return time.time() - last_time
 
     def check_mem_data(self):
         if self.mem_data is None:
@@ -150,7 +163,7 @@ class Project():
     def delete_project(self):
         '''Deletes entire folder containing the project'''
         path_to_proj = self.path_to()
-        os.remove(path_to_proj)
+        shutil.rmtree(path_to_proj)
     
     def path_to(self, file_role='', module_name='', file_name=''):
         '''
@@ -324,21 +337,23 @@ class Project():
         # Update log buffer
         self.log_buffer[self.mem_data_info['file_role'] + '_log'].append(log)
  
-   def infer(self, module_name, params):
-       '''Just runs the module name and returns answer'''
-       MODULES = {'infer_mvs': infer_mvs
-                  }
+    def infer(self, module_name, params):
+        '''Just runs the module name and returns answer'''
+        MODULES = {'infer_mvs': infer_mvs
+                    }
        
-       self.check_mem_data()  
-       # Initiate log
-       log = self.init_log(module_name)
-    
-       infered_params = MODULES[module_name](self.mem_data, params)
-
+        self.check_mem_data()  
+        # Initiate log
+        log = self.init_log(module_name)
+            
+        infered_params = MODULES[module_name](self.mem_data, params)
+        
         # Update log buffer
         self.log_buffer[self.mem_data_info['file_role'] + '_log'].append(log)    
-    
+                
         # TODO: write result of inference
+        return infered_params
+    
     
 if __name__ == '__main__':
     # Create/Load a project

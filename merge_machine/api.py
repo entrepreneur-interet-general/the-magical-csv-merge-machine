@@ -54,22 +54,25 @@ curl -i http://127.0.0.1:5000/download/ -X POST -F "request_json=@sample_downloa
 curl -i http://127.0.0.1:5000/metadata/ -X POST -F "request_json=@sample_download_request.json;type=application/json"
 """
 
+import os
+
 from flask import Flask, json, jsonify, redirect, request, url_for, send_file
 from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
 
 from project import Project
 
+# Change current path to path of api.py
+curdir = os.path.dirname(os.path.realpath(__file__))
+os.chdir(curdir)
 
-
-
+# Initiate application
 app = Flask(__name__)
 cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 
 app.debug = True
-app.secret_key = open('secret_key.txt').read() # TODO: change this, obviously!
-#app.config['TMP_UPLOAD'] = '/home/leo/Documents/eig/test_api/data/tmp'
+app.secret_key = open('secret_key.txt').read()
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 # Check that files are not too big
           
           
