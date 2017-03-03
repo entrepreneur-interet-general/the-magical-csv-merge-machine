@@ -10,7 +10,7 @@ info:
   title: The Merge Machine
   termsOfService: ???
   contact:
-    name: leo@bouloc.eu	
+    name: leo@bouloc.eu
   license:
     name: ???
     url: ???
@@ -19,14 +19,13 @@ basePath: /
 schemes:
   - http
 paths:
-
   /project/metadata/{project_id}:
     get:
       tags:
         - metadata
         - project
       summary: Fetch metadata for given project ID
-      description: "test"
+      description: "Get metadata for json"
       operationId: getMetadata
       parameters:
         - in: path
@@ -60,7 +59,10 @@ paths:
           description: Parameters for download
           required: false
           schema:
-            $ref: "#/definitions/Data"
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Data' 
       responses:
         default:
           description: successful operation
@@ -183,6 +185,21 @@ paths:
           description: successful operation
 
 
+  /admin/list_projects:
+    get:
+      tags:
+        - admin
+        - project
+      summary: List all project id's
+      operationId: listProjects
+      produces:
+        - application/json
+      responses:
+        default:
+          description: successful operation        
+
+
+
 definitions:
   
   Data:
@@ -198,6 +215,7 @@ definitions:
         type: string
         description: What module to fetch from (optional)
         enum:
+          - INIT
           - replace_mvs
           - other_moduleTBD
       file_name:
@@ -212,6 +230,7 @@ definitions:
         type: string
         description: Name of module to run
         enum:
+          - INIT
           - replace_mvs
           - other_module
       infer:
@@ -256,7 +275,7 @@ definitions:
         $ref: '#/definitions/Data'
       params:
         type: object
-        description: Parameters on how to perform missing value inference
+        description: Definition of values to replace
         required: ['mvs_dict']
         properties:
           mvs_dict:
@@ -264,10 +283,12 @@ definitions:
             properties:
               all:
                 type: array
+                description: Values to replace in all columns
                 items:
                   $ref: '#/definitions/MissingValueDescription'
               columns:
                 type: object
+                description: Values to replace in specific columns
                 properties:
                   col_name:
                     type: string
