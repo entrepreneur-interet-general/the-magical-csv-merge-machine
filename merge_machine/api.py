@@ -8,15 +8,15 @@ Created on Mon Feb  6 15:01:16 2017
 
 TODO:
     - Safe file name / not unique per date
-    - Generic load module from request + json ()
+    
     - API: List of internal referentials
     - API: List of finished modules for given project / source
     - API: List of loaded sources
-    - API: Fetch transformed file
+    
     - API: Fetch infered parameters
     - API: Fetch logs
+    - API: Move implicit load out of API
     
-    - Separate upload and main run
 
 DEV GUIDELINES:
     - By default the API will use the file with the same name in the last 
@@ -104,6 +104,11 @@ def init_project(project_id=None, existing_only=False):
     
         if 'data' in params:
             data_params = params['data']
+            
+            # Make paths secure
+            for key, value in data_params.iteritems():
+                data_params[key] = secure_filename(value)
+            
         if 'params' in params:
             module_params = params['params']
     
@@ -192,7 +197,9 @@ def upload(project_id=None):
 
 
 def load_from_params(proj, data_params=None):
-    '''Load data to project using the parameters received in request'''
+    '''Load data to project using the parameters received in request.
+    Implicit load is systematic. TODO: Define implicit load
+    '''
     if data_params is None:
         file_role = None
         module_name = None
@@ -295,7 +302,7 @@ def infer_mvs(project_id):
     load_from_params(proj, data_params)
     
     result = proj.infer('infer_mvs', module_params)
-    
+        
     # Write log
     proj.write_log_buffer(False)
     

@@ -45,9 +45,7 @@ class Admin():
         if not os.path.isdir(dir_path):
             raise Exception('No project found with the following ID: {0}'.format(project_id))
         shutil.rmtree(dir_path)
-        
-        
-    
+
     def get_internal_refs(self):
         return 'NOT IMPLEMENTED'
         

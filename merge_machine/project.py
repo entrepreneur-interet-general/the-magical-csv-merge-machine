@@ -5,23 +5,6 @@ Created on Fri Feb 24 14:04:51 2017
 
 @author: leo
 
-metadata.json:
-    
-{
-timestamp: 1487940990.422995, # Creation time
-user_id: ???, # If we track users
-use_internal_ref: True,
-internal_ref_name: sirene,
-source_names = ['source_1.csv']
-source_log:[ # List of modules that were executed with what source files (from what module). was there an error
-    {file_name: "source_id_1", module: "load", timestamp: 1487949990.422995, origin: "INIT", error:False},
-    {file_name: "source_id_1", module: "missing_values", timestamp: 1487949990.422995, origin: "load", error:False}
-    ]
-ref_log:[]
-project_id:347a7ba113a8cb3863b0c40246ec9098
-]
-}
-
 IDEAS:
     - split file
 
@@ -31,12 +14,6 @@ DEV GUIDELINES:
     - Each module shall take care of creating it's own directory
 
 TODO:
-    - File load
-    - Module transform
-    - Make generic api call for single module
-    - delete 
-    - Change log structure ?
-    - Make function to fetch last file conditional to arguments.
 """
 
 import gc
@@ -52,16 +29,6 @@ import pandas as pd
 # IMPORT MODULES
 from infer_nan import infer_mvs, replace_mvs
 
-from CONFIG import DATA_PATH
-
-def path_to_ref(referential_name, module_name='', file_name=''):
-    '''
-    Return path to directory that stores specific information for stored
-    canonical_data
-    '''
-    dir_path = os.path.join(DATA_PATH, 'referentials', referential_name, module_name, file_name)
-    return os.path.abspath(dir_path)
-
 def gen_proj_id():
     '''Generate unique non-guessable string for project ID'''
     unique_string = str(time.time()) + '_' + str(random.random())
@@ -69,10 +36,6 @@ def gen_proj_id():
     h.update(unique_string)
     project_id = h.hexdigest()
     return project_id
-
-def check_file_role(file_role):
-    if (file_role not in ['ref', 'source']) and (file_role is not None):
-        raise Exception('"file_role" is either "source" or "ref"')
 
 def allowed_file(filename):
     '''Check if file name is correct'''
@@ -93,7 +56,43 @@ def init_log_buffer():
     return []
 
 
+NOT_IMPLEMENTED_MESSAGE = 'NOT IMPLEMENTED in inherited class'
+
 class Project():
+    """
+    Abstract class to deal with data, data transformation, and metadata.
+    
+    SUMMARY:
+        This class allows to load user data and perform inference or 
+        transformations. Before and after transformation, data is stored in 
+        memory as Pandas DataFrame. Transformations are only written to disk if
+        write_data is called. A log that describes the changes made to the 
+        data in memory is stored in log_buffer. When writing data, you should
+        also write the log_buffer (write_log_buffer) to log the changes that 
+        were performed.
+    
+    In short: Objects stored in memory are:
+        - TODO: write this
+    
+    """
+
+#==============================================================================
+# Methods that should be implemented in children
+#==============================================================================
+
+    def check_file_role(self, file_role):
+        raise Exception(NOT_IMPLEMENTED_MESSAGE)
+
+    def path_to(self, file_role='', module_name='', file_name=''):
+        raise Exception(NOT_IMPLEMENTED_MESSAGE)
+
+    def create_metadata(self):
+        raise Exception(NOT_IMPLEMENTED_MESSAGE)    
+        
+#==============================================================================
+# Actual class
+#==============================================================================
+
     def __init__(self, project_id=None):
         if project_id is None:            
             self.new_project()
@@ -104,7 +103,19 @@ class Project():
         # No data in memory initially
         self.mem_data = None
         self.mem_data_info = None # Information on data in memory
-        self.log_buffer = init_log_buffer() # List of logs not yet written to metadata.json
+        self.log_buffer = init_log_buffer() # List of logs not yet written to metadata.json    
+    
+    def new_project(self):
+        '''Create new project'''
+        # Create directory
+        self.project_id = gen_proj_id()
+        path_to_proj = self.path_to()
+        if not os.path.isdir(path_to_proj):
+            os.makedirs(path_to_proj)
+        # Create metadata
+        self.metadata = self.create_metadata()
+        self.write_metadata()  
+
 
     def init_log(self, module_name, module_type):
         assert module_type in ['transform', 'infer']
@@ -114,7 +125,7 @@ class Project():
                'file_role': self.mem_data_info['file_role'],
                 # Modification at hand                        
                'module': module_name, # Module to be executed
-               'module_type': module_type, # Type 
+               'module_type': module_type, # Type (transform, infer, or dedupe)
                'start_timestamp': time.time(),
                'end_timestamp': None, 'error':None, 'error_msg':None, 'written': False}
         return log
@@ -124,10 +135,8 @@ class Project():
         log['error'] = error
         return log
     
-    
     def time_since_created(self):
         return time.time() - float(self.metadata['timestamp'])
-    
     
     # TODO: add shared to metadata
     def time_since_last_action(self):
@@ -140,49 +149,19 @@ class Project():
         if self.mem_data is None:
             raise Exception('No data in memory: use `load_data` at least once')        
 
-    def create_metadata(self):
-        metadata = dict()
-        metadata['timestamp'] = time.time()
-        metadata['user_id'] = 'NOT IMPlEMENTED'
-        metadata['use_internal_ref'] = None
-        metadata['internal_ref_name'] = None
-        metadata['source_names'] = []
-        metadata['log'] = []
-        metadata['project_id'] = self.project_id
-        return metadata
-
-    def new_project(self):
-        '''Create new project'''
-        # Create directory
-        self.project_id = gen_proj_id()
-        path_to_proj = self.path_to()
-        if not os.path.isdir(path_to_proj):
-            os.makedirs(path_to_proj)
-        # Create metadata
-        self.metadata = self.create_metadata()
-        self.write_metadata()   
+ 
 
     def delete_project(self):
         '''Deletes entire folder containing the project'''
         path_to_proj = self.path_to()
         shutil.rmtree(path_to_proj)
     
-    def path_to(self, file_role='', module_name='', file_name=''):
-        '''
-        Return path to directory that stores specific information for a project 
-        module
-        '''
-        assert file_role in ['', 'source', 'ref']
-        #assert all((not x[-1]) or all(x[:-1]) for i in [[project_id, file_role, module_name, file_name][:i] for i in range(4)]) 
-        dir_path = os.path.join(DATA_PATH, 'projects', self.project_id, file_role, module_name, file_name)
-        return os.path.abspath(dir_path)
-    
     def add_init_data(self, file, file_role, file_name):
         """
         Add source or reference to the project. Will write. Can only add table 
         as INIT (not in modules) by design.
         """
-        check_file_role(file_role)
+        self.check_file_role(file_role)
         
         #
         self.mem_data_info = {'file_role': file_role, 
@@ -205,7 +184,7 @@ class Project():
     
     def remove_data(self, file_role, module_name='', file_name=''):
         '''Removes the corresponding data file'''
-        check_file_role(file_role)
+        self.check_file_role(file_role)
         file_path = self.path_to(file_role, module_name, file_name)
         if os.path.isfile(file_path):
             os.remove(file_path)
@@ -224,7 +203,7 @@ class Project():
     
     def clean_metadata(self, file_role, file_name):
         '''Remove all mentions of a file in metadata'''
-        check_file_role(file_role)
+        self.check_file_role(file_role)
         self.metadata['log'] = filter(lambda x: (x['file_name']!=file_name) \
                          and (x['file_role']!=file_role), self.metadata['log'])
     
@@ -236,7 +215,7 @@ class Project():
     
     def get_last_written(self, file_role=None, module=None, file_name=None):
         '''
-        Return info on data that was last successfully written
+        Return info on data that was last successfully written (from log)
         
         INPUT:
             - file_role: filter on file role (last data with given file_role)
@@ -246,7 +225,7 @@ class Project():
         OUTPUT:
             - module_name ('INIT' if no previous module)
         '''
-        check_file_role(file_role)
+        self.check_file_role(file_role)
 
         for log in self.metadata['log'][::-1]:
             if (not log['error']) and log['written'] \
@@ -297,7 +276,7 @@ class Project():
 
         
     def write_data(self):
-        '''Write data in memory to proper module'''
+        '''Write data stored in memory to proper module'''
         self.check_mem_data()
             
         # Write data
@@ -340,56 +319,30 @@ class Project():
         self.log_buffer.append(log)
         return log
  
+    def write_infered_params(self, params, file_role, module_name):
+        file_path = self.path_to(file_role, module_name, 'infered_params.json')
+        with open(file_path, 'w') as w:
+            json.dump(params, w)
+    
     def infer(self, module_name, params):
         '''Just runs the module name and returns answer'''
         MODULES = {'infer_mvs': infer_mvs
                     }
-       
         self.check_mem_data()  
+        
         # Initiate log
         log = self.init_log(module_name, 'infer')
             
         infered_params = MODULES[module_name](self.mem_data, params)
-        
+                
+        # Write result of inference
+        self.write_infered_params(params, self.mem_data_info['file_role'], module_name)
+
         # Update log buffer
         self.log_buffer.append(log)    
-                
-        # TODO: write result of inference
+        
         return infered_params
     
+
     
-if __name__ == '__main__':
-    # Create/Load a project
-    project_id = "f87cf0519b713abd8f40cdd11d564f98"
-    proj = Project(None)
-    
-    # Upload source to project
-    file_name = 'source.csv'
-    file_path = os.path.join('local_test_data', file_name)
-    with open(file_path) as f:
-        proj.add_init_data(f, 'source', file_name)
-        
-    # Load source data to memory
-    proj.load_data(file_role='source', module_name='INIT' , file_name=file_name)
-    
-    # Try transformation
-    params = {'mvs_dict': {'all': [],
-              'columns': [{'col_name': u'uai',
-                           'missing_vals': [{'origin': ['len_ratio'],
-                                             'score': 0.2,
-                                             'val': u'NR'}]}]},
-                'thresh': 0.6}
-    log = proj.transform('replace_mvs', params)
-    
-    # Write transformed file
-    proj.write_data()
-    proj.write_log_buffer(written=True)
-    
-    # Remove previously uploaded file
-    # proj.remove_data('source', 'INIT', 'source.csv')    
-    import pprint
-    pprint.pprint(log)
-    pprint.pprint(proj.get_arb())
-    pprint.pprint(proj.metadata)
-    
-    proj.clean_metadata('source', 'source.csv') 
+
