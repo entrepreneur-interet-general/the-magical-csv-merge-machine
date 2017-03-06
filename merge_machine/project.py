@@ -93,8 +93,8 @@ class Project():
 # Actual class
 #==============================================================================
 
-    def __init__(self, project_id=None):
-        if project_id is None:            
+    def __init__(self, project_id=None, create_new=False):
+        if create_new: 
             self.new_project()
         else:
             self.project_id = project_id
@@ -105,12 +105,23 @@ class Project():
         self.mem_data_info = None # Information on data in memory
         self.log_buffer = init_log_buffer() # List of logs not yet written to metadata.json    
     
-    def new_project(self):
-        '''Create new project'''
+    def new_project(self, project_id=None):
+        '''
+        Create new project. Will use a specified project_id or generate it 
+        otherwise
+        '''
         # Create directory
-        self.project_id = gen_proj_id()
+        if project_id is None:
+            self.project_id = gen_proj_id()
+        else:
+            self.project_id = project_id
+        
         path_to_proj = self.path_to()
-        if not os.path.isdir(path_to_proj):
+        
+        if os.path.isdir(path_to_proj):
+            raise Exception('Project already exists. \
+                    Choose a new path or delete the existing: {}'.format(path_to_proj))
+        else:
             os.makedirs(path_to_proj)
         # Create metadata
         self.metadata = self.create_metadata()
@@ -144,11 +155,43 @@ class Project():
             last_time = max(last_time, float(self.metadata['log'][-1]['end_timestamp']))
         return time.time() - last_time
 
+    def get_arb(self):
+        '''List directories and files in project'''
+        path_to_proj = self.path_to()
+        return get_arb(path_to_proj)
+
+    def get_last_written(self, file_role=None, module=None, file_name=None):
+        '''
+        Return info on data that was last successfully written (from log)
+        
+        INPUT:
+            - file_role: filter on file role (last data with given file_role)
+            - module: filter on given module
+            - file_name: filter on file_name
+            
+        OUTPUT:
+            - module_name ('INIT' if no previous module)
+        '''
+        self.check_file_role(file_role)
+
+        for log in self.metadata['log'][::-1]:
+            if (not log['error']) and log['written'] \
+                      and ((log['file_role'] == file_role) or file_role is None) \
+                      and ((log['module'] == module) or module is None) \
+                      and ((log['file_name'] == file_name) or file_name is None):
+                break
+        else:
+            import pdb
+            pdb.set_trace()
+            raise Exception('No written data could be found in logs')
+        file_role = log['file_role']
+        module = log['module']
+        file_name = log['file_name']        
+        return (file_role, module, file_name)
+
     def check_mem_data(self):
         if self.mem_data is None:
             raise Exception('No data in memory: use `load_data` at least once')        
-
- 
 
     def delete_project(self):
         '''Deletes entire folder containing the project'''
@@ -196,9 +239,11 @@ class Project():
         assert metadata['project_id'] == self.project_id
         return metadata
     
+    
     def write_metadata(self):
         path_to_metadata = self.path_to(file_name='metadata.json')
         json.dump(self.metadata, open(path_to_metadata, 'w'))
+    
     
     def clean_metadata(self, file_role, file_name):
         '''Remove all mentions of a file in metadata'''
@@ -206,40 +251,6 @@ class Project():
         self.metadata['log'] = filter(lambda x: (x['file_name']!=file_name) \
                          and (x['file_role']!=file_role), self.metadata['log'])
     
-    def get_arb(self):
-        '''List directories and files in project'''
-        path_to_proj = self.path_to()
-        return get_arb(path_to_proj)
-        
-    
-    def get_last_written(self, file_role=None, module=None, file_name=None):
-        '''
-        Return info on data that was last successfully written (from log)
-        
-        INPUT:
-            - file_role: filter on file role (last data with given file_role)
-            - module: filter on given module
-            - file_name: filter on file_name
-            
-        OUTPUT:
-            - module_name ('INIT' if no previous module)
-        '''
-        self.check_file_role(file_role)
-
-        for log in self.metadata['log'][::-1]:
-            if (not log['error']) and log['written'] \
-                      and ((log['file_role'] == file_role) or file_role is None) \
-                      and ((log['module'] == module) or module is None) \
-                      and ((log['file_name'] == file_name) or file_name is None):
-                break
-        else:
-            import pdb
-            pdb.set_trace()
-            raise Exception('No written data could be found in logs')
-        file_role = log['file_role']
-        module = log['module']
-        file_name = log['file_name']        
-        return (file_role, module, file_name)
         
     def load_data(self, file_role, module_name, file_name):
         '''Load data as pandas DataFrame'''
@@ -288,13 +299,25 @@ class Project():
                                  self.mem_data_info['file_name'])
         self.mem_data.to_csv(file_path, encoding='utf-8', index=False)
 
+
+    def write_infered_params(self, params, file_role, module_name):
+        dir_path = self.path_to(self.mem_data_info['file_role'], module_name)
+        if not os.path.isdir(dir_path):
+            os.makedirs(dir_path)        
+        file_path = self.path_to(file_role, 
+                                 module_name, 
+                                 'infered_params.json')
+        with open(file_path, 'w') as w:
+            json.dump(params, w)
+
         
     def clear_memory(self):
         '''Removes the table loaded in memory'''
         self.mem_data = None
         self.mem_data_info = None
         gc.collect()
-    
+
+
     def transform(self, module_name, params):
         '''Run module on pandas DataFrame in memory and update memory state'''
         
@@ -317,17 +340,8 @@ class Project():
         # Update log buffer
         self.log_buffer.append(log)
         return log
- 
-    def write_infered_params(self, params, file_role, module_name):
-        dir_path = self.path_to(self.mem_data_info['file_role'], module_name)
-        if not os.path.isdir(dir_path):
-            os.makedirs(dir_path)        
-        file_path = self.path_to(file_role, 
-                                 module_name, 
-                                 'infered_params.json')
-        with open(file_path, 'w') as w:
-            json.dump(params, w)
     
+
     def infer(self, module_name, params):
         '''Just runs the module name and returns answer'''
         MODULES = {'infer_mvs': infer_mvs

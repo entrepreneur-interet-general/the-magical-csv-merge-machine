@@ -56,12 +56,12 @@ curl -i http://127.0.0.1:5000/metadata/ -X POST -F "request_json=@sample_downloa
 
 import os
 
-from flask import Flask, json, jsonify, redirect, request, url_for, send_file
+from flask import Flask, jsonify, request, url_for, send_file
 from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
 
 from admin import Admin
-from project import Project
+from user_project import UserProject
 
 
 # Change current path to path of api.py
@@ -93,7 +93,7 @@ def init_project(project_id=None, existing_only=False):
     
     if (project_id is None) and existing_only:
         raise Exception('Cannot pass None to project_id. No project can be created here')
-    proj = Project(project_id)
+    proj = UserProject(project_id)
     
     # Parse json request
     data_params = None
