@@ -115,8 +115,7 @@ class Project():
         # Create metadata
         self.metadata = self.create_metadata()
         self.write_metadata()  
-
-
+    
     def init_log(self, module_name, module_type):
         assert module_type in ['transform', 'infer']
         log = { # Data being modified
@@ -274,7 +273,7 @@ class Project():
         self.write_metadata()
         self.log_buffer = init_log_buffer()
 
-        
+
     def write_data(self):
         '''Write data stored in memory to proper module'''
         self.check_mem_data()
@@ -283,7 +282,7 @@ class Project():
         dir_path = self.path_to(self.mem_data_info['file_role'], 
                                 self.mem_data_info['module'])
         if not os.path.isdir(dir_path):
-            os.makedirs(dir_path)
+            os.makedirs(dir_path)        
         file_path = self.path_to(self.mem_data_info['file_role'], 
                                  self.mem_data_info['module'], 
                                  self.mem_data_info['file_name'])
@@ -320,7 +319,12 @@ class Project():
         return log
  
     def write_infered_params(self, params, file_role, module_name):
-        file_path = self.path_to(file_role, module_name, 'infered_params.json')
+        dir_path = self.path_to(self.mem_data_info['file_role'], module_name)
+        if not os.path.isdir(dir_path):
+            os.makedirs(dir_path)        
+        file_path = self.path_to(file_role, 
+                                 module_name, 
+                                 'infered_params.json')
         with open(file_path, 'w') as w:
             json.dump(params, w)
     

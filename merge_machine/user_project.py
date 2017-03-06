@@ -54,8 +54,12 @@ if __name__ == '__main__':
     with open(file_path) as f:
         proj.add_init_data(f, 'source', file_name)
         
+        
+    
     # Load source data to memory
     proj.load_data(file_role='source', module_name='INIT' , file_name=file_name)
+    
+    infered_params = proj.infer('infer_mvs', None)
     
     # Try transformation
     params = {'mvs_dict': {'all': [],

@@ -9,7 +9,7 @@ Created on Fri Mar  3 10:37:58 2017
 import os
 import shutil
 
-from project import Project
+from user_project import UserProject
 
 from CONFIG import DATA_PATH
 
@@ -45,18 +45,18 @@ class Admin():
         if not os.path.isdir(dir_path):
             raise Exception('No project found with the following ID: {0}'.format(project_id))
         shutil.rmtree(dir_path)
-
+    
     def get_internal_refs(self):
         return 'NOT IMPLEMENTED'
         
 if __name__ == '__main__':
     admin = Admin()
     
-    _id = '347a7ba113a8cb3863b0c40246ec9098'
+    _id = '8b3fbab040534afae137e2ae124ce152'
     
     for _id in admin.list_projects():
         #admin.remove_project(_id)
-        proj = Project(_id)
-        print(proj.time_since_last_action())
+        proj = UserProject(_id)
+        print(proj.project_id, proj.time_since_last_action())
             
     
