@@ -28,7 +28,8 @@ class UserProject(Project):
         '''
         if file_role:
             self.check_file_role(file_role)
-        path = os.path.join(DATA_PATH, 'projects', self.project_id, file_role, module_name, file_name)
+        path = os.path.join(DATA_PATH, 'projects', self.project_id, file_role, 
+                            module_name, file_name)
         return os.path.abspath(path)    
 
     def create_metadata(self):
@@ -36,28 +37,28 @@ class UserProject(Project):
         metadata['timestamp'] = time.time()
         metadata['user_id'] = 'NOT IMPlEMENTED'
         metadata['use_internal_ref'] = None
-        metadata['internal_ref_name'] = None
-        metadata['source_names'] = []
+        metadata['ref_name'] = None
+        #metadata['source_names'] = []
         metadata['log'] = []
         metadata['project_id'] = self.project_id
         return metadata   
+
     
 
 if __name__ == '__main__':
     # Create/Load a project
-    project_id = "f87cf0519b713abd8f40cdd11d564f98"
-    proj = UserProject(None)
+    project_id = "4e8286f034eef40e89dd99ebe6d87f21"
+    proj = UserProject(project_id, create_new=False)
     
     # Upload source to project
-    file_name = 'source.csv'
-    file_path = os.path.join('local_test_data', file_name)
-    with open(file_path) as f:
-        proj.add_init_data(f, 'source', file_name)
-        
-        
+    file_names = ['source.csv', 'source2.csv']
+    for file_name in file_names:
+        file_path = os.path.join('local_test_data', file_name)
+        with open(file_path) as f:
+            proj.add_init_data(f, 'source', file_name)
     
     # Load source data to memory
-    proj.load_data(file_role='source', module_name='INIT' , file_name=file_name)
+    proj.load_data(file_role='source', module_name='INIT' , file_name='source.csv')
     
     infered_params = proj.infer('infer_mvs', None)
     
@@ -81,4 +82,4 @@ if __name__ == '__main__':
     pprint.pprint(proj.get_arb())
     pprint.pprint(proj.metadata)
     
-    proj.clean_metadata('source', 'source.csv') 
+    print proj.log_by_file_name()

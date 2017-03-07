@@ -17,6 +17,8 @@ TODO:
     - API: Fetch logs
     - API: Move implicit load out of API
     
+    - API: Error codes / remove error
+    
 
 DEV GUIDELINES:
     - By default the API will use the file with the same name in the last 
@@ -221,67 +223,6 @@ def load_from_params(proj, data_params=None):
     proj.load_data(file_role, module_name, file_name)
 
 
-
-@app.route('/project/run_all/<project_id>', methods=['POST'])
-@cross_origin()
-def main(project_id):
-    '''
-    DEPRECATED
-    
-    Runs all modules at once (avoids having to call all modules separately + 
-    avoids writing unnecessary data).
-    
-    See https://github.com/eig-2017/the-magical-csv-merge-machine/blob/master/docs/api_calls_schema.md
-    for pseudo call
-    
-    '''
-    # Needs: (one file path (source) and one ref_name) or (two file_paths (source + ref))
-    # Check that needs are satisfied
-    # calls upload_file on one or two files
-    # writes paths to source, ref in metadata
-    # Use load module (encoding and separator detection) detection and 
-    # returns project_id
-    
-    #==========================================================================
-    # Check that form input is valid
-    #==========================================================================
-    
-    check_request()
-    
-    #==========================================================================
-    # Load project and parameters
-    #==========================================================================
-
-    proj, params = init_project(project_id, True)
-
-    #==========================================================================
-    # Execute transformations on table(s)
-    #==========================================================================
-    
-    
-    for file_role in ['source', 'ref']:
-
-        
-        for command in params['modules'][file_role]: 
-            module_name = command['module_name']
-            module_params = command['params']
-            proj.transform(module_name, module_params)
-            
-        # Write transformations
-        proj.write_data()
-    
-    #==========================================================================
-    # Save files
-    #==========================================================================
-    
-    return jsonify(error=False, 
-                   metadata=proj.metadata,
-                   project_id=proj.project_id)
-
-
-
-
-
 #==============================================================================
 # MODULES
 #==============================================================================
@@ -325,12 +266,9 @@ def replace_mvs(project_id):
     
     return jsonify(error=False)
 
-
-
 #==============================================================================
 # Admin
 #==============================================================================
-
 
 @app.route('/admin/list_projects', methods=['GET', 'POST'])
 @cross_origin()
@@ -341,7 +279,14 @@ def list_projects():
     return jsonify(error=False,
                    response=list_of_projects)
 
-
+@app.route('/admin/list_referentials', methods=['GET', 'POST'])
+@cross_origin()
+def list_referentials():
+    '''Lists all internal referentials'''
+    admin = Admin()
+    list_of_projects = admin.list_referentials()
+    return jsonify(error=False,
+                   response=list_of_projects)
 
 
 if __name__ == '__main__':

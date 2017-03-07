@@ -46,8 +46,6 @@ class Admin():
             raise Exception('No project found with the following ID: {0}'.format(project_id))
         shutil.rmtree(dir_path)
     
-    def get_internal_refs(self):
-        return 'NOT IMPLEMENTED'
         
 if __name__ == '__main__':
     admin = Admin()
@@ -58,5 +56,6 @@ if __name__ == '__main__':
         #admin.remove_project(_id)
         proj = UserProject(_id)
         print(proj.project_id, proj.time_since_last_action())
+        print(proj.list_csvs())
             
     

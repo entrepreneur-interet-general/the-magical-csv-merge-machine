@@ -5,6 +5,9 @@ Created on Fri Feb 24 14:04:51 2017
 
 @author: leo
 
+Abstract class that deals with csv data, transformations, and inference.
+
+
 IDEAS:
     - split file
 
@@ -18,6 +21,7 @@ TODO:
 
 import gc
 import hashlib
+import itertools
 import json
 import os
 import random
@@ -26,8 +30,13 @@ import time
 
 import pandas as pd
 
-# IMPORT MODULES
 from infer_nan import infer_mvs, replace_mvs
+
+MODULES = {
+        'transform':{'replace_mvs': replace_mvs},
+        'infer':{'infer_mvs': infer_mvs}
+        }
+
 
 def gen_proj_id():
     '''Generate unique non-guessable string for project ID'''
@@ -51,6 +60,8 @@ def get_arb(dir_path):
         else:
             to_return[name] = {}
     return to_return
+
+
 
 def init_log_buffer():
     return []
@@ -97,6 +108,8 @@ class Project():
         if create_new: 
             self.new_project()
         else:
+            if project_id is None:
+                raise Exception('Set create_new to true or specify project_id')
             self.project_id = project_id
             self.metadata = self.read_metadata()
             
@@ -125,7 +138,7 @@ class Project():
             os.makedirs(path_to_proj)
         # Create metadata
         self.metadata = self.create_metadata()
-        self.write_metadata()  
+        self.write_metadata()
     
     def init_log(self, module_name, module_type):
         assert module_type in ['transform', 'infer']
@@ -160,6 +173,39 @@ class Project():
         path_to_proj = self.path_to()
         return get_arb(path_to_proj)
 
+
+    def list_csvs(self):
+        '''
+        Lists csv files (from data) in data directory and presents a list of modules in 
+        which they are present. You can combine this with get_last_written
+        '''
+        all_csvs = dict()
+        for file_role in ['ref', 'source']:
+            all_csvs[file_role] = dict()
+            root_path = self.path_to(file_role=file_role)
+            if os.path.isdir(root_path):
+                for _dir in os.listdir(root_path):
+                    if os.path.isdir(os.path.join(root_path, _dir)):
+                        for file_name in os.listdir(os.path.join(root_path, _dir)):
+                            if file_name[-4:] == '.csv':
+                                if file_name not in all_csvs[file_role]:
+                                    all_csvs[file_role][file_name] = [_dir]
+                                else:
+                                    all_csvs[file_role][file_name].append(_dir)
+        return all_csvs
+
+    def log_by_file_name(self):
+        # Sort by name and date        
+        sorted_log = sorted(self.metadata['log'], key=lambda x: (x['file_name'], 
+                                x['start_timestamp']))
+        
+        resp = dict()
+        for key, group in itertools.groupby(sorted_log, lambda x: x['file_name']):
+            resp[key] = list(group)
+        return resp
+            
+
+
     def get_last_written(self, file_role=None, module=None, file_name=None):
         '''
         Return info on data that was last successfully written (from log)
@@ -181,8 +227,6 @@ class Project():
                       and ((log['file_name'] == file_name) or file_name is None):
                 break
         else:
-            import pdb
-            pdb.set_trace()
             raise Exception('No written data could be found in logs')
         file_role = log['file_role']
         module = log['module']
@@ -191,7 +235,8 @@ class Project():
 
     def check_mem_data(self):
         if self.mem_data is None:
-            raise Exception('No data in memory: use `load_data` at least once')        
+            raise Exception('No data in memory: use `load_data` (reload is \
+                        mandatory after dedupe)')        
 
     def delete_project(self):
         '''Deletes entire folder containing the project'''
@@ -224,6 +269,13 @@ class Project():
         self.write_log_buffer(written=True)
         self.clear_memory()
     
+    def add_config_data(self, file, file_role, module):
+        '''Will write config file'''
+        if (file_role != 'shared') or (module != 'dedupe'):
+            raise Exception('Can only upload config files to file_role: shared\
+                            and module:dedupe') # TODO: Is this good? Yes/No?
+        
+            
     def remove_data(self, file_role, module_name='', file_name=''):
         '''Removes the corresponding data file'''
         self.check_file_role(file_role)
@@ -238,7 +290,6 @@ class Project():
         metadata = json.loads(open(path_to_metadata).read())
         assert metadata['project_id'] == self.project_id
         return metadata
-    
     
     def write_metadata(self):
         path_to_metadata = self.path_to(file_name='metadata.json')
@@ -320,10 +371,6 @@ class Project():
 
     def transform(self, module_name, params):
         '''Run module on pandas DataFrame in memory and update memory state'''
-        
-        MODULES = {'replace_mvs': replace_mvs
-                    }
-
         self.check_mem_data()        
         
         # Initiate log
@@ -331,7 +378,7 @@ class Project():
 
         # TODO: catch module errors and add to log
         # Run module on pandas DataFrame 
-        self.mem_data = MODULES[module_name](self.mem_data, params)
+        self.mem_data = MODULES['transform'][module_name](self.mem_data, params)
         self.mem_data_info['module'] = module_name
         
         # Complete log
@@ -344,23 +391,23 @@ class Project():
 
     def infer(self, module_name, params):
         '''Just runs the module name and returns answer'''
-        MODULES = {'infer_mvs': infer_mvs
-                    }
         self.check_mem_data()  
         
         # Initiate log
         log = self.init_log(module_name, 'infer')
             
-        infered_params = MODULES[module_name](self.mem_data, params)
+        infered_params = MODULES['infer'][module_name](self.mem_data, params)
                 
         # Write result of inference
         self.write_infered_params(params, self.mem_data_info['file_role'], module_name)
 
         # Update log buffer
-        self.log_buffer.append(log)    
+        self.log_buffer.append(log)     
         
         return infered_params
     
+    
+
 
     
 
