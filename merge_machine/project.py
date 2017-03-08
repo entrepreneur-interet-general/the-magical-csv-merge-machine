@@ -269,12 +269,13 @@ class Project():
         self.write_log_buffer(written=True)
         self.clear_memory()
     
-    def add_config_data(self, file, file_role, module):
+    def add_config_data(self, file, file_role, module, file_name):
         '''Will write config file'''
         if (file_role != 'shared') or (module != 'dedupe'):
             raise Exception('Can only upload config files to file_role: shared\
                             and module:dedupe') # TODO: Is this good? Yes/No?
-        
+        file_path = self.path_to(file_role, module, file_name)
+        # TODO: finish this. What should we do? for all modules? pass file? pass dict?
             
     def remove_data(self, file_role, module_name='', file_name=''):
         '''Removes the corresponding data file'''
