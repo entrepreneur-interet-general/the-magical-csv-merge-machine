@@ -9,6 +9,7 @@ Created on Fri Mar  3 10:37:58 2017
 # TODO: 
     - Generate variable definition. In particular: has missing/corpus/type
     - Translate all messages for the interface
+    - Insert referential restriction in middle of training somehow
 
 """
 import dedupe
@@ -48,6 +49,11 @@ def preProcess(val):
 
 
 def exact_matches(data_1, data_2, match_fields):
+    '''
+    (from https://github.com/datamade/csvdedupe/blob/master/csvdedupe/csvlink.py)
+    Separates dedupe-formated data from two sources into exact matches, and non-
+    exact matches
+    '''
     nonexact_1 = {}
     nonexact_2 = {}
     exact_pairs = []
@@ -87,6 +93,8 @@ def merge_results(ref, source, matched_records, selected_columns_from_ref):
                                         include in the file we return
 
     '''
+    assert selected_columns_from_ref # TODO: This should be done in checking input parameters
+    
     # Turn matched_records into pandas DataFrame
     source_idx = [x[0][0][0] for x in matched_records]
     ref_idx = [x[0][0][1] for x in matched_records]
@@ -104,6 +112,29 @@ def merge_results(ref, source, matched_records, selected_columns_from_ref):
 
     return source
 
+def format_for_dedupe(tab, col_map, cols_for_match, file_role):
+    '''Formats a pandas DataFrame as input for dedupe'''
+    # Check that all columns are destinct
+    if len(set(tab.columns)) != tab.shape[1]:
+        raise Exception('CSV inputs should have distinct column names')
+    
+    # Replace columns
+    indexed_col_map = index_col_map(col_map, file_role)
+    tab.columns = [indexed_col_map.get(x, x) for x in tab.columns]
+    
+    # Pre-process
+    for col in cols_for_match:
+        sel = tab[col].notnull()
+        tab.loc[sel, col] = tab.loc[sel, col].apply(preProcess)
+    
+    # Replace np.NaN by None
+    tab = tab.where(tab.notnull(), None)
+
+    # Put as dedupe input format
+    data = tab[cols_for_match].to_dict('index')
+    
+    return data
+
 
 if __name__ == '__main__':
     
@@ -115,10 +146,15 @@ if __name__ == '__main__':
     
     
     variable_definition = [
-                            {'field': 'nom_lycee', 'type': 'String'},
-                            {'field': 'commune', 'type': 'String'}
+                            {'field': 'nom_lycee', 'type': 'String', 'crf':True, 'missing_values':True},
+                            {'field': 'commune', 'type': 'String', 'crf': True, 'missing_values':True}
                             ]
-    cols = [var['field'] for var in variable_definition]
+    cols_for_match = [var['field'] for var in variable_definition]
+
+
+    # What columns in reference to include in output
+    selected_columns_from_ref = ['numero_uai', 'patronyme_uai', 'localite_acheminement_uai']
+        
     
     num_cores = 2
     gazetteer = dedupe.Gazetteer(variable_definition=variable_definition, 
@@ -138,27 +174,8 @@ if __name__ == '__main__':
     
     tab = pd.read_csv(ref_path, encoding='utf-8', dtype='unicode')
     
-    # Check that all columns are destinct
-    if len(set(tab.columns)) != tab.shape[1]:
-        raise Exception('CSV inputs should have distinct column names')
-    
-    # Replace columns
-    indexed_col_map = index_col_map(col_map, file_role)
-    tab.columns = [indexed_col_map.get(x, x) for x in tab.columns]
-    
-    # Pre-process
-    for col in cols:
-        sel = tab[col].notnull()
-        tab.loc[sel, col] = tab.loc[sel, col].apply(preProcess)
-    
-    # Replace np.NaN by None
-    tab = tab.where(tab.notnull(), None)
-    
     # Put to dedupe input format
-    data_ref = tab[cols].to_dict('index')
-    
-    # Remove np.nan
-    #data_ref = {_id: {key: value for key, value in datapoint.iteritems() if isinstance(value, basestring)} for _id, datapoint in data_ref.iteritems()}
+    data_ref = format_for_dedupe(tab, col_map, cols_for_match, file_role)
     
     #==============================================================================
     # # GET SOURCE DATA
@@ -169,52 +186,41 @@ if __name__ == '__main__':
     
     tab = pd.read_csv(source_path, encoding='utf-8', dtype='unicode')
     
-    # Check that all columns are destinct
-    if len(set(tab.columns)) != tab.shape[1]:
-        raise Exception('CSV inputs should have distinct column names')
-    
-    # Replace columns
-    indexed_col_map = index_col_map(col_map, file_role)
-    tab.columns = [indexed_col_map.get(x, x) for x in tab.columns]
-    
-    # Pre-process
-    for col in cols:
-        sel = tab[col].notnull()
-        tab.loc[sel, col] = tab.loc[sel, col].apply(preProcess)
-    
-    # Replace np.NaN by None
-    tab = tab.where(tab.notnull(), None)
-    
-    
-    # Remove np.nan
-    #data_ref = {_id: {key: value for key, value in datapoint.iteritems() if isinstance(value, basestring)} for _id, datapoint in data_ref.iteritems()}
-    
     # Put to dedupe input format
-    data_source = tab[cols].to_dict('index')
+    data_source = format_for_dedupe(tab, col_map, cols_for_match, file_role)
     
     #==============================================================================
     # 
     #==============================================================================
     
+    #    import cProfile
+    #    
+    #    def main():
     # Manual train # TODO: remove
-    sample_size = 500000
+    sample_size = 50000
+    
+
     
     (nonexact_1,
      nonexact_2,
-     exact_pairs) = exact_matches(data_ref, data_source, cols)
+     exact_pairs) = exact_matches(data_ref, data_source, cols_for_match)
     
     gazetteer.sample(data_1=nonexact_1, data_2=nonexact_2, sample_size=sample_size)
     
     # Read training
-    if os.path.isfile(train_path):
+    use_training_cache = True
+    if use_training_cache and os.path.isfile(train_path):
         with open(train_path) as f:
             gazetteer.readTraining(f)
     
     # Add training
-    dedupe.consoleLabel(gazetteer)
-    # Write training
-    with open(train_path, 'w') as w:
-        gazetteer.writeTraining(w)
+    manual_train = False
+    if manual_train:
+        dedupe.consoleLabel(gazetteer)
+        
+        # Write training
+        with open(train_path, 'w') as w:
+            gazetteer.writeTraining(w)
      
     # Add training
     max_compare = 500000
@@ -226,23 +232,29 @@ if __name__ == '__main__':
     
     threshold = 0.0001
     
-    matched_records = gazetteer.match(data_source, threshold=threshold)
+    match_rates = []
+    thresholds = [0.001] #[10**(-x) for x in [0, 0] + list(range(1, 14))]
+    for threshold in thresholds:
+    
+        matched_records = gazetteer.match(data_source, threshold=threshold)
+           
+
+        source = pd.read_csv(source_path, encoding='utf-8', dtype='unicode')
+        ref = pd.read_csv(ref_path, encoding='utf-8', dtype='unicode')
+        
+        
+        source = merge_results(ref, source, matched_records, selected_columns_from_ref)
+        
+        match_rates.append(source.numero_uai.notnull().mean())
+    
+    for x in zip(thresholds, match_rates):
+        print(x[0], '-->', x[1])
+        
     
     
-    
-    
-    # Merge source with selected columns in ref
-    selected_columns_from_ref = ['numero_uai', 'patronyme_uai', 'localite_acheminement_uai']
-    
-    source = pd.read_csv(source_path, encoding='utf-8', dtype='unicode')
-    ref = pd.read_csv(ref_path, encoding='utf-8', dtype='unicode')
-    
-    
-    source = merge_results(ref, source, matched_records, selected_columns_from_ref)
-    
-    
-    
-    
-    
+    cols = ['commune', 'localite_acheminement_uai', 'lycees_sources', 
+            'patronyme_uai', '__CONFIDENCE']
+        
+#    cProfile.run('main()')
     import pdb
     pdb.set_trace()
