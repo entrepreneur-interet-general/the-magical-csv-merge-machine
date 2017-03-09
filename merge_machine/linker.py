@@ -12,7 +12,9 @@ Created on Fri Mar  3 10:37:58 2017
     - Insert referential restriction in middle of training somehow
 
 """
+import copy
 import dedupe
+import gc
 import os
 import re
 
@@ -23,15 +25,6 @@ import pandas as pd
 
 # variable_definition: see here: https://dedupe.readthedocs.io/en/latest/Variable-definition.html
 
-
-def index_col_map(col_map, file_role):
-    '''
-    Returns a dict with keys the value of file_role and value the new column 
-    name
-    '''
-    assert file_role in ['source', 'ref']
-    new_col_map = {_map[file_role]: _map['col_new'] for _map in col_map}
-    return new_col_map
 
 def preProcess(val):
     """
@@ -112,17 +105,23 @@ def merge_results(ref, source, matched_records, selected_columns_from_ref):
 
     return source
 
-def format_for_dedupe(tab, col_map, cols_for_match, file_role):
-    '''Formats a pandas DataFrame as input for dedupe'''
+def get_cols_for_match(my_variable_definition):
+    cols_for_match = [var['field']['ref'] for var in my_variable_definition]
+    return cols_for_match
+
+def format_for_dedupe(tab, my_variable_definition, file_role):
+    '''Takes a pandas DataFrame and create a dedupe-compatible dictionnary'''
     # Check that all columns are destinct
     if len(set(tab.columns)) != tab.shape[1]:
         raise Exception('CSV inputs should have distinct column names')
     
-    # Replace columns
-    indexed_col_map = index_col_map(col_map, file_role)
-    tab.columns = [indexed_col_map.get(x, x) for x in tab.columns]
+    # Replace columns in source
+    if file_role == 'source':
+        col_map = {x['field']['source']: x['field']['ref'] for x in my_variable_definition}
+        tab.columns = [col_map.get(x, x) for x in tab.columns]
     
     # Pre-process
+    cols_for_match = get_cols_for_match(my_variable_definition)
     for col in cols_for_match:
         sel = tab[col].notnull()
         tab.loc[sel, col] = tab.loc[sel, col].apply(preProcess)
@@ -136,46 +135,127 @@ def format_for_dedupe(tab, col_map, cols_for_match, file_role):
     return data
 
 
-if __name__ == '__main__':
+def main_dedupe(data_ref, data_source, my_variable_definition, train_path):
+    '''Generates matches records'''
+    sample_size = 50000
     
-    # Dict that maps a new nam
-    col_map = [
-        {'source': 'lycees_sources','ref': 'full_name', 'col_new': 'nom_lycee'},
-        {'source': 'commune', 'ref': 'localite_acheminement_uai', 'col_new': 'commune'}
-        ]
+    # Get columns for match and change to standard dedupe variable definition
+    cols_for_match = get_cols_for_match(my_variable_definition)
+    variable_definition = copy.deepcopy(my_variable_definition)
+    for var in variable_definition:
+        var['field'] = var['field']['ref']    
     
-    
-    variable_definition = [
-                            {'field': 'nom_lycee', 'type': 'String', 'crf':True, 'missing_values':True},
-                            {'field': 'commune', 'type': 'String', 'crf': True, 'missing_values':True}
-                            ]
-    cols_for_match = [var['field'] for var in variable_definition]
+    (nonexact_1,
+     nonexact_2,
+     exact_pairs) = exact_matches(data_ref, data_source, cols_for_match)
 
-
-    # What columns in reference to include in output
-    selected_columns_from_ref = ['numero_uai', 'patronyme_uai', 'localite_acheminement_uai']
-        
-    
     num_cores = 2
     gazetteer = dedupe.Gazetteer(variable_definition=variable_definition, 
                                  num_cores=num_cores)
     
+    gazetteer.sample(data_1=nonexact_1, data_2=nonexact_2, sample_size=sample_size)
+    
+    # Read training
+    use_training_cache = True
+    try:
+        if use_training_cache and os.path.isfile(train_path):
+            with open(train_path) as f:
+                gazetteer.readTraining(f)
+    except:
+        print('Unable to load training data...')
+        pass
+        
+    
+    # Add examples through manual labelling
+    # TODO: remove this when we can train in interface
+    manual_labelling = True
+    
+    if manual_labelling:
+        dedupe.consoleLabel(gazetteer)
+        
+        # Write training
+        with open(train_path, 'w') as w:
+            gazetteer.writeTraining(w)
+     
+    # Train on labelled data
+    # TODO: Load train data
+    gazetteer.train(index_predicates=True) # TODO: look into memory usage of index_predicates
+    
+    # Index reference
+    gazetteer.index(data=data_ref)
+    
+    # Compute threshold
+    recall_weight = 1.5
+    threshold = gazetteer.threshold(data_source, recall_weight=recall_weight)
+
+    matched_records = gazetteer.match(data_source, threshold=threshold)
+    
+    return matched_records, threshold
+    
+ 
+def linker(params):
+    '''
+    Takes as inputs file paths and returnes the merge table as a pandas DataFrame
+    '''
+    ref_path = params['ref_path']
+    source_path = params['source_path']    
+    train_path = params['train_path']   
+    learned_settings_path = params['learned_settings_path']   
+    my_variable_definition = params['my_variable_definition']   
+    
+    # Put to dedupe input format
+    ref = pd.read_csv(ref_path, encoding='utf-8', dtype='unicode')
+    data_ref = format_for_dedupe(ref, my_variable_definition, 'ref') 
+    del ref # To save memory
+    gc.collect()
+    
+    # Put to dedupe input format
+    source = pd.read_csv(source_path, encoding='utf-8', dtype='unicode')
+    data_source = format_for_dedupe(source, my_variable_definition, 'source')
+    del source
+    gc.collect()
+    
+    matched_records, threshold = main_dedupe(data_ref, data_source, my_variable_definition, train_path)
+    
+    ref = pd.read_csv(ref_path, encoding='utf-8', dtype='unicode')
+    source = pd.read_csv(source_path, encoding='utf-8', dtype='unicode')
+    
+    # Generate out file
+    source = merge_results(ref, source, matched_records, selected_columns_from_ref)
+        
+    return source
+
+
+if __name__ == '__main__':
+    
+    # Not same as dedupe
+    my_variable_definition = [
+                            {'field': 
+                                    {'source': 'lycees_sources',
+                                    'ref': 'full_name'}, 
+                            'type': 'String', 
+                            'crf':True, 
+                            'missing_values':True},
+                                
+                            {'field': {'source': 'commune', 
+                                       'ref': 'localite_acheminement_uai'}, 
+                            'type': 'String', 
+                            'crf': True, 
+                            'missing_values':True}
+                            ]
+
+    # What columns in reference to include in output
+    selected_columns_from_ref = ['numero_uai', 'patronyme_uai', 'localite_acheminement_uai']
+    
     
     train_path = 'local_test_data/training.json'
-    
-    
-    
     #==============================================================================
-    # # GET REF DATA
+    # Paths to data
     #==============================================================================
     file_role = 'ref'
     file_name = file_role + '.csv'
     ref_path = os.path.join('local_test_data', file_name)
     
-    tab = pd.read_csv(ref_path, encoding='utf-8', dtype='unicode')
-    
-    # Put to dedupe input format
-    data_ref = format_for_dedupe(tab, col_map, cols_for_match, file_role)
     
     #==============================================================================
     # # GET SOURCE DATA
@@ -184,74 +264,17 @@ if __name__ == '__main__':
     file_name = file_role + '.csv'
     source_path = os.path.join('local_test_data', file_name)
     
-    tab = pd.read_csv(source_path, encoding='utf-8', dtype='unicode')
-    
-    # Put to dedupe input format
-    data_source = format_for_dedupe(tab, col_map, cols_for_match, file_role)
-    
     #==============================================================================
     # 
     #==============================================================================
     
-    #    import cProfile
-    #    
-    #    def main():
-    # Manual train # TODO: remove
-    sample_size = 50000
     
 
-    
-    (nonexact_1,
-     nonexact_2,
-     exact_pairs) = exact_matches(data_ref, data_source, cols_for_match)
-    
-    gazetteer.sample(data_1=nonexact_1, data_2=nonexact_2, sample_size=sample_size)
-    
-    # Read training
-    use_training_cache = True
-    if use_training_cache and os.path.isfile(train_path):
-        with open(train_path) as f:
-            gazetteer.readTraining(f)
-    
-    # Add training
-    manual_train = False
-    if manual_train:
-        dedupe.consoleLabel(gazetteer)
-        
-        # Write training
-        with open(train_path, 'w') as w:
-            gazetteer.writeTraining(w)
-     
-    # Add training
-    max_compare = 500000
-    gazetteer.train(index_predicates=True)
-    
-    
-    # Index reference
-    gazetteer.index(data=data_ref)
-    
-    threshold = 0.0001
-    
-    match_rates = []
-    thresholds = [0.001] #[10**(-x) for x in [0, 0] + list(range(1, 14))]
-    for threshold in thresholds:
-    
-        matched_records = gazetteer.match(data_source, threshold=threshold)
-           
+    # Explore results
+    match_rate = source.numero_uai.notnull().mean()
+    print(threshold, '-->', match_rate)
 
-        source = pd.read_csv(source_path, encoding='utf-8', dtype='unicode')
-        ref = pd.read_csv(ref_path, encoding='utf-8', dtype='unicode')
-        
-        
-        source = merge_results(ref, source, matched_records, selected_columns_from_ref)
-        
-        match_rates.append(source.numero_uai.notnull().mean())
-    
-    for x in zip(thresholds, match_rates):
-        print(x[0], '-->', x[1])
-        
-    
-    
+    source.sort_values(by='__CONFIDENCE', inplace=True)
     cols = ['commune', 'localite_acheminement_uai', 'lycees_sources', 
             'patronyme_uai', '__CONFIDENCE']
         

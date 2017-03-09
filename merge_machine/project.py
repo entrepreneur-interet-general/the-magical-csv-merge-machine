@@ -31,6 +31,7 @@ import time
 import pandas as pd
 
 from infer_nan import infer_mvs, replace_mvs
+from linker import linker
 
 MODULES = {
         'transform':{'replace_mvs': replace_mvs},
@@ -67,7 +68,7 @@ def init_log_buffer():
     return []
 
 
-NOT_IMPLEMENTED_MESSAGE = 'NOT IMPLEMENTED in inherited class'
+NOT_IMPLEMENTED_MESSAGE = 'NOT IMPLEMENTED in abstract class'
 
 class Project():
     """
@@ -391,7 +392,7 @@ class Project():
     
 
     def infer(self, module_name, params):
-        '''Just runs the module name and returns answer'''
+        '''Just runs the module on pandas DataFrame data in memory and returns answer'''
         self.check_mem_data()  
         
         # Initiate log
@@ -408,7 +409,6 @@ class Project():
         return infered_params
     
     
-
 
     
 

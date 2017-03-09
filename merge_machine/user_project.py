@@ -9,6 +9,7 @@ import os
 import time
 
 from project import Project
+from referential import Referential
 
 from CONFIG import DATA_PATH
 
@@ -43,7 +44,22 @@ class UserProject(Project):
         metadata['project_id'] = self.project_id
         return metadata   
 
-    
+
+    def linker(self, module_name, data_params, params):
+        '''
+        
+        
+        '''
+        # Get data to act on  
+        if self.use_internal_ref is None:
+            raise Exception('use_internal_ref not set... should we use internal ref ?')
+
+        # Path to referential
+        if self.use_internal_ref:
+            ref = Referential(self.metadata['ref_name'], create_new=False)
+            ref_path = ref.path_to()
+        else:
+            ref_path = self.path_to('ref', module_name=Nn)
 
 if __name__ == '__main__':
     # Create/Load a project
