@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Fri Feb 24 14:04:51 2017
@@ -17,6 +17,8 @@ DEV GUIDELINES:
     - Each module shall take care of creating it's own directory
 
 TODO:
+    - Store user params
+    - Deal with log for merge 
 """
 
 import gc
@@ -31,11 +33,12 @@ import time
 import pandas as pd
 
 from infer_nan import infer_mvs, replace_mvs
-from linker import linker
+from dedupe_linker import dedupe_linker
 
 MODULES = {
         'transform':{'replace_mvs': replace_mvs},
-        'infer':{'infer_mvs': infer_mvs}
+        'infer':{'infer_mvs': infer_mvs},
+        'link': {'dedupe_linker': dedupe_linker}
         }
 
 
@@ -43,7 +46,7 @@ def gen_proj_id():
     '''Generate unique non-guessable string for project ID'''
     unique_string = str(time.time()) + '_' + str(random.random())
     h = hashlib.md5()
-    h.update(unique_string)
+    h.update(unique_string.encode('utf-8'))
     project_id = h.hexdigest()
     return project_id
 
@@ -116,7 +119,7 @@ class Project():
             
         # No data in memory initially
         self.mem_data = None
-        self.mem_data_info = None # Information on data in memory
+        self.mem_data_info = {} # Information on data in memory
         self.log_buffer = init_log_buffer() # List of logs not yet written to metadata.json    
     
     def new_project(self, project_id=None):
@@ -142,11 +145,11 @@ class Project():
         self.write_metadata()
     
     def init_log(self, module_name, module_type):
-        assert module_type in ['transform', 'infer']
+        assert module_type in ['transform', 'infer', 'link']
         log = { # Data being modified
-               'file_name': self.mem_data_info['file_name'], 
-               'origin': self.mem_data_info['module'],
-               'file_role': self.mem_data_info['file_role'],
+               'file_name': self.mem_data_info.get('file_name', None), 
+               'origin': self.mem_data_info.get('module', None),
+               'file_role': self.mem_data_info.get('file_role', None),
                 # Modification at hand                        
                'module': module_name, # Module to be executed
                'module_type': module_type, # Type (transform, infer, or dedupe)
@@ -272,10 +275,23 @@ class Project():
     
     def add_config_data(self, file, file_role, module, file_name):
         '''Will write config file'''
-        if (file_role != 'shared') or (module != 'dedupe'):
-            raise Exception('Can only upload config files to file_role: shared\
-                            and module:dedupe') # TODO: Is this good? Yes/No?
+        if (file_role != 'link') or (module != 'dedupe_linker'):
+            raise Exception('Can only upload config files to file_role: link\
+                            and module:dedupe_linker') # TODO: Is this good? Yes/No?
+        if file_name != 'training.json':
+            raise Exception('For now you can only upload files named training.json')
+
+        # Create directories
+        dir_path = self.path_to(file_role, module)
+        if not os.path.isdir(dir_path):
+            os.makedirs(dir_path)   
+        
+        # Write file
         file_path = self.path_to(file_role, module, file_name)
+        with open(file_path, 'w') as w:
+            w.write(file.read())
+            
+        
         # TODO: finish this. What should we do? for all modules? pass file? pass dict?
             
     def remove_data(self, file_role, module_name='', file_name=''):

@@ -95,8 +95,8 @@ def mv_from_common_values(all_top_values, score=0.5):
     '''Looks for values common in at least two columns'''
     # Create dict with: {value: set_of_columns_where_common} with values present in at least two columns
     popular_values = dict()
-    for col_1, top_values_1 in all_top_values.iteritems():
-        for col_2, top_values_2 in all_top_values.iteritems():
+    for col_1, top_values_1 in all_top_values.items():
+        for col_2, top_values_2 in all_top_values.items():
             if col_1 != col_2:
                 common_values = [x for x in top_values_1.index if x in top_values_2.index]
                 for val in common_values:
@@ -108,7 +108,7 @@ def mv_from_common_values(all_top_values, score=0.5):
     
     if popular_values:
         # Questionable heuristic: return value most frequent
-        temp = [(val, len(cols)) for val, cols in popular_values.iteritems()]
+        temp = [(val, len(cols)) for val, cols in popular_values.items()]
         temp.sort(key=lambda x: x[1], reverse=True)
         mv_value = temp[0][0]
         return [(mv_value, score, 'common_values')]
@@ -122,14 +122,14 @@ def mv_from_common_values_2(col_mvs, score=1):
     """
     # Make dict with key: mv_candidate value: list of columns where applicable
     val_mvs = dict()
-    for col, tuples in col_mvs.iteritems():
+    for col, tuples in col_mvs.items():
         for (val, score, origin) in tuples:
             if val not in val_mvs:
                 val_mvs[val] = [col]
             else:
                 val_mvs[val].append(col)
                 
-    return [(val, score, 'common_values') for val, cols in val_mvs.iteritems() if (len(cols)>=2)]
+    return [(val, score, 'common_values') for val, cols in val_mvs.items() if (len(cols)>=2)]
     
 
 def compute_all_top_values(tab, num_top_values):
@@ -172,7 +172,7 @@ def correct_score(list_of_possible_mvs, probable_mvs):
 
     # Reformat output like input
     new_list_of_possible_mvs = []
-    for val, _dict in new_list_of_possible_mvs_tmp.iteritems():
+    for val, _dict in new_list_of_possible_mvs_tmp.items():
         new_list_of_possible_mvs.append((val, _dict['score'], _dict['origin']))
     
     return new_list_of_possible_mvs
@@ -198,7 +198,7 @@ def infer_mvs(tab, params=None):
     
     col_mvs = dict()
     # Look at each column and infer mv
-    for col, top_values in all_top_values.iteritems():
+    for col, top_values in all_top_values.items():
         col_mvs[col] = []
         if top_values.iloc[0] == 1:
             continue
@@ -213,7 +213,7 @@ def infer_mvs(tab, params=None):
         col_mvs[col].sort(key=lambda x: x[1], reverse=True)
         
     
- 
+
 
     # Transfer output to satisfy API standards
     def triplet_to_dict(val):
@@ -221,7 +221,7 @@ def infer_mvs(tab, params=None):
         return {'val': val[0], 'score': val[1], 'origin': val[2]}
 
     common_mvs = [triplet_to_dict(val) for val in mv_from_common_values_2(col_mvs)]
-    columns_mvs = [{'col_name':key, 'missing_vals': [triplet_to_dict(val) for val in vals]} for key, vals in col_mvs.iteritems() if vals]
+    columns_mvs = [{'col_name':key, 'missing_vals': [triplet_to_dict(val) for val in vals]} for key, vals in col_mvs.items() if vals]
     infered_mvs = {'columns': columns_mvs, 'all': common_mvs}
     return {'mvs_dict': infered_mvs, 'thresh': 0.6} # TODO: remove harcode
 
@@ -253,8 +253,8 @@ def replace_mvs(tab, params):
     thresh = params.get('thresh', 0.6)
     
     # Replace
-    assert mvs_dict.keys() == ['all', 'columns']
-    
+    assert sorted(list(mvs_dict.keys())) == ['all', 'columns']
+
     for mv in mvs_dict['all']:
         val, score = mv['val'], mv['score']
         if score >= thresh:

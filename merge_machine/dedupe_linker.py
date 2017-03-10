@@ -11,6 +11,9 @@ Created on Fri Mar  3 10:37:58 2017
     - Translate all messages for the interface
     - Insert referential restriction in middle of training somehow
 
+# ERRORS in DOC:
+indexes=True --> index=True
+
 """
 import copy
 import dedupe
@@ -24,6 +27,10 @@ import pandas as pd
 #                      rec_id_b: {field_1: val_1b, field_2: val_2b}}
 
 # variable_definition: see here: https://dedupe.readthedocs.io/en/latest/Variable-definition.html
+
+NO_TRAINING_MESSAGE = 'No training file could be found. Use the interface (XXX)' \
+                      ', specify a matching ID to generate train (YYY), or ' \
+                      'upload a training file using (ZZZ)'
 
 
 def preProcess(val):
@@ -135,7 +142,11 @@ def format_for_dedupe(tab, my_variable_definition, file_role):
     return data
 
 
-def main_dedupe(data_ref, data_source, my_variable_definition, train_path):
+def main_dedupe(data_ref, 
+                data_source, 
+                my_variable_definition, 
+                train_path, 
+                learned_settings_path):
     '''Generates matches records'''
     sample_size = 50000
     
@@ -158,6 +169,10 @@ def main_dedupe(data_ref, data_source, my_variable_definition, train_path):
     # Read training
     use_training_cache = True
     try:
+        # Replace with this in future version
+        #if not os.path.isfile(train_path):
+        #    raise Exception(NO_TRAINING_MESSAGE)
+        
         if use_training_cache and os.path.isfile(train_path):
             with open(train_path) as f:
                 gazetteer.readTraining(f)
@@ -168,8 +183,7 @@ def main_dedupe(data_ref, data_source, my_variable_definition, train_path):
     
     # Add examples through manual labelling
     # TODO: remove this when we can train in interface
-    manual_labelling = True
-    
+    manual_labelling = False
     if manual_labelling:
         dedupe.consoleLabel(gazetteer)
         
@@ -180,6 +194,10 @@ def main_dedupe(data_ref, data_source, my_variable_definition, train_path):
     # Train on labelled data
     # TODO: Load train data
     gazetteer.train(index_predicates=True) # TODO: look into memory usage of index_predicates
+    # Write settings    
+    with open(learned_settings_path, 'wb') as f:
+        gazetteer.writeSettings(f, index=False)    
+    
     
     # Index reference
     gazetteer.index(data=data_ref)
@@ -189,19 +207,19 @@ def main_dedupe(data_ref, data_source, my_variable_definition, train_path):
     threshold = gazetteer.threshold(data_source, recall_weight=recall_weight)
 
     matched_records = gazetteer.match(data_source, threshold=threshold)
-    
     return matched_records, threshold
     
  
-def linker(params):
+def dedupe_linker(paths, params):
     '''
     Takes as inputs file paths and returnes the merge table as a pandas DataFrame
     '''
-    ref_path = params['ref_path']
-    source_path = params['source_path']    
-    train_path = params['train_path']   
-    learned_settings_path = params['learned_settings_path']   
-    my_variable_definition = params['my_variable_definition']   
+    ref_path = paths['ref']
+    source_path = paths['source']    
+    train_path = paths['train']   
+    learned_settings_path = paths['learned_settings']
+    my_variable_definition = params['variable_definition']
+    selected_columns_from_ref = params['selected_columns_from_ref']
     
     # Put to dedupe input format
     ref = pd.read_csv(ref_path, encoding='utf-8', dtype='unicode')
@@ -215,7 +233,11 @@ def linker(params):
     del source
     gc.collect()
     
-    matched_records, threshold = main_dedupe(data_ref, data_source, my_variable_definition, train_path)
+    matched_records, threshold = main_dedupe(data_ref, 
+                                             data_source, 
+                                             my_variable_definition, 
+                                             train_path,
+                                             learned_settings_path)
     
     ref = pd.read_csv(ref_path, encoding='utf-8', dtype='unicode')
     source = pd.read_csv(source_path, encoding='utf-8', dtype='unicode')
@@ -223,7 +245,7 @@ def linker(params):
     # Generate out file
     source = merge_results(ref, source, matched_records, selected_columns_from_ref)
         
-    return source
+    return source, threshold
 
 
 if __name__ == '__main__':
@@ -246,29 +268,30 @@ if __name__ == '__main__':
 
     # What columns in reference to include in output
     selected_columns_from_ref = ['numero_uai', 'patronyme_uai', 'localite_acheminement_uai']
-    
-    
+   
+    #==============================================================================
+    # Paths to data and parameters
+    #==============================================================================
     train_path = 'local_test_data/training.json'
-    #==============================================================================
-    # Paths to data
-    #==============================================================================
-    file_role = 'ref'
-    file_name = file_role + '.csv'
-    ref_path = os.path.join('local_test_data', file_name)
-    
-    
-    #==============================================================================
-    # # GET SOURCE DATA
-    #==============================================================================
-    file_role = 'source'
-    file_name = file_role + '.csv'
-    source_path = os.path.join('local_test_data', file_name)
+    learned_settings_path = 'local_test_data/learned_train'    
+
+    ref_path = 'local_test_data/ref.csv'
+    source_path = 'local_test_data/source.csv'
     
     #==============================================================================
     # 
     #==============================================================================
     
+    paths = dict()
+    paths['ref'] = ref_path
+    paths['source'] = source_path
+    paths['train'] = train_path
+    paths['learned_settings'] = learned_settings_path
     
+    params = {'variable_definition': my_variable_definition,
+              'selected_columns_from_ref': selected_columns_from_ref}
+    
+    source, threshold = dedupe_linker(paths, params)
 
     # Explore results
     match_rate = source.numero_uai.notnull().mean()
@@ -279,5 +302,3 @@ if __name__ == '__main__':
             'patronyme_uai', '__CONFIDENCE']
         
 #    cProfile.run('main()')
-    import pdb
-    pdb.set_trace()

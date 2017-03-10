@@ -1,10 +1,9 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Mon Feb  6 15:01:16 2017
 
 @author: leo
-
 
 TODO:
     - Safe file name / not unique per date
@@ -22,6 +21,7 @@ TODO:
     - Change metadata to use_internal and ref_name to last used or smt. Data to
       use is specified on api call and not read from metadata (unless using last used)
     
+    - Protect admin functions
 
 DEV GUIDELINES:
     - By default the API will use the file with the same name in the last 
@@ -105,6 +105,45 @@ def init_project(project_id=None, existing_only=False):
     proj = UserProject(project_id)
     return proj
     
+
+def parse_data_params(proj, data_params, file_role=None):
+    '''
+    Returns identifiers for data based on project history. Uses `get_last_written`
+    to retrieve the last file written given the constraints in data_params
+    
+    INPUT:
+        - proj: a user project
+        - data_params: {'file_role': ..., 'module': ..., 'file_name': ...}
+        - file_role: Constrain the file role (for use in linking...)
+    '''
+    if data_params is None:
+        module_name = None
+        file_name = None
+    else:
+        file_role = data_params.setdefault('file_role', file_role)
+        # Skip processing for internal referentials
+        if data_params.setdefault('internal', False):
+            raise Exception('Internal data NOT YET IMPLEMENTED')
+        
+        # Load data from last run (or from user specified)
+        file_name = data_params.setdefault('file_name', None)
+        module_name = data_params.setdefault('module', None)
+        
+    if any(x is None for x in [file_role, module_name, file_name]):
+        (file_role, module_name, file_name) = proj.get_last_written(\
+                                        file_role, module_name, file_name)
+    return (file_role, module_name, file_name)
+
+
+def load_from_params(proj, data_params=None):
+    '''Load data to project using the parameters received in request.
+    Implicit load is systematic. TODO: Define implicit load
+    '''
+    (file_role, module_name, file_name) = parse_data_params(proj, data_params)
+    proj.load_data(file_role, module_name, file_name)
+
+
+
 def parse_1file_request():
     # Parse json request
     data_params = None
@@ -117,7 +156,7 @@ def parse_1file_request():
             data_params = params['data']
             
             # Make paths secure
-            for key, value in data_params.iteritems():
+            for key, value in data_params.items():
                 data_params[key] = secure_filename(value)
             
         if 'params' in params:
@@ -136,8 +175,8 @@ def parse_linking_request():
             data_params = params['data']
             for file_role in ['ref', 'source']:
                 # Make paths secure
-                for key, value in data_params.iteritems():
-                    data_params[key] = secure_filename(value)
+                for key, value in data_params[file_role].items():
+                    data_params[file_role][key] = secure_filename(value)
                 
         if 'params' in params:
             module_params = params['params']
@@ -148,11 +187,10 @@ def parse_linking_request():
 @cross_origin()
 def metadata(project_id):
     '''Fetch metadata for project ID'''
-    proj, _, _ = init_project(project_id, True)
+    proj = init_project(project_id, True)
     resp = jsonify(error=False,
                    metadata=proj.metadata, 
                    project_id=proj.project_id)
-    print resp
     return resp
 
 @app.route('/project/download/<project_id>', methods=['POST'])
@@ -194,7 +232,7 @@ def download(project_id):
         file_path = proj.path_to(file_role, module, file_name)
         return send_file(file_path)
     
-    except Exception, e:
+    except Exception as e:
         import pdb
         pdb.set_trace()
         return jsonify(error=True,
@@ -223,36 +261,6 @@ def upload(project_id=None):
     return jsonify(error=False,
                metadata=proj.metadata,
                project_id=proj.project_id)
-
-
-def parse_data_params(data_params):
-    if data_params is None:
-        file_role = None
-        module_name = None
-        file_name = None
-    else:
-        file_role = data_params.setdefault('file_role', None)
-        # Skip processing for internal referentials
-        if file_role == 'ref' and data_params.setdefault('internal', False):
-            raise Exception('Internal data NOT YET IMPLEMENTED')
-        
-        # Load data from last run (or from user specified)
-        file_name = data_params.setdefault('file_name', None)
-        module_name = data_params.setdefault('module', None)
-        
-    if not any(x is None for x in [file_role, module_name, file_name]):
-        (file_role, module_name, file_name) = proj.get_last_written(\
-                                        file_role, module_name, file_name)
-    return (file_role, module_name, file_name)
-
-
-def load_from_params(proj, data_params=None):
-    '''Load data to project using the parameters received in request.
-    Implicit load is systematic. TODO: Define implicit load
-    '''
-    (file_role, module_name, file_name) = parse_data_params(data_params)
-    proj.load_data(file_role, module_name, file_name)
-
 
 
 #==============================================================================
@@ -303,21 +311,42 @@ def replace_mvs(project_id):
     return jsonify(error=False)
 
 
-@app.route('/project/linker/linker/<project_id>', methods=['POST'])
+@app.route('/project/link/dedupe_linker/<project_id>', methods=['POST'])
 @cross_origin()
 def linker(project_id):
     '''
     Runs deduper module. Contrary to other modules, linker modules, take
     paths as input (in addition to module parameters)
+    
+    {
+    'data': {'source': {},  
+            'ref': {}}
+    'params': {'variable_definition': {...},
+               'columns_to_keep': [...]}
+    }
+    
     '''
     proj = init_project(project_id, True)
     data_params, module_params = parse_linking_request()
     
-    parse_data_params(data_params['source'])
-    source_path = proj.path_to(file_role='source', module_name='', file_name='')
+    # Set paths
+    (file_role, module_name, file_name) = parse_data_params(proj, data_params.get('source', None), file_role='source')
+    source_path = proj.path_to(file_role='source', module_name=module_name, file_name=file_name)
+
+    (file_role, module_name, file_name) = parse_data_params(proj, data_params.get('ref', None), file_role='ref')
+    ref_path = proj.path_to(file_role='ref', module_name=module_name, file_name=file_name)
     
-    proj.linker('linker', ref_path, source_path, module_params)
+    paths = {'ref': ref_path, 'source': source_path}
     
+    # Perform linking
+    _ = proj.linker('dedupe_linker', paths, module_params)
+
+    # Write transformations and log
+    proj.write_data()    
+    proj.write_log_buffer(True)
+
+
+    return jsonify(error=False)    
     
 
 #==============================================================================
