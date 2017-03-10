@@ -10,7 +10,7 @@ Created on Fri Mar  3 10:37:58 2017
     - Generate variable definition. In particular: has missing/corpus/type
     - Translate all messages for the interface
     - Insert referential restriction in middle of training somehow
-
+    - Check before hand that the columns asked for exist
 # ERRORS in DOC:
 indexes=True --> index=True
 

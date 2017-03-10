@@ -84,7 +84,7 @@ paths:
       parameters:
         - in: path
           name: project_id
-          description: Unique project identifier as returned by upload
+          description: Unique project identifier as returned by upload. To create a new project, use `new_project` as value for `project_id`
           type: string
           required: true
         - in: formData
@@ -98,7 +98,6 @@ paths:
       responses:
         default:
           description: successful operation
-
 
   /project/modules/infer_mvs/{project_id}:
     post:
@@ -128,7 +127,6 @@ paths:
         default:
           description: successful operation
 
-
   /project/modules/replace_mvs/{project_id}:
     post:
       tags:
@@ -153,6 +151,35 @@ paths:
           required: true
           schema:
             $ref: "#/definitions/ReplaceMVsParams"      
+      responses:
+        default:
+          description: successful operation
+
+
+  /project/link/dedupe_linker/{project_id}:
+    post:
+      tags:
+        - link
+        - data
+        - project
+      summary: Find matches between a source and referential using the dedupe_linker module.
+      description: TODO -> write
+      operationId: dedupeLinker
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          type: string
+        - in: body
+          name: body
+          description: Parameters for Replacing Missing Values
+          required: true
+          schema:
+            $ref: "#/definitions/DedupeLinkerParams"    
       responses:
         default:
           description: successful operation
@@ -184,7 +211,6 @@ paths:
         default:
           description: successful operation
 
-
   /admin/list_projects:
     get:
       tags:
@@ -198,6 +224,18 @@ paths:
         default:
           description: successful operation        
 
+  /admin/list_referentials:
+    get:
+      tags:
+        - admin
+        - referential
+      summary: List all project id's
+      operationId: listReferentials
+      produces:
+        - application/json
+      responses:
+        default:
+          description: successful operation        
 
 
 definitions:
@@ -281,7 +319,7 @@ definitions:
           mvs_dict:
             type: object
             properties:
-              all:
+              all:  
                 type: array
                 description: Values to replace in all columns
                 items:
@@ -299,7 +337,57 @@ definitions:
             type: number
             format: float
 
-            
+  DedupeLinkerParams:
+    type: object
+    properties:
+      data:
+        type: object
+        description: The source and referential to merge
+        properties:
+          source:
+            $ref: '#/definitions/Data'
+          ref:
+            description: Define the referential to use in matching
+            $ref: '#/definitions/Data'        
+      params:
+        type: object
+        description: Parameters to send to dedupe_linker
+        properties:
+          selected_columns_from_ref:
+            type: array
+            description: List of columns in referential that we want to append to our source
+            items:
+              type: string
+          variable_definition:
+            type: array
+            description: List of fields to try to merge on
+            items:
+              $ref: '#/definitions/FieldsDescription'
+    
+    
+  FieldsDescription:
+    type: object
+    properties:
+      field:
+        type: object
+        description: Names of matching columns in source and reference
+        properties:
+          source:
+            type: string
+            description: Column name in source
+          ref: 
+            type: string
+            description: Column name in reference
+      type: 
+        type: string
+        description: Dedupe type of the column (documented HERE XXX)
+      missing_values:
+        type: boolean
+        description: Does this field contain missing values (remove from API)
+      crf:
+        type: boolean
+        description: Should we use conditional random field (remove from API)
+      
   MissingValueDescription:
     type: object
     description: Describe possible representations of missing values.
