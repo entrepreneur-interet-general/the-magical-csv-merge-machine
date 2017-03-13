@@ -22,6 +22,8 @@ TODO:
       use is specified on api call and not read from metadata (unless using last used)
     
     - Protect admin functions
+    
+    - ADD LICENSE
 
 DEV GUIDELINES:
     - By default the API will use the file with the same name in the last 

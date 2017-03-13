@@ -1,0 +1,58 @@
+<html>
+    <head>
+        <title>Flask-SocketIO-Chat: {{ room }}</title>
+        <script type="text/javascript" src="//code.jquery.com/jquery-1.4.2.min.js"></script>
+        <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/1.3.6/socket.io.min.js"></script>
+        <script type="text/javascript" charset="utf-8">
+            var socket;
+            $(document).ready(function(){
+                socket = io.connect('http://' + document.domain + ':' + location.port + '/');
+                socket.on('connect', function() {
+                    socket.emit('joined', {});
+                });
+
+                socket.on('message', function(data) {
+		    var test_var = data.test_var
+                    //$('#chat').val($('#chat').val() + data.msg + '\n');
+                    //$('#chat').scrollTop($('#chat')[0].scrollHeight);
+                });
+                $('#answer').keypress(function(e) {
+                    var code = e.keyCode || e.which;
+                    if (code == 13) {
+			answer_to_send = $("input[name='possible_answer']:checked").val();
+
+			// To uncheck checkboxes
+			//$("input[name='possible_answer']").attr('checked',false);
+                        socket.emit('answer', answer_to_send);
+                    }
+                });
+            });
+            function leave_room() {
+                socket.emit('left', {}, function() {
+                    socket.disconnect();
+                    // go back to the login page
+                    window.location.href = "{{ url_for('main') }}";
+                });
+            }
+        </script>
+    </head>
+    <body>
+        <h1>Labelling for dedupe: {{ test_var }}</h1>
+
+	<form id="answer">
+	  <input type="radio" name="possible_answer" value="y" /> (y)es
+	  <input type="radio" name="possible_answer" value="n" /> (n)o
+	  <input type="radio" name="possible_answer" value="u" /> (u)ncertain
+	  <input type="radio" name="possible_answer" value="f" /> (f)inished
+	  <input type="radio" name="possible_answer" value="p" /> (p)revious
+	</form>
+	
+	<button id="send_answer"> Send Answer </button>
+ 
+        <!--<textarea id="chat" cols="80" rows="20"></textarea><br><br>
+        <input id="text" size="80" placeholder="Enter your message here"><br><br>-->
+        <!--<a href="#" onclick="leave_room();">Leave this room</a>-->	
+    </body>
+</html>
+
+
