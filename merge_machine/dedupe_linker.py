@@ -142,12 +142,8 @@ def format_for_dedupe(tab, my_variable_definition, file_role):
     return data
 
 
-def main_dedupe(data_ref, 
-                data_source, 
-                my_variable_definition, 
-                train_path, 
-                learned_settings_path):
-    '''Generates matches records'''
+def load_deduper(data_ref, data_source, my_variable_definition):
+    '''Load the dedupe object'''
     sample_size = 50000
     
     # Get columns for match and change to standard dedupe variable definition
@@ -165,6 +161,18 @@ def main_dedupe(data_ref,
                                  num_cores=num_cores)
     
     gazetteer.sample(data_1=nonexact_1, data_2=nonexact_2, sample_size=sample_size)
+    
+    return gazetteer
+
+
+def main_dedupe(data_ref, 
+                data_source, 
+                my_variable_definition, 
+                train_path, 
+                learned_settings_path):
+    '''Computes matches between records'''
+    # TODO: remove load from main? Pass as variable
+    gazetteer = load_deduper(data_ref, data_source, my_variable_definition)
     
     # Read training
     use_training_cache = True

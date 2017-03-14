@@ -4,75 +4,129 @@
 Created on Mon Mar 13 13:20:20 2017
 
 @author: leo
+
+USES: /python-memcached
 """
 
+import gc
 import os
 
+import flask
 from flask import Flask, render_template, session
+from flask_session import Session, MemcachedSessionInterface
 from flask_socketio import emit, SocketIO
+import pandas as pd
 
+from dedupe_linker import format_for_dedupe, load_deduper
 
 # Change current path to path of web_app.py
 curdir = os.path.dirname(os.path.realpath(__file__))
 os.chdir(curdir)
 
 app = Flask(__name__)
+
+app.config['SESSION_TYPE'] = "memcached"# 'memcached'
+
+Session(app)
 app.config['SECRET_KEY'] = open('secret_key.txt').read()
+
 socketio = SocketIO(app)
 
+#SESSION_TYPE = 'MemcachedSessionInterface'
 
-def init_var():
-    a = 1
-    return a
+DUMMY_EMIT = {'formated_example': 'EXample 1 \nEXample 2 \n Are the same?',
+                     'n_match': 3, 
+                     'n_distinct': 5, 
+                     'message': 'go sharks', 
+                     'has_previous': False}
 
 
-@socketio.on('joined', namespace='/')
-def init(deduper=None):
-    print('JOINED !!!')
-    
-    #session['labeller'] = Labeller(deduper)
-    #session['labeller'].new_label()
-    
-    emit('message', {'test_var': 'yolozer'})
-    #emit('message', session['labeller'].to_emit())
+GLOBAL_TEST = {'rappers':['jadakis', '50 cent']}
+#@socketio.on('joined', namespace='/')
+#def init(deduper=None):
+#    print('JOINED !!!')
+#    #    emit('message', DUMMY_EMIT)
+#    emit('message', flask._app_ctx_stack.labeller.to_emit())
 
 @socketio.on('answer', namespace='/')
 def get_answer(user_input):
-    print('I am here')
     message = ''
-    if session['labeller'].answer_is_valid(user_input):
-        session['labeller'].parse_valid_input(user_input)
-        if session['labeller'].finished:
+    #message = 'Expect to have about 50% of good proposals in this phase. The more you label, the better...'
+    if flask._app_ctx_stack.labeller.answer_is_valid(user_input):
+        flask._app_ctx_stack.labeller.parse_valid_answer(user_input)
+        if flask._app_ctx_stack.labeller.finished:
             # TODO: deal with this (write train and redirect)
-            message = 'Sent an invalid answer'
+            print('DEAL WITH FINISHED')
         else:
-            session['labeller'].new_label()
-    
-    emit('message', session['labeller'].to_emit(message=message))
+            flask._app_ctx_stack.labeller.new_label()
+    else:
+        message = 'Sent an invalid answer'
+    emit('message', flask._app_ctx_stack.labeller.to_emit(message=message))
     
     
 
 @app.route('/', methods=['GET'])
-def main():    
-    return render_template('dedupe_training.html', test_var='YOLO') 
-    return render_template('dedupe_training.html',
-                       formated_example='EXample 1 \nEXample 2 \n Are the same?',
-                       n_match=4,
-                       n_distinct=6,
-                       message='',
-                       has_previous=False)
+def main():
+    # Not same as dedupe
+    my_variable_definition = [
+                            {'field': 
+                                    {'source': 'lycees_sources',
+                                    'ref': 'full_name'}, 
+                            'type': 'String', 
+                            'crf':True, 
+                            'missing_values':True},
+                                
+                            {'field': {'source': 'commune', 
+                                       'ref': 'localite_acheminement_uai'}, 
+                            'type': 'String', 
+                            'crf': True, 
+                            'missing_values':True}
+                            ]
 
+    # What columns in reference to include in output
+    #    selected_columns_from_ref = ['numero_uai', 'patronyme_uai', 'localite_acheminement_uai']
+   
+    #==============================================================================
+    # Paths to data and parameters
+    #==============================================================================
+    #    train_path = 'local_test_data/training.json'
+    #    learned_settings_path = 'local_test_data/learned_train'    
 
+    ref_path = 'local_test_data/ref2.csv'
+    source_path = 'local_test_data/source.csv'    
+    
+    # Put to dedupe input format
+    ref = pd.read_csv(ref_path, encoding='utf-8', dtype='unicode')
+    data_ref = format_for_dedupe(ref, my_variable_definition, 'ref') 
+    del ref # To save memory
+    gc.collect()
+    
+    # Put to dedupe input format
+    source = pd.read_csv(source_path, encoding='utf-8', dtype='unicode')
+    data_source = format_for_dedupe(source, my_variable_definition, 'source')
+    del source
+    gc.collect()
+    
+    #==========================================================================
+    # Should really start here
+    #==========================================================================
+    deduper = load_deduper(data_ref, data_source, my_variable_definition)
 
-    return render_template('dedupe_training.html',
-                       formated_example=session['labeller'].formated_example,
-                       n_match=session['labeller'].n_match,
-                       n_distinct=session['labeller'].n_distinct,
-                       message='',
-                       has_previous=False)
+    flask._app_ctx_stack.labeller = Labeller(deduper)
+    flask._app_ctx_stack.labeller.new_label()
+    #    session.modified = True
+    
+    #session['test_var'] = {"1": 2}
 
+    #    return render_template('dedupe_training.html', **DUMMY_EMIT)    
+    #return render_template('dedupe_training.html', **DUMMY_EMIT)
+    return render_template('dedupe_training.html', **flask._app_ctx_stack.labeller.to_emit(''))
 
-
+@app.route('/test', methods=['GET'])
+def test():
+    import pdb
+    pdb.set_trace()
+    print(session)
 
 #==============================================================================
 # Deduper
@@ -86,6 +140,7 @@ def unique(seq) :
 
 class Labeller():
     def __init__(self, deduper):
+        self.deduper = deduper
         self.finished = False
         self.use_previous = False
         self. fields = unique(field.field 
@@ -104,34 +159,38 @@ class Labeller():
         
         return user_input in valid_responses
         
-    def to_emit(self, message=''):
+    def to_emit(self, message):
         '''Creates a dict to be sent to the template'''
         dict_to_emit = dict()
         dict_to_emit['formated_example'] = self._format_fields()
-        dict_to_emit['n_match'] = session['labeller'].n_match,
-        dict_to_emit['n_distinct'] = session['labeller'].n_distinct,
-        dict_to_emit['has_previous'] = False
-        dict_to_emit['message'] = message
+        dict_to_emit['n_match'] = str(self.n_match)
+        dict_to_emit['n_distinct'] = str(self.n_distinct)
+        dict_to_emit['has_previous'] = len(self.examples_buffer) >= 1
+        if message:
+            dict_to_emit['_message'] = message
+        return dict_to_emit
 
 
     def _format_fields(self):
         '''Return string containing fields and field names'''
         # TODO: This should be done in template
-        self.formated_example = ''
+        formated_example = ''
         for pair in self.record_pair:
             for field in self.fields:
                 line = "%s : %s" % (field, pair[field])
-                self.formated_example += line + '\n'
+                formated_example += line + '\n'
+            formated_example += '\n'
+        return formated_example
             
         
     def new_label(self):
         if self.use_previous:
-            record_pair, _ = self.examples_buffer.pop(0)
+            self.record_pair, _ = self.examples_buffer.pop(0)
             self.use_previous = False
         else:
             if not self.uncertain_pairs:
-                uncertain_pairs = self.deduper.uncertainPairs()
-            self.record_pair = uncertain_pairs.pop()
+                self.uncertain_pairs = self.deduper.uncertainPairs()
+            self.record_pair = self.uncertain_pairs.pop()
                      
         self.n_match = (len(self.deduper.training_pairs['match']) +
                    sum(label=='match' for _, label in self.examples_buffer))
@@ -156,10 +215,10 @@ class Labeller():
             self.uncertain_pairs.append(self.record_pair)
         
         if len(self.examples_buffer) > self.buffer_len:
-            record_pair, label = self.examples_buffer.pop()
+            self.record_pair, label = self.examples_buffer.pop()
             if label in ['distinct', 'match']:
                 examples = {'distinct' : [], 'match' : []}
-                examples[label].append(record_pair)
+                examples[label].append(self.record_pair)
                 self.deduper.markPairs(examples)
 
 

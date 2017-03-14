@@ -10,20 +10,45 @@
                 socket.on('connect', function() {
                     socket.emit('joined', {});
                 });
-
                 socket.on('message', function(data) {
-		    var test_var = data.test_var
+		    var formated_example = data.formated_example
+		    var n_match = data.n_match
+		    var n_distinct = data.n_distinct
+		    var _message = data._message
+		    var has_previous = data.has_previous
+
+		    // Update text to display
+		    $('#example_to_label').text(formated_example)
+		    $('#n_match').text(n_match)
+		    $('#n_distinct').text(n_distinct)
+		    $('#example_to_label').text(formated_example)
+
+
+		    // Show message if present
+		    if (typeof _message !== 'undefined') {
+			$('#_message').text(_message)
+			$('#_message').show()
+		    } else {
+			$('#_message').hide()
+		    }
+
+		
+		    // Show previous button if present
+		    if (has_previous) {
+		    	$('#previous_button').show()
+			$('#previous_button_text').show()
+		    } else {
+			$('#previous_button').hide()
+			$('#previous_button_text').hide()
+		    }
+
                     //$('#chat').val($('#chat').val() + data.msg + '\n');
                     //$('#chat').scrollTop($('#chat')[0].scrollHeight);
                 });
                 $('#answer').keypress(function(e) {
                     var code = e.keyCode || e.which;
                     if (code == 13) {
-			answer_to_send = $("input[name='possible_answer']:checked").val();
-
-			// To uncheck checkboxes
-			//$("input[name='possible_answer']").attr('checked',false);
-                        socket.emit('answer', answer_to_send);
+			send_answer()
                     }
                 });
             });
@@ -34,20 +59,33 @@
                     window.location.href = "{{ url_for('main') }}";
                 });
             }
+            function send_answer() {
+		answer_to_send = $("input[name='possible_answer']:checked").val();
+
+		// To uncheck checkboxes
+		//$("input[name='possible_answer']").attr('checked',false);
+                socket.emit('answer', answer_to_send);
+            }
         </script>
     </head>
     <body>
-        <h1>Labelling for dedupe: {{ test_var }}</h1>
+        <h1 id='title'>Labelling for dedupe: {{ project_id }}</h1>
+
+	<p id="example_to_label" style="white-space: pre-line"> {{ formated_example }} </p>
+
+	<p> You have labelled <span id="n_match">{{ n_match }}</span>/10 positive and <span id="n_distinct">{{ n_distinct }}</span>/10 negative</p>
+
+	<p id="message">{{ _message }}</p>
 
 	<form id="answer">
 	  <input type="radio" name="possible_answer" value="y" /> (y)es
 	  <input type="radio" name="possible_answer" value="n" /> (n)o
 	  <input type="radio" name="possible_answer" value="u" /> (u)ncertain
 	  <input type="radio" name="possible_answer" value="f" /> (f)inished
-	  <input type="radio" name="possible_answer" value="p" /> (p)revious
+	  <input type="radio" name="possible_answer" value="p" id="previous_button"/><span id="previous_button_text"> (p)revious</span>
 	</form>
 	
-	<button id="send_answer"> Send Answer </button>
+	<button id="send_answer" onclick="send_answer()"> Send Answer </button>
  
         <!--<textarea id="chat" cols="80" rows="20"></textarea><br><br>
         <input id="text" size="80" placeholder="Enter your message here"><br><br>-->
