@@ -1,0 +1,39 @@
+<html>
+    <head>
+        <title>Upload</title>
+        <script type="text/javascript" src="//code.jquery.com/jquery-1.4.2.min.js"></script>
+        <script type="text/javascript" charset="utf-8">
+
+        $(document).ready(function(){
+			$("#existing_project").submit(function() {
+			    var formData = new FormData($(this)[0]);
+
+			    $.post($(this).attr("action"), formData, function(data) {
+			        alert(data);
+			    });
+			    return false
+			}); 
+		});
+        </script>
+    </head>
+    <body>
+        <h1 id='title'>Upload files for project: {{ project_id }}</h1>
+
+	<form id="files_to_upload" method="post" action="{{ upload_api_url }}" enctype="multipart/form-data">
+	     <label for="source"> Fichier source:</label>
+	     <input type="hidden" name="MAX_FILE_SIZE" value="{{ MAX_FILE_SIZE }}" />
+	     <input type="file" name="source" id="source" />
+	     <label for="reference"> Fichier référence:</label>
+	     <input type="hidden" name="MAX_FILE_SIZE" value="{{ MAX_FILE_SIZE }}" />
+	     <input type="file" name="reference" id="reference" />
+	     <input type="submit" name="submitBtn" value="GO!" />
+	</form>
+	
+	<!--<button id="send_answer" onclick="send_answer()"> Upload </button>-->
+	
+	<!--<button id="send_answer" onclick="send_answer()"> Upload </button>-->
+
+    </body>
+</html>
+
+

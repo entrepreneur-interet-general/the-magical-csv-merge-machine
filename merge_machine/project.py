@@ -370,6 +370,10 @@ class Project():
 
 
     def write_infered_params(self, params, file_role, module_name):
+        '''
+        Writes dictionary params in a file named "infered_params" at the 
+        specified path.    
+        '''
         dir_path = self.path_to(self.mem_data_info['file_role'], module_name)
         if not os.path.isdir(dir_path):
             os.makedirs(dir_path)        

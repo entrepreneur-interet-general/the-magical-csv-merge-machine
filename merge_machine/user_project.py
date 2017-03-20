@@ -6,6 +6,8 @@ Created on Fri Feb 24 14:04:51 2017
 @author: leo
 
 
+TODO: Add private flag to user project so you have to log in to see/use
+
 
 
 """

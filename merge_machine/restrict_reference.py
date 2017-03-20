@@ -3,6 +3,13 @@
 """
 Created on Tue Feb 21 16:13:02 2017
 @author: leo
+
+Try to infer properties of reference based on given matches (from manual training or exact match on a given field). In particular: guess words that SHOULD be present in a given column. You can then restrict the reference to lines that ALL contain these words.
+
+For example: if source only contains companies listed in departement:"Essonne" in the reference for training matches, you can suggest that we should only search for matches within rows of the reference that have departement:"Essonne"
+
+# TODO: Add threshold for value presence to account for user mistake
+
 """
 
 import pandas as pd

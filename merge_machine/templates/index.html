@@ -1,0 +1,57 @@
+<html>
+    <head>
+        <title>Welcome to the Magical CSV Merge Machine Experience (MCSVMME)</title>
+        <script type="text/javascript" src="//code.jquery.com/jquery-1.4.2.min.js"></script>
+        <script type="text/javascript" charset="utf-8">
+       $(document).ready(function(){
+			$("#existing_project").submit(function(e) {
+				e.preventDefault();
+			    var formData = new FormData($(this)[0]);
+			    go_to_next(formData.get('project_id'))
+			}); 
+			$("#new_project").submit(function(e) {
+				e.preventDefault();
+				var new_project_url = '/api/project/new'
+				$.getJSON(new_project_url, function(json) {
+					var project_id = json.project_id
+					alert("Created new project with ID:".concat(project_id, ". Save this ID somewhere safe..."))
+					go_to_next(project_id)
+				});
+			    
+			}); 
+		});
+
+       function go_to_next(project_id){
+       		var exists_url = '/api/project/exists'.concat('/', project_id)
+			$.getJSON(exists_url, function(json){
+			    if (json.exists) {
+		       		var next_url = '{{ next_url }}'
+		       		next_url = next_url.concat('/', project_id)
+		       		window.location = next_url			    		    	
+			    } else {
+			    	alert("Project id ".concat(project_id, " could not be found."))
+			    }
+			});
+       }
+
+        </script>
+    </head>
+    <body>
+        <h1 id='title'>Welcome to the Magical CSV Merge Machine Experience (MCSVMME)</h1>
+
+
+	<form id="existing_project">
+		 Project ID: <input type="text" name="project_id" placeholder='Ex: af8b2be7b759313f375df12e34ab3b72'/>
+	     <input type="submit" name="submitExisting" value="Join Existing Project" />
+	</form>
+
+	<form id="new_project" method="post" enctype="multipart/form-data">
+	     <input type="submit" name="submitNew" value="Create New Project" />
+	</form>
+
+
+
+    </body>
+</html>
+
+

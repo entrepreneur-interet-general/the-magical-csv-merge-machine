@@ -14,6 +14,9 @@ Created on Fri Mar  3 10:37:58 2017
 # ERRORS in DOC:
 indexes=True --> index=True
 
+
+Given a dedupe formated training set, perform linking between source and reference using gazetteer.
+
 """
 import copy
 import dedupe
@@ -258,48 +261,15 @@ def dedupe_linker(paths, params):
 
 if __name__ == '__main__':
     
-    # Not same as dedupe
-    my_variable_definition = [
-                            {'field': 
-                                    {'source': 'lycees_sources',
-                                    'ref': 'full_name'}, 
-                            'type': 'String', 
-                            'crf':True, 
-                            'missing_values':True},
-                                
-                            {'field': {'source': 'commune', 
-                                       'ref': 'localite_acheminement_uai'}, 
-                            'type': 'String', 
-                            'crf': True, 
-                            'missing_values':True}
-                            ]
-
-    # What columns in reference to include in output
-    selected_columns_from_ref = ['numero_uai', 'patronyme_uai', 'localite_acheminement_uai']
-   
-    #==============================================================================
-    # Paths to data and parameters
-    #==============================================================================
-    train_path = 'local_test_data/training.json'
-    learned_settings_path = 'local_test_data/learned_train'    
-
-    ref_path = 'local_test_data/ref.csv'
-    source_path = 'local_test_data/source.csv'
-    
-    #==============================================================================
-    # 
-    #==============================================================================
-    
-    paths = dict()
-    paths['ref'] = ref_path
-    paths['source'] = source_path
-    paths['train'] = train_path
-    paths['learned_settings'] = learned_settings_path
-    
-    params = {'variable_definition': my_variable_definition,
-              'selected_columns_from_ref': selected_columns_from_ref}
+    import json
+    with open('local_test_data/rnsr/my_dedupe_rnsr_config.json') as f:
+       my_config = json.load(f)    
+    paths = my_config['paths']
+    params = my_config['params']
     
     source, threshold = dedupe_linker(paths, params)
+
+    source.to_csv('local_test_data/rnsr/res.csv', encoding='utf-8', index=False)
 
     # Explore results
     match_rate = source.numero_uai.notnull().mean()

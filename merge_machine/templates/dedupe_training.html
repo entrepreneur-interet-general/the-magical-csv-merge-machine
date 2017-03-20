@@ -6,45 +6,53 @@
         <script type="text/javascript" charset="utf-8">
             var socket;
             $(document).ready(function(){
+		// Connect to socket
                 socket = io.connect('http://' + document.domain + ':' + location.port + '/');
+		// Join (not useful here)
                 socket.on('connect', function() {
                     socket.emit('joined', {});
                 });
-                socket.on('message', function(data) {
-		    var formated_example = data.formated_example
-		    var n_match = data.n_match
-		    var n_distinct = data.n_distinct
-		    var _message = data._message
-		    var has_previous = data.has_previous
+		// Redirect when done
+		socket.on('redirect', function(data) {
+		    window.location = data.url;
+		});
+		// On new example, replace text to label and various metrics
+            socket.on('message', function(data) {
+		    var formated_example = data.formated_example;
+		    var n_match = data.n_match;
+		    var n_distinct = data.n_distinct;
+		    var _message = data._message;
+		    var has_previous = data.has_previous;
 
 		    // Update text to display
-		    $('#example_to_label').text(formated_example)
-		    $('#n_match').text(n_match)
-		    $('#n_distinct').text(n_distinct)
-		    $('#example_to_label').text(formated_example)
+		    $('#example_to_label').text(formated_example);
+		    $('#n_match').text(n_match);
+		    $('#n_distinct').text(n_distinct);
+		    $('#_message').text(_message);
 
+		    // Show previous button if present
+		    if (has_previous) {
+		    	$('#previous_button').show();
+			$('#previous_button_text').show();
+		    } else {
+		    	$('#previous_button').hide();
+		    	$('#previous_button_text').hide();
+			$('#uncertain_button').focus()
+		    }
 
 		    // Show message if present
 		    if (typeof _message !== 'undefined') {
-			$('#_message').text(_message)
-			$('#_message').show()
+			$('#_message').text(_message);
+			$('#_message').show();
 		    } else {
-			$('#_message').hide()
+			$('#_message').hide();
 		    }
 
-		
-		    // Show previous button if present
-		    if (has_previous) {
-		    	$('#previous_button').show()
-			$('#previous_button_text').show()
-		    } else {
-			$('#previous_button').hide()
-			$('#previous_button_text').hide()
-		    }
 
                     //$('#chat').val($('#chat').val() + data.msg + '\n');
                     //$('#chat').scrollTop($('#chat')[0].scrollHeight);
                 });
+		// Use RETURN key to send answer
                 $('#answer').keypress(function(e) {
                     var code = e.keyCode || e.which;
                     if (code == 13) {
@@ -52,6 +60,7 @@
                     }
                 });
             });
+	    // Not used here (to disconnect or leave room)
             function leave_room() {
                 socket.emit('left', {}, function() {
                     socket.disconnect();
@@ -59,12 +68,13 @@
                     window.location.href = "{{ url_for('main') }}";
                 });
             }
+	    // Send answer to server
             function send_answer() {
-		answer_to_send = $("input[name='possible_answer']:checked").val();
+				answer_to_send = $("input[name='possible_answer']:checked").val();
 
-		// To uncheck checkboxes
-		//$("input[name='possible_answer']").attr('checked',false);
-                socket.emit('answer', answer_to_send);
+				// To uncheck checkboxes
+				//$("input[name='possible_answer']").attr('checked',false);
+		        socket.emit('answer', answer_to_send);
             }
         </script>
     </head>
@@ -80,9 +90,9 @@
 	<form id="answer">
 	  <input type="radio" name="possible_answer" value="y" /> (y)es
 	  <input type="radio" name="possible_answer" value="n" /> (n)o
-	  <input type="radio" name="possible_answer" value="u" /> (u)ncertain
+	  <input type="radio" name="possible_answer" value="u" id="uncertain_button"/> (u)ncertain
 	  <input type="radio" name="possible_answer" value="f" /> (f)inished
-	  <input type="radio" name="possible_answer" value="p" id="previous_button"/><span id="previous_button_text"> (p)revious</span>
+	  <input type="radio" name="possible_answer" value="p" id="previous_button" style="display: none"/><span id="previous_button_text" style="display: none"> (p)revious</span>
 	</form>
 	
 	<button id="send_answer" onclick="send_answer()"> Send Answer </button>
