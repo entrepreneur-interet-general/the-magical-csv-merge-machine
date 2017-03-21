@@ -6,6 +6,10 @@ Created on Mon Mar 13 13:20:20 2017
 @author: leo
 
 USES: /python-memcached
+
+TODO: Gray out next button until all fields are properly filled
+TODO: Do not go to next page if an error occured
+
 """
 
 import gc
