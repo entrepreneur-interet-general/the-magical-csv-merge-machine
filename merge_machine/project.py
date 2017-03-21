@@ -15,6 +15,7 @@ DEV GUIDELINES:
     - Modules take as input (pd.DataFrame, dict_for_parameters)
     - Current state should be fully understandable from metadata
     - Each module shall take care of creating it's own directory
+    - File name is unique (not accross reference)
 
 TODO:
     - Store user params
@@ -178,25 +179,25 @@ class Project():
         return get_arb(path_to_proj)
 
 
-    def list_csvs(self):
+    def list_files(self, extensions=['.csv']):
         '''
         Lists csv files (from data) in data directory and presents a list of modules in 
         which they are present. You can combine this with get_last_written
         '''
-        all_csvs = dict()
-        for file_role in ['ref', 'source']:
-            all_csvs[file_role] = dict()
+        all_files = dict()
+        for file_role in ['ref', 'source', 'link']:
+            all_files[file_role] = dict()
             root_path = self.path_to(file_role=file_role)
             if os.path.isdir(root_path):
                 for _dir in os.listdir(root_path):
                     if os.path.isdir(os.path.join(root_path, _dir)):
                         for file_name in os.listdir(os.path.join(root_path, _dir)):
-                            if file_name[-4:] == '.csv':
-                                if file_name not in all_csvs[file_role]:
-                                    all_csvs[file_role][file_name] = [_dir]
+                            if any(file_name[-len(ext):] == ext for ext in extensions):
+                                if file_name not in all_files[file_role]:
+                                    all_files[file_role][file_name] = [_dir]
                                 else:
-                                    all_csvs[file_role][file_name].append(_dir)
-        return all_csvs
+                                    all_files[file_role][file_name].append(_dir)
+        return all_files
 
     def log_by_file_name(self):
         # Sort by name and date        
@@ -223,7 +224,7 @@ class Project():
             - module_name ('INIT' if no previous module)
         '''
         self.check_file_role(file_role)
-
+    
         for log in self.metadata['log'][::-1]:
             if (not log['error']) and log['written'] \
                       and ((log['file_role'] == file_role) or file_role is None) \
@@ -253,6 +254,8 @@ class Project():
         as INIT (not in modules) by design.
         """
         self.check_file_role(file_role)
+        
+        # Check that file is not already present
         
         #
         self.mem_data_info = {'file_role': file_role, 
@@ -291,7 +294,6 @@ class Project():
         with open(file_path, 'w') as w:
             w.write(file.read())
             
-        
         # TODO: finish this. What should we do? for all modules? pass file? pass dict?
             
     def remove_data(self, file_role, module_name='', file_name=''):
@@ -312,14 +314,21 @@ class Project():
     def write_metadata(self):
         path_to_metadata = self.path_to(file_name='metadata.json')
         json.dump(self.metadata, open(path_to_metadata, 'w'))
-    
-    
-    def clean_metadata(self, file_role, file_name):
-        '''Remove all mentions of a file in metadata'''
-        self.check_file_role(file_role)
-        self.metadata['log'] = filter(lambda x: (x['file_name']!=file_name) \
-                         and (x['file_role']!=file_role), self.metadata['log'])
-    
+
+    def remove(self, file_name):
+        '''Remove all files and clear metadata with given name from project'''
+        # TODO: deal with .csv dependency
+        all_files = self.list_files(extensions=['.csv'])
+        
+        for file_role, name_dict in all_files.items():
+            for _file_name, module_name in name_dict.items():
+                if file_name == _file_name:
+                    self.remove_data(file_role, module_name, file_name)
+        
+        self.metadata['log'] = filter(lambda x: (x['file_name']!=file_name), 
+                                                 self.metadata['log'])     
+        self.write_metadata()
+        
         
     def load_data(self, file_role, module_name, file_name):
         '''Load data as pandas DataFrame'''

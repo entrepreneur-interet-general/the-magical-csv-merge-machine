@@ -22,7 +22,7 @@ TODO:
       use is specified on api call and not read from metadata (unless using last used)
     
     - Protect admin functions
-    
+    -
     - ADD LICENSE
 
 DEV GUIDELINES:
@@ -188,36 +188,53 @@ def parse_linking_request():
 # WEB
 #==============================================================================
 
-@app.route('/web', methods=['GET'])
+@app.route('/')
+@app.route('/web/', methods=['GET'])
+@app.route('/web/project/', methods=['GET'])
 @cross_origin()
-def index():
+def web_index():
     return render_template('index.html', 
-                           next_url=url_for('web_upload'))
+                           next_url=url_for('web_select_files'))
 
 
-@app.route('/web/project/upload')
-@app.route('/web/project/upload/<project_id>')
+@app.route('/web/project/select/', methods=['GET'])
+@app.route('/web/project/select/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
-def web_upload(project_id=None):
+def web_select_files(project_id=None):
     MAX_FILE_SIZE = 1048576
-    return render_template('upload.html', 
+    
+    proj = init_project(project_id=project_id, existing_only=True)
+    all_csvs = proj.list_files(extensions=['.csv'])
+    
+    all_internal_refs = [] # TODO: take care of this
+    return render_template('select_files.html', 
                            project_id=project_id,
-                           upload_api_url=url_for('upload', project_id=project_id), 
+                           previous_sources=all_csvs['source'],
+                           previous_references=all_csvs['ref'],
+                           internal_references=all_internal_refs,
+                           upload_api_url=url_for('upload', project_id=project_id),
+                           select_file_url=url_for('select_file', project_id=project_id),
+                           next_url=url_for('web_link', project_id=project_id),
                            MAX_FILE_SIZE=MAX_FILE_SIZE)
 
+@app.route('/web/project/<project_id>/link/', methods=['GET'])
+@cross_origin()
+def web_link(project_id):
+    return 'NOT YET DONE'
+    
 
 #==============================================================================
 # API
 #==============================================================================
 
-@app.route('/api/project/new', methods=['GET'])
+@app.route('/api/project/new/', methods=['GET'])
 def new_project():
     proj = UserProject(create_new=True)
     return jsonify(error=False, 
                    project_id=proj.project_id)
 
 
-@app.route('/api/project/metadata/<project_id>', methods=['GET', 'POST'])
+@app.route('/api/project/metadata/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
 def metadata(project_id):
     '''Fetch metadata for project ID'''
@@ -228,7 +245,7 @@ def metadata(project_id):
     return resp
 
 
-@app.route('/api/project/download/<project_id>', methods=['POST'])
+@app.route('/api/project/download/<project_id>/', methods=['POST'])
 @cross_origin()
 def download(project_id):
     '''
@@ -244,7 +261,7 @@ def download(project_id):
         
         if data_params is None:
             data_params = {}
-        
+            
         file_role = data_params.get('file_role', None)
         module = data_params.get('module', None)
         file_name = data_params.get('file_name', None)
@@ -272,9 +289,17 @@ def download(project_id):
         return jsonify(error=True,
                        message=e)
 
-
-
-@app.route('/api/project/exists/<project_id>', methods=['GET', 'POST'])
+@app.route('/api/project/select_file/<project_id>/', methods=['POST'])
+def select_file(project_id):
+    '''send {file_role: "source", file_name: "XXX", internal: False}'''
+    proj = init_project(project_id, True)
+    params = request.json
+    proj.select_file(params['file_role'], params['file_name'], params['internal'])
+    return jsonify(error=False)
+ 
+    
+    
+@app.route('/api/project/exists/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
 def project_exists(project_id):
     '''Check if project exists'''
@@ -287,7 +312,7 @@ def project_exists(project_id):
         return jsonify(error=False, exists=False)
     
 
-@app.route('/api/project/upload/<project_id>', methods=['POST'])
+@app.route('/api/project/upload/<project_id>/', methods=['POST'])
 @cross_origin()
 def upload(project_id=None):
     '''
@@ -304,7 +329,8 @@ def upload(project_id=None):
     for key in ['source', 'ref']:
         if key in request.files:
             file = request.files[key]
-            proj.add_init_data(file.stream, key, file.filename)    
+            if file:
+                proj.add_init_data(file.stream, key, file.filename)    
     
     return jsonify(error=False,
                metadata=proj.metadata,
@@ -323,7 +349,7 @@ def list_modules():
                    message='This should list the available modules') #TODO: <--
 
 
-@app.route('/api/project/modules/infer_mvs/<project_id>', methods=['GET', 'POST'])
+@app.route('/api/project/modules/infer_mvs/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
 def infer_mvs(project_id):
     '''Runs the infer_mvs module'''
@@ -341,7 +367,7 @@ def infer_mvs(project_id):
                    response=result)
     
     
-@app.route('/api/project/modules/replace_mvs/<project_id>', methods=['POST'])
+@app.route('/api/project/modules/replace_mvs/<project_id>/', methods=['POST'])
 @cross_origin()
 def replace_mvs(project_id):
     '''Runs the mvs replacement module'''
@@ -357,7 +383,7 @@ def replace_mvs(project_id):
     return jsonify(error=False)
 
 
-@app.route('/api/project/link/dedupe_linker/<project_id>', methods=['POST'])
+@app.route('/api/project/link/dedupe_linker/<project_id>/', methods=['POST'])
 @cross_origin()
 def linker(project_id):
     '''
@@ -399,7 +425,7 @@ def linker(project_id):
 # Admin
 #==============================================================================
 
-@app.route('/api/admin/list_projects', methods=['GET', 'POST'])
+@app.route('/api/admin/list_projects/', methods=['GET', 'POST'])
 @cross_origin()
 def list_projects():
     '''Lists all project id_s'''
@@ -408,7 +434,7 @@ def list_projects():
     return jsonify(error=False,
                    response=list_of_projects)
 
-@app.route('/api/admin/list_referentials', methods=['GET', 'POST'])
+@app.route('/api/admin/list_referentials/', methods=['GET', 'POST'])
 @cross_origin()
 def list_referentials():
     '''Lists all internal referentials'''

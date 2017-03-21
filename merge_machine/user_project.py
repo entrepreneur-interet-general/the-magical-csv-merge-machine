@@ -55,11 +55,16 @@ class UserProject(Project):
         metadata['user_id'] = 'NOT IMPlEMENTED'
         metadata['use_internal_ref'] = None
         metadata['ref_name'] = None
-        #metadata['source_names'] = []
+        metadata['current'] = {'source': None, 'ref': None} # {'source': {internal: False, file_name: "source.csv.csv"}, 'ref': None}
         metadata['log'] = []
         metadata['project_id'] = self.project_id
         return metadata   
 
+    def select_file(self, file_role, file_name, internal=False):
+        # TODO: Validate that the file exists
+        self.check_file_role(file_role)
+        self.metadata['current'][file_role] = {'internal': internal, 'file_name': file_name}  
+        self.write_metadata()
 
     def linker(self, module_name, paths, params):
         '''

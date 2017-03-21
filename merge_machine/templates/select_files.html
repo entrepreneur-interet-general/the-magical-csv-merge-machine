@@ -1,0 +1,197 @@
+<html>
+    <head>
+        <title>Upload</title>
+        <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+        <script type="text/javascript" charset="utf-8">
+
+        $(document).ready(function(){
+			$("#submitBtn").on("click", function() {
+				// http://blog.w3villa.com/websites/uploading-filesimage-with-ajax-jquery-without-submitting-a-form/
+				// Select source
+				switch ($("input[type=radio][name='select_source']:checked").val()) {
+					case "previous":
+						file_name = $("input[type=radio][name='previous_source']:checked").val()
+						alert("Using previous source: ".concat(file_name))
+						call_select_file("source", file_name, false)
+						break;
+					case "upload":
+						var form = new FormData($("#source_to_upload")[0]);
+						upload(form, "source");
+						break;
+				};
+
+
+				// Select referential
+				switch ($("input[type=radio][name='select_ref']:checked").val()) {
+					case "previous":
+						file_name = $("input[type=radio][name='previous_ref']:checked").val()
+						call_select_file("ref", file_name, false)
+						alert("Using previous referential: ".concat(file_name))
+						break;
+					case "internal":
+						file_name = $("input[type=radio][name='internal_ref']:checked").val()
+						call_select_file("ref", file_name, true)
+						alert("Using internal referential: ".concat(file_name))
+						break;
+					case "upload":
+						var form = new FormData($("#ref_to_upload")[0]);
+						upload(form, "ref");
+						break;
+				};
+
+			// Redirect
+			window.location = "{{ next_url }}"
+
+			}); 
+
+
+			// Display function for source
+			$("input[type=radio][name='select_source']").on("change", function() {
+				if (this.value == "upload"){
+					$("#upload_source").show()
+				} else {
+					$("#upload_source").hide()
+				}
+				if (this.value == "previous"){
+					$("#previous_source").show()
+				} else {
+					$("#previous_source").hide()
+				}
+			});
+
+			// Display function for ref
+			$("input[type=radio][name='select_ref']").on("change", function() {
+				if (this.value == "upload"){
+					$("#upload_ref").show()
+				} else {
+					$("#upload_ref").hide()
+				}
+				if (this.value == "previous"){
+					$("#previous_ref").show()
+				} else {
+					$("#previous_ref").hide()
+				}
+				if (this.value == "internal"){
+					$("#internal_ref").show()
+				} else {
+					$("#internal_ref").hide()
+				}
+			});
+
+		});
+
+
+        function call_select_file(file_role, file_name, internal){
+    		$.ajax({
+            type: 'post',
+	            url: "{{ select_file_url }}",
+	            data: JSON.stringify({file_role: file_role, file_name: file_name, internal: internal}),
+	            contentType: "application/json; charset=utf-8",
+	            traditional: true,
+	            success: function (data) {
+	            }
+        	});
+        };
+
+        function upload(form, file_role) {
+        	var upload_api_url = "{{ upload_api_url }}"
+			$.ajax({
+			        url: upload_api_url,
+			        method: "POST",
+			        dataType: 'json',
+			        data: form,
+			        processData: false,
+			        contentType: false,
+			        async: false, // TODO: check this (to avoid next page before uplload)
+			        success: function(result){
+			        			file_name = form.get(file_role).name;
+    							call_select_file(file_role, file_name, false);
+    							alert("Uploaded file ".concat(file_name, " as ", file_role))
+    						},
+			        error: function(er){alert("Error during upload...	")}
+			});
+		}
+
+        </script>
+    </head>
+
+
+    <body>
+        <h1 id='title'>Select files for project: {{ project_id }}</h1>
+
+	
+
+		<div style="width: 100%;">
+			<!-- SELECT SOURCE -->
+			<div id="choose_source" style="float:left; width: 50%">
+				<h2 id='title'>Source</h2>
+
+		 	  	{% if previous_sources %}
+				 	<input type="radio" name="select_source" value="previous" /> Use previous source </br>
+				 	<div id="previous_source" style="display: none; color: gray">
+					    {% for item in previous_sources %}
+					    	<input type="radio" name="previous_source" value="{{ item }}" /> {{ item }} </br>
+					    {% endfor %}
+
+			 		</div>
+				{% else %}
+					<input type="radio" name="select_source" value="previous" disabled="true"/> Use previous source (No file previously uploaded) </br>
+				{% endif %}
+
+				<input type="radio" name="select_source" value="upload" /> Upload new source </br>
+				<div id="upload_source" style="display: none; color: gray">
+					<form id="source_to_upload" method="post" enctype="multipart/form-data">
+						 <!--<label for="source"> Source file:</label>-->
+				 	    <input type="hidden" name="MAX_FILE_SIZE" value="{{ MAX_FILE_SIZE }}" />
+					    <input type="file" name="source" id="source" />
+				    </form>
+			    </div>
+			 </div>
+
+			 <!-- SELECT REF -->
+			 <div id="choose_ref" style="float:left;">
+			 	<h2 id='title'>Referential</h2>
+
+		 	  	{% if internal_references %}
+				 	<input type="radio" name="select_ref" value="internal" /> Use internal referential </br>
+				 	<div id="internal_references" style="display: none; color: gray">
+					    {% for item in internal_references %}
+					    	<input type="radio" name="internal_ref" value="{{ item }}" /> {{ item }} </br>
+					    {% endfor %}
+			 		</div>
+				{% else %}
+					<input type="radio" name="select_ref" value="internal" disabled="true"/> Use internal referential (NOT YET IMPLEMENTED) </br>
+				{% endif %}
+
+		 	  	{% if previous_references %}
+				 	<input type="radio" name="select_ref" value="previous" /> Use previous referential </br>
+				 	<div id="previous_ref" style="display: none; color: gray">
+					    {% for item in previous_references %}
+					    	<input type="radio" name="previous_ref" value="{{ item }}" /> {{ item }} </br>
+					    {% endfor %}
+			 		</div>
+				{% else %}
+					<input type="radio" name="select_ref" value="previous" disabled="true"/> Use previous referential (No file previously uploaded) </br>
+				{% endif %}
+
+			 	<input type="radio" name="select_ref" value="upload" /> Upload new referential </br>
+			 	<div id="upload_ref" style="display: none; color: gray">
+			 		<form id="ref_to_upload" method="post" enctype="multipart/form-data">
+					    <!--<label for="ref"> Reference file:</label>-->
+					    <input type="hidden" name="MAX_FILE_SIZE" value="{{ MAX_FILE_SIZE }}" />
+					    <input type="file" name="ref" id="ref" />
+				    </form>
+				</div>
+			</div>
+
+			<div style="clear:both">
+
+				</br>
+				<button type="button" id="submitBtn" >Next Step...</button>
+			</div>
+		</div>
+	
+    </body>
+</html>
+
+

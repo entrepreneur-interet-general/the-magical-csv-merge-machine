@@ -26,7 +26,7 @@
 			$.getJSON(exists_url, function(json){
 			    if (json.exists) {
 		       		var next_url = '{{ next_url }}'
-		       		next_url = next_url.concat('/', project_id)
+		       		next_url = next_url.concat(project_id)
 		       		window.location = next_url			    		    	
 			    } else {
 			    	alert("Project id ".concat(project_id, " could not be found."))
