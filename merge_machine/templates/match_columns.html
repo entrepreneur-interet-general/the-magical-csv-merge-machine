@@ -5,8 +5,6 @@
         <script type="text/javascript" src="https://cdn.rawgit.com/google/palette.js/master/palette.js"></script>
         <script type="text/javascript" charset="utf-8">
 
-
-
         // Initiate label (color) trackers
         var source_label = {
 		    {% for col in source_index%}
@@ -20,13 +18,36 @@
 		    {% endfor %}
         }
 
+
+        // var source_index = [
+        //	{% for row in source_sample %}
+        //		{
+		//	    {% for key, val in row.items() %}
+		//	        "{{ key }}": "{{ val }}",
+		//	    {% endfor %}
+		//		},
+		//	{% endfor %}
+		//   ]
+
+        // var ref_index = [
+        //	{% for row in ref_sample %}
+        //		{
+		//	    {% for key, val in row.items() %}
+		//	        "{{ key }}": "{{ val }}",
+		//	    {% endfor %}
+		//		},
+		//	{% endfor %}
+		//  ]
+
+
         // Keep track of current label so you can click on same label successively
         curr_label = 1
 
         var color_count = Object.keys(source_label).length
+        var seq = palette("qualitative", color_count)
 
 		var orig_color = "#ffffff"
-		var seq = palette("qualitative", color_count)
+		
 
 
 
@@ -73,7 +94,28 @@
 	        {% endfor %}
     	});
 
+
+		
+
+
         $(document).ready(function(){
+
+
+        	// Prefill with colors if previous config was given
+			{% for group in config %}
+				label = {{ loop.index }}
+				{% for col in group["source"] %}
+					source_label["{{ col }}"] = label
+					$("#source_table .{{ col }}").css('background-color', seq[label-1]) // NB index starts at 1
+				{% endfor %}
+				{% for col in group["ref"] %}
+					ref_label["{{ col }}"] = label
+					$("#ref_table .{{ col }}").css('background-color', seq[label-1])
+				{% endfor %}
+			{% endfor %}
+
+
+
 			$("#submitBtn").on("click", function() {
 				json_to_send = 	format_for_api(source_label, ref_label)
 				

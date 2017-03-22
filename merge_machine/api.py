@@ -25,6 +25,10 @@ TODO:
     -
     - ADD LICENSE
 
+    - Gray out next button until all fields are properly filled
+    - Do not go to next page if an error occured
+    - General error handling
+
 DEV GUIDELINES:
     - By default the API will use the file with the same name in the last 
       module that was completed. Otherwise, you can specify the module to use file from
@@ -61,17 +65,30 @@ curl -i http://127.0.0.1:5000/download/ -X POST -F "request_json=@sample_downloa
 
 # Download metadata
 curl -i http://127.0.0.1:5000/metadata/ -X POST -F "request_json=@sample_download_request.json;type=application/json"
+
+USES: /python-memcached
+
 """
 
+import gc
 import os
 
+import flask
 from flask import Flask, jsonify, render_template, request, send_file, url_for
+from flask_session import Session
+from flask_socketio import emit, SocketIO
 from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
+
+import pandas as pd
+
+from dedupe_linker import format_for_dedupe, load_deduper
+from labeller import Labeller
 
 from admin import Admin
 from user_project import UserProject
 from referential import Referential
+
 
 
 # Change current path to path of api.py
@@ -83,13 +100,15 @@ app = Flask(__name__)
 cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 app.config['SERVER_NAME'] = '127.0.0.1:5000'
+app.config['SESSION_TYPE'] = "memcached"# 'memcached'
 
+Session(app)
 
 app.debug = True
-app.secret_key = open('secret_key.txt').read()
+app.config['SECRET_KEY'] = open('secret_key.txt').read()
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 # Check that files are not too big
           
-          
+socketio = SocketIO(app)       
 
     
 def check_request():
@@ -242,20 +261,143 @@ def web_match_columns(project_id):
     else:
         raise Exception('Internal source not yet implemented')
     
-    print(source_sample)
+    # Load previous config
+    config = proj.read_col_matches()
+    
     return render_template('match_columns.html',
+                           config=config,
+                           
                            source_index=list(source_sample[0].keys()),
                            ref_index=list(ref_sample[0].keys()),
+                           
                            source_sample=source_sample,
                            ref_sample=ref_sample,
+                           
                            add_column_matches_api_url=url_for('add_column_matches', project_id=project_id),
                            next_url=url_for('web_dedupe', project_id=project_id))
   
-@app.route('/web/project/dedupe/<project_id>/', methods=['GET'])
+
+    
+@socketio.on('answer', namespace='/')
+def web_get_answer(user_input):
+    # TODO: avoiid multiple click
+    message = ''
+    #message = 'Expect to have about 50% of good proposals in this phase. The more you label, the better...'
+    if flask._app_ctx_stack.labeller.answer_is_valid(user_input):
+        flask._app_ctx_stack.labeller.parse_valid_answer(user_input)
+        if flask._app_ctx_stack.labeller.finished:
+            print('Writing train')
+            flask._app_ctx_stack.labeller.write_training(flask._app_ctx_stack.training_path)
+            print('Wrote train')
+                
+            
+            #            # >>>
+            #            # Perform deduplication
+            #            paths = {'ref': ref_path, 'source': source_path}
+            #            
+            #            # Perform linking
+            #            _ = proj.linker('dedupe_linker', paths, module_params)
+            #        
+            #            # Write transformations and log
+            #            proj.write_data()    
+            #            proj.write_log_buffer(True)
+            #            
+            #            # <<<
+
+  
+            
+
+            # TODO: Do dedupe
+            emit('redirect', {'url': url_for('web_download')})
+        else:
+            flask._app_ctx_stack.labeller.new_label()
+    else:
+        message = 'Sent an invalid answer'
+    emit('message', flask._app_ctx_stack.labeller.to_emit(message=message))
+    
+
+@app.route('/web/project/link/dedupe_linker/<project_id>/', methods=['GET'])
 @cross_origin()    
 def web_dedupe(project_id):
-    return 'Hi THERE. NOT YET IMPLEMENTED'
     
+    #    import json
+    #    with open('local_test_data/rnsr/my_dedupe_rnsr_config.json') as f:
+    #       my_config = json.load(f)    
+    #    paths = my_config['paths']
+    #    params = my_config['params']  
+    #    ref_path = paths['ref']
+    #    source_path = paths['source']      
+    #    my_variable_definition = params['variable_definition']      
+    #    flask._app_ctx_stack.training_path = paths['train']
+    
+    proj = init_project(project_id, existing_only=True)
+    
+    # TODO: Add extra config page
+    # TODO: move this to user_project
+
+    col_matches = proj.read_col_matches()
+    
+    my_variable_definition = []
+    for match in col_matches:
+        if (len(match['source']) != 1) or (len(match['ref']) != 1):
+            import pdb; pdb.set_trace()
+            raise Exception('Not dealing with multiple columns (1 source, 1 ref only)')
+        my_variable_definition.append({"crf": True, "missing_values": True, "field": 
+            {"ref": match['ref'][0], "source": match['source'][0]}, "type": "String"})
+      
+    flask._app_ctx_stack.training_path = proj.path_to('link', 'dedupe_linker', 'training.json')
+    
+
+    # Get path to source
+    if proj.metadata['current']['source']['internal']:
+        raise Exception('Not dealing with internal sources yet')
+    else:
+        (file_role, module_name, file_name) = proj.get_last_written('source', 
+                            None, proj.metadata['current']['source']['file_name'])
+    source_path = proj.path_to(file_role, module_name, file_name)
+    
+    # Get path to source
+    if proj.metadata['current']['ref']['internal']:
+        raise Exception('Not dealing with internal sources yet')
+    else:
+        (file_role, module_name, file_name) = proj.get_last_written('ref', 
+                            None, proj.metadata['current']['ref']['file_name'])
+    ref_path = proj.path_to(file_role, module_name, file_name)
+
+    
+    # Put to dedupe input format
+    ref = pd.read_csv(ref_path, encoding='utf-8', dtype='unicode')
+    data_ref = format_for_dedupe(ref, my_variable_definition, 'ref') 
+    del ref # To save memory
+    gc.collect()
+    
+    # Put to dedupe input format
+    source = pd.read_csv(source_path, encoding='utf-8', dtype='unicode')
+    data_source = format_for_dedupe(source, my_variable_definition, 'source')
+    del source
+    gc.collect()
+    
+    #==========================================================================
+    # Should really start here
+    #==========================================================================
+    deduper = load_deduper(data_ref, data_source, my_variable_definition)
+
+    flask._app_ctx_stack.labeller = Labeller(deduper)
+    flask._app_ctx_stack.labeller.new_label()
+    
+    print(flask._app_ctx_stack.labeller.to_emit(''))
+    return render_template('dedupe_training.html', 
+                           **flask._app_ctx_stack.labeller.to_emit(''))
+    #return render_template('dedupe_training.html', **DUMMY_EMIT)
+
+
+@app.route('/web/project/link/download/<project_id>/', methods=['GET'])
+@cross_origin()
+def web_download(project_id):
+    return render_template('download.html', 
+                           project_id=project_id)
+
+
 
 #==============================================================================
 # API
@@ -488,4 +630,4 @@ def list_referentials():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    socketio.run(app, debug=True)

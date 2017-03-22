@@ -295,8 +295,9 @@ class Project():
         with open(file_path, 'w') as w:
             json.dump(config_dict, w)
             
-        # TODO: finish this. What should we do? for all modules? pass file? pass dict?
-            
+    
+
+    
     def remove_data(self, file_role, module_name='', file_name=''):
         '''Removes the corresponding data file'''
         self.check_file_role(file_role)
@@ -305,10 +306,19 @@ class Project():
             os.remove(file_path)
         else:
             raise Exception('{0} (in: {1}, as: {1}) could not be found in project'.format(file_name, module_name, file_role))
+ 
+    def read_config_data(self, file_role, module, file_name):
+        '''Reads json file'''
+        file_path = self.path_to(file_role=file_role, module_name=module, file_name=file_name)
+        if os.path.isfile(file_path):
+            config = json.loads(open(file_path).read())
+        else: 
+            config=None
+        return config    
     
     def read_metadata(self):
-        path_to_metadata = self.path_to(file_name='metadata.json')
-        metadata = json.loads(open(path_to_metadata).read())
+        '''Wrapper around read_config_data'''
+        metadata = self.read_config_data('', '', file_name='metadata.json')
         assert metadata['project_id'] == self.project_id
         return metadata
     
