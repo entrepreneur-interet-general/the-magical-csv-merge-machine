@@ -66,6 +66,12 @@ class UserProject(Project):
         self.metadata['current'][file_role] = {'internal': internal, 'file_name': file_name}  
         self.write_metadata()
 
+
+    def add_col_matches(self, column_matches):
+        '''column_matches is a json file as list of dict of list'''
+        # TODO: add checks on file
+        self.add_config_data(column_matches, 'link', 'dedupe_linker', 'column_matches.json')
+
     def linker(self, module_name, paths, params):
         '''
         # TODO: This is not optimal. Find way to change paths to smt else
@@ -118,6 +124,8 @@ if __name__ == '__main__':
 
     # Load source data to memory
     proj.load_data(file_role='source', module_name='INIT' , file_name='source.csv')
+    
+    assert False
     
     infered_params = proj.infer('infer_mvs', None)
     

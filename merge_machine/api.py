@@ -214,13 +214,47 @@ def web_select_files(project_id=None):
                            internal_references=all_internal_refs,
                            upload_api_url=url_for('upload', project_id=project_id),
                            select_file_url=url_for('select_file', project_id=project_id),
-                           next_url=url_for('web_link', project_id=project_id),
+                           next_url=url_for('web_match_columns', project_id=project_id),
                            MAX_FILE_SIZE=MAX_FILE_SIZE)
 
-@app.route('/web/project/<project_id>/link/', methods=['GET'])
+@app.route('/web/project/match_columns/<project_id>/', methods=['GET'])
 @cross_origin()
-def web_link(project_id):
-    return 'NOT YET DONE'
+def web_match_columns(project_id):
+    ROWS_TO_DISPLAY = range(3)
+    
+    proj = init_project(project_id, existing_only=True)
+    
+    # Load source sample
+    source_data = proj.metadata['current']['source']
+
+    if not source_data['internal']:
+        # NB: Displaying initial file
+        source_sample = proj.get_sample('source', 'INIT', source_data['file_name'],
+                                     row_idxs=ROWS_TO_DISPLAY)
+    else:
+        raise Exception('Internal source not yet implemented')
+    
+    # Load ref sample
+    ref_data = proj.metadata['current']['ref']
+    if not ref_data['internal']:
+        ref_sample = proj.get_sample('ref', 'INIT', ref_data['file_name'], 
+                                     row_idxs=ROWS_TO_DISPLAY)
+    else:
+        raise Exception('Internal source not yet implemented')
+    
+    print(source_sample)
+    return render_template('match_columns.html',
+                           source_index=list(source_sample[0].keys()),
+                           ref_index=list(ref_sample[0].keys()),
+                           source_sample=source_sample,
+                           ref_sample=ref_sample,
+                           add_column_matches_api_url=url_for('add_column_matches', project_id=project_id),
+                           next_url=url_for('web_dedupe', project_id=project_id))
+  
+@app.route('/web/project/dedupe/<project_id>/', methods=['GET'])
+@cross_origin()    
+def web_dedupe(project_id):
+    return 'Hi THERE. NOT YET IMPLEMENTED'
     
 
 #==============================================================================
@@ -336,6 +370,15 @@ def upload(project_id=None):
                metadata=proj.metadata,
                project_id=proj.project_id)
 
+
+@app.route('/api/project/add_column_matches/<project_id>/', methods=['POST'])
+@cross_origin()
+def add_column_matches(project_id):
+    column_matches = request.json
+    proj = init_project(project_id, existing_only=True)
+    proj.add_col_matches(column_matches)
+    return jsonify(error=False)
+    
 
 #==============================================================================
 # MODULES

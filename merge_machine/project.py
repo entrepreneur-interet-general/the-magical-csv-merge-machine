@@ -276,13 +276,14 @@ class Project():
         self.write_log_buffer(written=True)
         self.clear_memory()
     
-    def add_config_data(self, file, file_role, module, file_name):
+    def add_config_data(self, config_dict, file_role, module, file_name):
         '''Will write config file'''
         if (file_role != 'link') or (module != 'dedupe_linker'):
             raise Exception('Can only upload config files to file_role: link\
                             and module:dedupe_linker') # TODO: Is this good? Yes/No?
-        if file_name != 'training.json':
-            raise Exception('For now you can only upload files named training.json')
+            
+        if file_name not in ['training.json', 'column_matches.json']:
+            raise Exception('For now you can only upload files named training.json or column_matches.json')
 
         # Create directories
         dir_path = self.path_to(file_role, module)
@@ -292,7 +293,7 @@ class Project():
         # Write file
         file_path = self.path_to(file_role, module, file_name)
         with open(file_path, 'w') as w:
-            w.write(file.read())
+            json.dump(config_dict, w)
             
         # TODO: finish this. What should we do? for all modules? pass file? pass dict?
             
@@ -337,6 +338,19 @@ class Project():
         self.mem_data_info = {'file_role': file_role, 
                                'file_name': file_name,
                                'module': module_name}
+        
+    def get_sample(self, file_role, module_name, file_name, row_idxs=range(5)):
+        '''Returns a dict with the selected rows (including header)'''
+        file_path = self.path_to(file_role, module_name, file_name)
+        if row_idxs is not None:
+            assert row_idxs[0] == 0
+            max_rows = max(row_idxs)    
+            tab = pd.read_csv(file_path, encoding='utf-8', dtype='unicode', nrows=max_rows)
+            tab = tab.iloc[[x - 1 for x in row_idxs], :]
+        else:
+            tab = pd.read_csv(file_path, encoding='utf-8', dtype='unicode')
+        return tab.to_dict('records')
+        
     
     def write_log_buffer(self, written):
         '''

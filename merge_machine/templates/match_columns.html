@@ -1,0 +1,190 @@
+<html>
+    <head>
+        <title>Match columns</title>
+        <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+        <script type="text/javascript" src="https://cdn.rawgit.com/google/palette.js/master/palette.js"></script>
+        <script type="text/javascript" charset="utf-8">
+
+
+
+        // Initiate label (color) trackers
+        var source_label = {
+		    {% for col in source_index%}
+		    		"{{ col }}": 0,
+		    {% endfor %}
+        }
+
+        var ref_label = {
+		    {% for col in ref_index%}
+		    		"{{ col }}": 0,
+		    {% endfor %}
+        }
+
+        // Keep track of current label so you can click on same label successively
+        curr_label = 1
+
+        var color_count = Object.keys(source_label).length
+
+		var orig_color = "#ffffff"
+		var seq = palette("qualitative", color_count)
+
+
+
+		$("#source_table").ready(function() {
+			{% for col in source_index %}
+		        $("#source_table .{{ col }}").on("click", function() {
+		        	if (source_label["{{ col }}"] == curr_label) {
+			        	source_label["{{ col }}"] += 1
+			        	source_label["{{ col }}"] %= (color_count + 1)
+			        	curr_label = source_label["{{ col }}"]		        		
+		        	} else {
+		        		source_label["{{ col }}"] = curr_label
+			        }
+
+			        // Change color
+		        	if (source_label["{{ col }}"] == 0) {
+		        		$("#source_table .{{ col }}").css('background-color', orig_color)
+		        	} else {
+		        		$("#source_table .{{ col }}").css('background-color', seq[source_label["{{ col }}"] - 1])
+		        	}
+		        });
+	        {% endfor %}
+    	});
+
+		$("#ref_table").ready(function() {
+			{% for col in ref_index %}
+		        $("#ref_table .{{ col }}").on("click", function() {
+
+		        	if (ref_label["{{ col }}"] == curr_label) {
+			        	ref_label["{{ col }}"] += 1
+			        	ref_label["{{ col }}"] %= (color_count + 1)
+			        	curr_label = ref_label["{{ col }}"]		        		
+		        	} else {
+		        		ref_label["{{ col }}"] = curr_label
+			        }
+
+			        // Change color
+		        	if (ref_label["{{ col }}"] == 0) {
+		        		$("#ref_table .{{ col }}").css('background-color', orig_color)
+		        	} else {
+		        		$("#ref_table .{{ col }}").css('background-color', seq[ref_label["{{ col }}"] - 1])
+		        	}
+		        });
+	        {% endfor %}
+    	});
+
+        $(document).ready(function(){
+			$("#submitBtn").on("click", function() {
+				json_to_send = 	format_for_api(source_label, ref_label)
+				
+	    		$.ajax({
+	            type: 'post',
+		            url: "{{ add_column_matches_api_url }}",
+		            data: JSON.stringify(json_to_send),
+		            contentType: "application/json; charset=utf-8",
+		            traditional: true,
+		            success: function (data) {
+		            	alert("sent: ".concat(JSON.stringify(json_to_send)))
+		            }
+	        	});
+
+			// Redirect
+			window.location = "{{ next_url }}"	        	
+				
+			});
+		});
+
+		function format_for_api(source_label, ref_label) {
+			// Create a list of dict of list 
+			// Example: [{"source": ['voirie', "commune"], "ref": ["adresse"]}, {"source": ["etab"], "ref": ["etablissement"]}]
+
+			var temp_obj = {}
+			for (var col in source_label) {
+				var label = source_label[col]
+				if (label != 0) {
+					if (!(label in temp_obj)) {
+						temp_obj[label] = {"source": [], "ref": []}
+					} 
+					temp_obj[label]["source"].push(col)
+				}
+			}
+
+			for (var col in ref_label) {
+				var label = ref_label[col]
+				if (label != 0) {
+					temp_obj[label]["ref"].push(col)
+				}
+			}
+
+			// Transform dict of dict of list to list of dict of list
+			to_return = []
+			for (var key in temp_obj) {
+				to_return.push(temp_obj[key])
+			}
+			return to_return
+		}
+
+        </script>
+    </head>
+
+
+    <body>
+        <h1 id='title'>Select Columns to Match for project: {{ project_id }}</h1>
+
+	
+
+		<div style="width: 100%;">
+			<!-- SELECT SOURCE -->
+			<div id="display_source" style="float:left; width: 50%">
+				<h2>Source</h2>
+
+				<table id="source_table" style="font-size: 75%;">
+					<tr>
+					    {% for key, _ in source_sample[0].items() %}
+					        <th class="{{ key }}">{{ key }}</th>
+					    {% endfor %}
+					</tr>
+
+					{% for row in source_sample %}
+					    <tr>
+					    {% for key, val in row.items() %}
+					        <td class="{{ key }}">{{ val }}</td>
+					    {% endfor %}
+					    </tr>
+					{% endfor %}
+				 </table>
+
+			</div>
+
+			<!-- SELECT REF -->
+			<div id="display_ref" style="float:left;">
+				<h2>Referential</h2>
+
+				<table id="ref_table" style="font-size: 75%;">
+					<tr>
+					    {% for key, _ in ref_sample[0].items() %}
+					        <th class="{{ key }}">{{ key }}</th>
+					    {% endfor %}
+					</tr>
+
+					{% for row in ref_sample %}
+					    <tr>
+					    {% for key, val in row.items() %}
+					        <td class="{{ key }}">{{ val }}</td>
+					    {% endfor %}
+					    </tr>
+					{% endfor %}
+				 </table>
+			</div>
+
+			<div style="clear:both">
+
+				</br>
+				<button type="button" id="submitBtn" >Next Step...</button>
+			</div>
+		</div>
+	
+    </body>
+</html>
+
+
