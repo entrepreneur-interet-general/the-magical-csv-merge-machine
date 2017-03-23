@@ -92,10 +92,13 @@ def merge_results(ref, source, matched_records, selected_columns_from_ref):
         - ref: pd.DataFrame (reference)
         - source: pd.DataFrame (source)
         - matched_records: output of gazetteer.match
-        - selected_columns_from_source: list of columns in ref that we want to 
+        - selected_columns_from_ref: list of columns in ref that we want to 
                                         include in the file we return
 
     '''
+    if selected_columns_from_ref is None:
+        selected_columns_from_ref = list(ref.columns)
+    
     assert selected_columns_from_ref # TODO: This should be done in checking input parameters
     
     # Turn matched_records into pandas DataFrame

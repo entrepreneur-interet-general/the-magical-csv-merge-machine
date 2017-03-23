@@ -39,18 +39,15 @@
     <body>
         <h1 id='title'>Welcome to the Magical CSV Merge Machine Experience (MCSVMME)</h1>
 
+		<form id="existing_project">
+			 Project ID: <input type="text" name="project_id" placeholder='Ex: af8b2be7b759313f375df12e34ab3b72'/>
+		     <input type="submit" name="submitExisting" value="Join Existing Project" />
+		</form>
 
-	<form id="existing_project">
-		 Project ID: <input type="text" name="project_id" placeholder='Ex: af8b2be7b759313f375df12e34ab3b72'/>
-	     <input type="submit" name="submitExisting" value="Join Existing Project" />
-	</form>
-
-	<form id="new_project" method="post" enctype="multipart/form-data">
-	     <input type="submit" name="submitNew" value="Create New Project" />
-	</form>
-
-
-
+		<form id="new_project" method="post" enctype="multipart/form-data">
+		     <input type="submit" name="submitNew" value="Create New Project" />
+		</form>
+		
     </body>
 </html>
 

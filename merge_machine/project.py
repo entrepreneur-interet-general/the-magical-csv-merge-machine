@@ -371,13 +371,15 @@ class Project():
         
         '''
         if not self.log_buffer:
-            raise Exception('No log buffer ot write; no operations since last write')
+            raise Exception('No log buffer or write; no operations since last write')
         
         # Indicate if any data was written
         if written:
             for log in self.log_buffer[::-1]:
-                if log['module_type'] == 'transform':
+                assert log['module_type'] in ['infer', 'transform', 'link']
+                if log['module_type'] in ['transform', 'link']:
                     log['written'] = True
+                    break
                        
         # Add buffer to metadata  
         self.metadata['log'].extend(self.log_buffer)

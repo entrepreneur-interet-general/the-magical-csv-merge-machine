@@ -115,7 +115,6 @@ def check_request():
     '''Check that input request is valid'''
     pass
 
-
 def init_project(project_id=None, existing_only=False):
     '''Initialize project'''  
     
@@ -124,7 +123,6 @@ def init_project(project_id=None, existing_only=False):
                         Use `upload` to create a new project')
     proj = UserProject(project_id)
     return proj
-    
 
 def parse_data_params(proj, data_params, file_role=None):
     '''
@@ -154,15 +152,12 @@ def parse_data_params(proj, data_params, file_role=None):
                                         file_role, module_name, file_name)
     return (file_role, module_name, file_name)
 
-
 def load_from_params(proj, data_params=None):
     '''Load data to project using the parameters received in request.
     Implicit load is systematic. TODO: Define implicit load
     '''
     (file_role, module_name, file_name) = parse_data_params(proj, data_params)
     proj.load_data(file_role, module_name, file_name)
-
-
 
 def parse_1file_request():
     # Parse json request
@@ -202,6 +197,15 @@ def parse_linking_request():
             module_params = params['params']
     
     return data_params, module_params    
+
+def gen_dedupe_variable_definition(col_matches):
+    my_variable_definition = []
+    for match in col_matches:
+        if (len(match['source']) != 1) or (len(match['ref']) != 1):
+            raise Exception('Not dealing with multiple columns (1 source, 1 ref only)')
+        my_variable_definition.append({"crf": True, "missing_values": True, "field": 
+            {"ref": match['ref'][0], "source": match['source'][0]}, "type": "String"})
+    return my_variable_definition
 
 #==============================================================================
 # WEB
@@ -281,34 +285,18 @@ def web_match_columns(project_id):
 @socketio.on('answer', namespace='/')
 def web_get_answer(user_input):
     # TODO: avoiid multiple click
+    # TODO: add safeguards  if not enough train
     message = ''
     #message = 'Expect to have about 50% of good proposals in this phase. The more you label, the better...'
     if flask._app_ctx_stack.labeller.answer_is_valid(user_input):
         flask._app_ctx_stack.labeller.parse_valid_answer(user_input)
         if flask._app_ctx_stack.labeller.finished:
             print('Writing train')
-            flask._app_ctx_stack.labeller.write_training(flask._app_ctx_stack.training_path)
+            flask._app_ctx_stack.labeller.write_training(flask._app_ctx_stack.paths['train'])
             print('Wrote train')
-                
-            
-            #            # >>>
-            #            # Perform deduplication
-            #            paths = {'ref': ref_path, 'source': source_path}
-            #            
-            #            # Perform linking
-            #            _ = proj.linker('dedupe_linker', paths, module_params)
-            #        
-            #            # Write transformations and log
-            #            proj.write_data()    
-            #            proj.write_log_buffer(True)
-            #            
-            #            # <<<
-
-  
-            
 
             # TODO: Do dedupe
-            emit('redirect', {'url': url_for('web_download')})
+            emit('redirect', {'url': url_for('web_download', project_id=flask._app_ctx_stack.project_id)})
         else:
             flask._app_ctx_stack.labeller.new_label()
     else:
@@ -319,6 +307,7 @@ def web_get_answer(user_input):
 @app.route('/web/project/link/dedupe_linker/<project_id>/', methods=['GET'])
 @cross_origin()    
 def web_dedupe(project_id):
+    '''Labelling / training and matching using dedupe'''
     
     #    import json
     #    with open('local_test_data/rnsr/my_dedupe_rnsr_config.json') as f:
@@ -330,49 +319,31 @@ def web_dedupe(project_id):
     #    my_variable_definition = params['variable_definition']      
     #    flask._app_ctx_stack.training_path = paths['train']
     
+    
+    flask._app_ctx_stack.project_id = project_id
     proj = init_project(project_id, existing_only=True)
+    flask._app_ctx_stack.proj = proj
     
     # TODO: Add extra config page
     # TODO: move this to user_project
 
     col_matches = proj.read_col_matches()
     
-    my_variable_definition = []
-    for match in col_matches:
-        if (len(match['source']) != 1) or (len(match['ref']) != 1):
-            import pdb; pdb.set_trace()
-            raise Exception('Not dealing with multiple columns (1 source, 1 ref only)')
-        my_variable_definition.append({"crf": True, "missing_values": True, "field": 
-            {"ref": match['ref'][0], "source": match['source'][0]}, "type": "String"})
-      
-    flask._app_ctx_stack.training_path = proj.path_to('link', 'dedupe_linker', 'training.json')
-    
+    # Generate variable definition for dedupe
 
-    # Get path to source
-    if proj.metadata['current']['source']['internal']:
-        raise Exception('Not dealing with internal sources yet')
-    else:
-        (file_role, module_name, file_name) = proj.get_last_written('source', 
-                            None, proj.metadata['current']['source']['file_name'])
-    source_path = proj.path_to(file_role, module_name, file_name)
+    my_variable_definition = gen_dedupe_variable_definition(col_matches)
     
-    # Get path to source
-    if proj.metadata['current']['ref']['internal']:
-        raise Exception('Not dealing with internal sources yet')
-    else:
-        (file_role, module_name, file_name) = proj.get_last_written('ref', 
-                            None, proj.metadata['current']['ref']['file_name'])
-    ref_path = proj.path_to(file_role, module_name, file_name)
-
+    paths = proj.gen_paths_dedupe()  
+    flask._app_ctx_stack.paths = paths
     
     # Put to dedupe input format
-    ref = pd.read_csv(ref_path, encoding='utf-8', dtype='unicode')
+    ref = pd.read_csv(paths['ref'], encoding='utf-8', dtype='unicode')
     data_ref = format_for_dedupe(ref, my_variable_definition, 'ref') 
     del ref # To save memory
     gc.collect()
     
     # Put to dedupe input format
-    source = pd.read_csv(source_path, encoding='utf-8', dtype='unicode')
+    source = pd.read_csv(paths['source'], encoding='utf-8', dtype='unicode')
     data_source = format_for_dedupe(source, my_variable_definition, 'source')
     del source
     gc.collect()
@@ -382,8 +353,10 @@ def web_dedupe(project_id):
     #==========================================================================
     deduper = load_deduper(data_ref, data_source, my_variable_definition)
 
-    flask._app_ctx_stack.labeller = Labeller(deduper)
-    flask._app_ctx_stack.labeller.new_label()
+    flask._app_ctx_stack.labeller = Labeller(deduper, 
+                                             training_path=paths['train'], 
+                                             use_previous=True)
+    flask._app_ctx_stack.labeller.new_label()   
     
     print(flask._app_ctx_stack.labeller.to_emit(''))
     return render_template('dedupe_training.html', 
@@ -393,9 +366,41 @@ def web_dedupe(project_id):
 
 @app.route('/web/project/link/download/<project_id>/', methods=['GET'])
 @cross_origin()
-def web_download(project_id):
-    return render_template('download.html', 
-                           project_id=project_id)
+def web_download(project_id):    
+    
+    proj = init_project(project_id, existing_only=True)
+    
+    file_path = proj.path_to('link', 
+                             'dedupe_linker', 
+                             'mmm_result.csv'
+                             )    
+    
+    if (not os.path.isfile(file_path)):        
+        paths = proj.gen_paths_dedupe()
+        
+        col_matches = proj.read_col_matches()
+        my_variable_definition = gen_dedupe_variable_definition(col_matches)
+        
+        module_params = {
+                        'variable_definition': my_variable_definition,
+                        'selected_columns_from_ref': None
+                        }  
+        
+        # TODO: This should probably be moved
+        print('Performing deduplication')    
+        
+        # Perform linking
+        proj.linker('dedupe_linker', paths, module_params)
+    
+        print('Writing data')
+        # Write transformations and log
+        proj.write_data()    
+        proj.write_log_buffer(True)
+        print('Wrote data')
+
+    return render_template('last_page.html', 
+                           project_id=project_id,
+                           download_api_url=url_for('download', project_id=project_id))
 
 
 
@@ -421,7 +426,7 @@ def metadata(project_id):
     return resp
 
 
-@app.route('/api/project/download/<project_id>/', methods=['POST'])
+@app.route('/api/project/download/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
 def download(project_id):
     '''
@@ -431,6 +436,7 @@ def download(project_id):
     If variables are specified, return the last file modified with specific variables
     
     '''
+    project_id = secure_filename(project_id)
     try:
         proj = init_project(project_id, True)
         data_params, _ = parse_1file_request()
@@ -457,7 +463,7 @@ def download(project_id):
                            permitted. Please do not use this service for storage')
         
         file_path = proj.path_to(file_role, module, file_name)
-        return send_file(file_path)
+        return send_file(file_path, as_attachment=True, attachment_filename='m3_merged.csv')
     
     except Exception as e:
         import pdb
@@ -596,7 +602,7 @@ def linker(project_id):
     paths = {'ref': ref_path, 'source': source_path}
     
     # Perform linking
-    _ = proj.linker('dedupe_linker', paths, module_params)
+    proj.linker('dedupe_linker', paths, module_params)
 
     # Write transformations and log
     proj.write_data()    

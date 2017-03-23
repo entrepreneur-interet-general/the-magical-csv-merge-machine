@@ -9,6 +9,7 @@ Class used to label data with a deduper object
 
 """
 
+import os
 
 def unique(seq) :
     seen = set()
@@ -16,7 +17,7 @@ def unique(seq) :
     return [x for x in seq if not (x in seen or seen_add(x))]
 
 class Labeller():
-    def __init__(self, deduper):
+    def __init__(self, deduper, training_path=None, use_previous=False):
         self.deduper = deduper
         self.finished = False
         self.use_previous = False
@@ -26,6 +27,12 @@ class Labeller():
         self.buffer_len = 1
         self.examples_buffer = []
         self.uncertain_pairs = []
+        
+        if (training_path is not None) and use_previous \
+                        and os.path.isfile(training_path):
+            with open(training_path) as f:
+                self.deduper.readTraining(f)
+        
 
     def answer_is_valid(self, user_input):
         '''Check if the user input is valid'''
@@ -33,8 +40,8 @@ class Labeller():
             valid_responses = {'y', 'n', 'u', 'f', 'p'}
         else: 
             valid_responses = {'y', 'n', 'u', 'f'}
-        
         return user_input in valid_responses
+
         
     def to_emit(self, message):
         '''Creates a dict to be sent to the template'''
@@ -97,6 +104,8 @@ class Labeller():
                 examples[label].append(self.record_pair)
                 self.deduper.markPairs(examples)
 
+    def cleanup_training(self):
+        deduper.cleanupTraining()
 
     def write_training(self, file_path):
         with open(file_path, 'w') as f:

@@ -75,38 +75,72 @@ class UserProject(Project):
     def read_col_matches(self):
         return self.read_config_data('link', 'dedupe_linker', 'column_matches.json')
 
+
     def linker(self, module_name, paths, params):
         '''
         # TODO: This is not optimal. Find way to change paths to smt else
         '''
         
         # Add module-specific paths
-        if module_name ==  'dedupe_linker':
-            assert 'train_path' not in paths
-            assert 'learned_settings_path' not in paths
-            
-            paths['train'] = self.path_to('link', module_name, 'training.json')
-            paths['learned_settings'] = self.path_to('link', module_name, 'learned_settings')
+        #        if module_name ==  'dedupe_linker':
+        #            assert 'train_path' not in paths
+        #            assert 'learned_settings_path' not in paths
+        #            
+        #            paths['train'] = self.path_to('link', module_name, 'training.json')
+        #            paths['learned_settings'] = self.path_to('link', module_name, 'learned_settings')
         
         # Initiate log
+        self.mem_data_info['file_role'] = 'link' # Role of file being modified
+        self.mem_data_info['file_name'] = 'mmm_result.csv' # File being modified
+        
         log = self.init_log(module_name, 'link')
 
         self.mem_data, thresh = MODULES['link'][module_name](paths, params)
         
         self.mem_data_info['module'] = module_name
-        self.mem_data_info['file_role'] = 'link'
-        self.mem_data_info['file_name'] = 'mmm_result.csv'
         
         # Complete log
         log = self.end_log(log, error=False)
                           
         # Update log buffer
-        self.log_buffer.append(log)
-        
+        self.log_buffer.append(log)        
         return 
 
 
+    #==========================================================================
+    #  Module specific
+    #==========================================================================
 
+    def gen_paths_dedupe(self):
+        # Get path to training file for dedupe
+        training_path = self.path_to('link', 'dedupe_linker', 'training.json')
+        learned_settings_path = self.path_to('link', 'dedupe_linker', 'learned_settings')
+        
+        # Get path to source
+        if self.metadata['current']['source']['internal']:
+            raise Exception('Not dealing with internal sources yet')
+        else:
+            (file_role, module_name, file_name) = self.get_last_written('source', 
+                                None, self.metadata['current']['source']['file_name'])
+        source_path = self.path_to(file_role, module_name, file_name)
+        
+        # Get path to ref
+        if self.metadata['current']['ref']['internal']:
+            raise Exception('Not dealing with internal sources yet')
+        else:
+            (file_role, module_name, file_name) = self.get_last_written('ref', 
+                                None, self.metadata['current']['ref']['file_name'])
+        ref_path = self.path_to(file_role, module_name, file_name)
+    
+        # Add paths
+        paths = {
+                'ref': ref_path, 
+                'source': source_path,
+                'train': training_path,
+                'learned_settings': learned_settings_path            
+                }
+        
+        return paths
 
 if __name__ == '__main__':
     # Create/Load a project
