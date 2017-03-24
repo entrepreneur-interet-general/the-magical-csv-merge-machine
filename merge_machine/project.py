@@ -17,6 +17,9 @@ DEV GUIDELINES:
     - Each module shall take care of creating it's own directory
     - File name is unique (not accross reference)
 
+
+    - Dedupe: Numbers predicate ? Lycée Acajou 1	LYCEE POLYVALENT ACAJOU 2
+
 TODO:
     - Store user params
     - Deal with log for merge 
@@ -313,7 +316,7 @@ class Project():
         if os.path.isfile(file_path):
             config = json.loads(open(file_path).read())
         else: 
-            config=None
+            config = {}
         return config    
     
     def read_metadata(self):
@@ -349,16 +352,23 @@ class Project():
                                'file_name': file_name,
                                'module': module_name}
         
-    def get_sample(self, file_role, module_name, file_name, row_idxs=range(5)):
+    def get_sample(self, file_role, module_name, file_name, row_idxs=range(5), 
+                   columns=None, drop_duplicates=True):
         '''Returns a dict with the selected rows (including header)'''
         file_path = self.path_to(file_role, module_name, file_name)
+        
         if row_idxs is not None:
             assert row_idxs[0] == 0
             max_rows = max(row_idxs)    
-            tab = pd.read_csv(file_path, encoding='utf-8', dtype='unicode', nrows=max_rows)
+            tab = pd.read_csv(file_path, encoding='utf-8', dtype='unicode', usecols=columns, nrows=max_rows)
+            
             tab = tab.iloc[[x - 1 for x in row_idxs], :]
         else:
-            tab = pd.read_csv(file_path, encoding='utf-8', dtype='unicode')
+            tab = pd.read_csv(file_path, encoding='utf-8', dtype='unicode', usecols=columns)
+        
+        if drop_duplicates:
+            tab.drop_duplicates(inplace=True)
+        
         return tab.to_dict('records')
         
     

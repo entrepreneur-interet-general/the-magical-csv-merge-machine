@@ -1,16 +1,118 @@
 <html>
     <head>
         <title>Download</title>
+        <!--<link rel="stylesheet" type="text/css" href="http://www.csszengarden.com/219/219.css?v=8may2013">-->
         <script type="text/javascript" src="//code.jquery.com/jquery-1.4.2.min.js"></script>
         <script type="text/javascript" charset="utf-8">
         	("#downloadBtn").on("click", function() {
         		alert('WTF')
         	});
         </script>
+
+
+		<style type="text/css">
+			#match_table{
+				border-collapse:collapse; 
+			}
+			/*  Define the background color for all the ODD table columns  */
+			#match_table tr td:nth-child(odd){ 
+				background: #d4d3e5;
+			}
+			/*  Define the background color for all the EVEN table columns  */
+			#match_table tr td:nth-child(even){
+				background: #e7e5ff;
+			}
+
+			#source_table  { 
+				background: #d4d3e5;
+			}
+
+			#ref_table  { 
+				background: #e7e5ff;
+			}
+		</style>
+
+
+
     </head>
     <body>
         <h1 id='title'>Download result</h1>
 
+        <h2> Matches found ({{ metrics['num_match'] }} - {{ metrics['perc_match'] }}%) </h2>
+        <!-- Display results -->
+        <div style="overflow: auto; max-height: 400px;"">
+			<table id="match_table" style="font-size: 75%; ">
+				<tr>
+				    {% for col in match_index %}
+				        <th class="{{ col }}">{{ col }}</th>
+				    {% endfor %}
+				</tr>
+
+				{% for row in match_sample %}
+				    <tr>
+				    {% for col in match_index %}
+				        <td class="{{ col }}">{{ row[col] }}</td>
+				    {% endfor %}
+				    </tr>
+				{% endfor %}
+			 </table>
+		</div>
+
+		<!--
+
+		<div style="width: 100%;">
+			<div id="display_source" style="float:left; width: 30%">
+				<h2>Source not matched</h2>
+
+		        <div style="overflow: auto; max-height: 150px;"">
+					<table id="source_table" style="font-size: 75%; ">
+						<tr>
+						    {% for col in source_index %}
+						        <th class="{{ col }}">{{ col }}</th>
+						    {% endfor %}
+						</tr>
+
+						{% for row in source_sample %}
+						    <tr>
+						    {% for col in source_index %}
+						        <td class="{{ col }}">{{ row[col] }}</td>
+						    {% endfor %}
+						    </tr>
+						{% endfor %}
+					 </table>
+				</div>
+
+			</div>
+
+			<div id="display_ref" style="float:left;">
+				<h2>Reference not matched</h2>
+
+		        <div style="overflow: auto; max-height: 150px;">
+					<table id="ref_table" style="font-size: 75%; ">
+						<tr>
+						    {% for col in ref_index %}
+						        <th class="{{ col }}">{{ col }}</th>
+						    {% endfor %}
+						</tr>
+
+						{% for row in ref_sample %}
+						    <tr>
+						    {% for col in ref_index %}
+						        <td class="{{ col }}">{{ row[col] }}</td>
+						    {% endfor %}
+						    </tr>
+						{% endfor %}
+					 </table>
+				</div>
+
+			</div>
+
+		</div>
+
+		-->
+
+
+		<div> </div>
         <a href="{{ download_api_url }}"> Download result </a>
         <!--<button id="downloadBtn"> Download result </button>-->
 

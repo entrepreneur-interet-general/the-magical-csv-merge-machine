@@ -89,9 +89,9 @@ class UserProject(Project):
         #            paths['train'] = self.path_to('link', module_name, 'training.json')
         #            paths['learned_settings'] = self.path_to('link', module_name, 'learned_settings')
         
-        # Initiate log
+        # Initiate log # TODO: move hardcode of file name
         self.mem_data_info['file_role'] = 'link' # Role of file being modified
-        self.mem_data_info['file_name'] = 'mmm_result.csv' # File being modified
+        self.mem_data_info['file_name'] = 'm3_result.csv' # File being modified
         
         log = self.init_log(module_name, 'link')
 

@@ -12,7 +12,7 @@ TODO:
     - API: List of finished modules for given project / source
     - API: List of loaded sources
     
-    - API: Fetch infered parameters
+    - API: Fetch infered parametersx
     - API: Fetch logs
     - API: Move implicit load out of API
     
@@ -28,6 +28,12 @@ TODO:
     - Gray out next button until all fields are properly filled
     - Do not go to next page if an error occured
     - General error handling
+    
+    - DOWNLOAD full config
+    
+    - ABSOLUTELY: CHANGE to user context rather than _app_ctx_stack . handle memory issues
+
+    - Allocate memory by user/ by IP?
 
 DEV GUIDELINES:
     - By default the API will use the file with the same name in the last 
@@ -370,9 +376,11 @@ def web_download(project_id):
     
     proj = init_project(project_id, existing_only=True)
     
+    res_file_name = 'm3_result.csv'
+    
     file_path = proj.path_to('link', 
                              'dedupe_linker', 
-                             'mmm_result.csv'
+                             res_file_name
                              )    
     
     if (not os.path.isfile(file_path)):        
@@ -396,10 +404,77 @@ def web_download(project_id):
         # Write transformations and log
         proj.write_data()    
         proj.write_log_buffer(True)
-        print('Wrote data')
+        
+        file_path = proj.path_to(proj.mem_data_info['file_role'], 
+                                 proj.mem_data_info['module'], 
+                                 proj.mem_data_info['file_name'])
+        print('Wrote data to: ', file_path)
+
+    # Identify rows to display
+    proj.load_data('link', 'dedupe_linker', res_file_name)  
+    
+    # Compute metrics
+    metrics = dict()
+    metrics['perc_match'] = proj.mem_data.__CONFIDENCE.notnull().mean() * 100
+    metrics['num_match'] = proj.mem_data.__CONFIDENCE.notnull().sum()
+
+    # Choose the columns to display # TODO: Absolutely move this
+    col_matches = proj.read_col_matches()
+    suffixes = ('_x', '_y')
+    cols_to_display_match = []
+    for match in col_matches:
+        for file_role in ['source', 'ref']:
+            for col in match[file_role]:
+                if col in cols_to_display_match:
+                    cols_to_display_match.remove(col)
+                    cols_to_display_match.append(col + suffixes[0])
+                    cols_to_display_match.append(col + suffixes[1])
+                else:
+                    cols_to_display_match.append(col)
+
+    # Choose the columns to display # TODO: Absolutely change this
+    cols_to_display_source = []
+    for match in col_matches:
+        for col in match['source']:
+            if col in cols_to_display_source:
+                cols_to_display_source.remove(col)
+            else:
+                cols_to_display_source.append(col)
+
+    cols_to_display_ref = []
+    for match in col_matches:
+        for col in match['ref']:
+            if col in cols_to_display_ref:
+                cols_to_display_ref.remove(col)
+            else:
+                cols_to_display_ref.append(col)
+
+
+    # Choose rows to display # TODO: Absolutely move this
+    num_rows_to_display = 1000
+    rows_to_display = [0] + list(proj.mem_data.index[proj.mem_data.__CONFIDENCE.notnull()] + 1)
+    rows_to_display = rows_to_display[:num_rows_to_display + 1]
+
+    # Generate display sample
+    match_sample = proj.get_sample('link', 'dedupe_linker', res_file_name,
+                                row_idxs=rows_to_display, columns=cols_to_display_match)
+    
+    source_sample = proj.get_sample('source', 'INIT', proj.metadata['current']['source']['file_name'],
+                                row_idxs=rows_to_display, columns=cols_to_display_source)
+    ref_sample = proj.get_sample('ref', 'INIT', proj.metadata['current']['ref']['file_name'],
+                                row_idxs=rows_to_display, columns=cols_to_display_ref)
 
     return render_template('last_page.html', 
                            project_id=project_id,
+                           
+                           match_index=cols_to_display_match,
+                           match_sample=match_sample,
+                           source_index=cols_to_display_source,
+                           source_sample=source_sample,
+                           ref_index=cols_to_display_ref,
+                           ref_sample=ref_sample,   
+                           
+                           metrics=metrics,
                            download_api_url=url_for('download', project_id=project_id))
 
 
