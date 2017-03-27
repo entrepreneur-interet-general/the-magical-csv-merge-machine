@@ -174,57 +174,80 @@
     <body>
         <h1 id='title'>Select Columns to Match for project: {{ project_id }}</h1>
 
-	
-
 		<div style="width: 100%;">
 			<!-- SELECT SOURCE -->
-			<div id="display_source" style="float:left; width: 50%">
+			<div id="display_source" style="float:left; overflow: auto; max-width: 40%">
 				<h2>Source</h2>
-
+				<!--
 				<table id="source_table" style="font-size: 75%;">
 					<tr>
 					    {% for key, _ in source_sample[0].items() %}
-					        <th class="{{ key }}">{{ key }}</th>
+					        <th class="{{ key |replace(' ', '_') }}">{{ key }}</th>
 					    {% endfor %}
 					</tr>
 
 					{% for row in source_sample %}
 					    <tr>
 					    {% for key, val in row.items() %}
-					        <td class="{{ key }}">{{ val }}</td>
+					        <td class="{{ key |replace(' ', '_') }}">{{ val }}</td>
 					    {% endfor %}
 					    </tr>
+					{% endfor %}
+				 </table>
+				 -->
+
+				<table id="source_table" style="font-size: 75%;">
+					{% for col in source_index %}
+						<tr>
+							<th class="{{ col }}">{{ col }}</th>
+							{% for row in source_sample %}
+								<td class="{{ col }}">{{ row[col] }}</td>
+							{% endfor %}
+						</tr>
 					{% endfor %}
 				 </table>
 
 			</div>
 
 			<!-- SELECT REF -->
-			<div id="display_ref" style="float:left;">
+			<div id="display_ref" style="float:left; overflow: auto; max-width: 40%">
 				<h2>Referential</h2>
 
 				<table id="ref_table" style="font-size: 75%;">
+					{% for col in ref_index %}
+						<tr>
+							<th class="{{ col }}">{{ col }}</th>
+							{% for row in ref_sample %}
+								<td class="{{ col }}">{{ row[col] }}</td>
+							{% endfor %}
+						</tr>
+					{% endfor %}
+				 </table>
+
+				<!--
+				<table id="ref_table" style="font-size: 75%;">
 					<tr>
 					    {% for key, _ in ref_sample[0].items() %}
-					        <th class="{{ key }}">{{ key }}</th>
+					        <th class="{{ key |replace(' ', '_') }}">{{ key }}</th>
 					    {% endfor %}
 					</tr>
 
 					{% for row in ref_sample %}
 					    <tr>
 					    {% for key, val in row.items() %}
-					        <td class="{{ key }}">{{ val }}</td>
+					        <td class="{{ key |replace(' ', '_') }}">{{ val }}</td>
 					    {% endfor %}
 					    </tr>
 					{% endfor %}
 				 </table>
+				 -->
 			</div>
 
 			<div style="clear:both">
 
 				</br>
 				<button type="button" id="submitBtn" >Next Step...</button>
-			</div>
+			</di	v>
 		</div>
 	
     </body>
