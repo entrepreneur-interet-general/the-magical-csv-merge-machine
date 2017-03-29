@@ -113,11 +113,14 @@ class Project():
 #==============================================================================
 
     def __init__(self, project_id=None, create_new=False):
+        if (project_id is not None) and create_new:
+            raise Exception('Set project_id to None or create_new to False')
+        if (project_id is None) and (not create_new):
+            raise Exception('Set create_new to True or specify project_id')
+        
         if create_new: 
             self.new_project()
         else:
-            if project_id is None:
-                raise Exception('Set create_new to true or specify project_id')
             self.project_id = project_id
             self.metadata = self.read_metadata()
             
@@ -253,9 +256,11 @@ class Project():
     
     def add_init_data(self, file, file_role, file_name):
         """
-        Add source or reference to the project. Will write. Can only add table 
+        Upload source or reference to the project. Will write. Can only add table 
         as INIT (not in modules) by design.
         """
+        CHARS_TO_REPLACE = [' ', ',', '.', '(', ')', '\'', '\"']
+        
         self.check_file_role(file_role)
         
         # Check that file is not already present
@@ -267,7 +272,23 @@ class Project():
         log = self.init_log('INIT', 'transform')
         
         # TODO: add separator detection
-        self.mem_data = pd.read_csv(file, encoding=None, dtype='unicode')
+        print(file_role)
+        could_read = False
+        for encoding in ['utf-8', 'windows-1252']:
+            if could_read:
+                break
+            for sep in [',', ';']:
+                try:
+                    self.mem_data = pd.read_csv(file, sep=sep, encoding=encoding, dtype='unicode')
+                    for char in CHARS_TO_REPLACE:
+                        self.mem_data.columns = [x.replace(char, '_') for x in self.mem_data.columns]
+                    could_read = True
+                    break
+                except Exception as e:
+                    print(e)
+                    file.seek(0)
+        if not could_read:
+            raise Exception('Separator or Encoding not found. Try uploading standard csv in utf-8')
 
         # Complete log
         log = self.end_log(log, error=False)

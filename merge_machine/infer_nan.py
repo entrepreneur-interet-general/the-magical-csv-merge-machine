@@ -184,14 +184,16 @@ def infer_mvs(tab, params=None):
     
     Run mv inference processes for each column and for the entire table
     """
+    PROBABLE_MVS=['nan', 'none', 'n/a']
+    ALWAYS_MVS=[' ']
+    
     if params is None:
         params = {}
     
     # Set variables and replace by default values
-    probable_mvs = params.get('probable_mvs', [u'nan'])
-    always_mvs = params.get('always_mvs', [u''])
+    PROBABLE_MVS.extend(params.get('probable_mvs', []))
+    ALWAYS_MVS.extend(params.get('always_mvs', []))
     num_top_values = params.get('num_top_values', 10)
-    
     
     # Compute most frequent values per column
     all_top_values = compute_all_top_values(tab, num_top_values)
@@ -206,10 +208,10 @@ def infer_mvs(tab, params=None):
         col_mvs[col].extend(mv_from_len_ratio(top_values))
         col_mvs[col].extend(mv_from_not_digit(top_values))
         col_mvs[col].extend(mv_from_punctuation(top_values))
-        col_mvs[col].extend(mv_from_usual_forms(top_values, probable_mvs))
-        col_mvs[col].extend(mv_from_usual_forms(top_values, always_mvs, 10**3))
+        col_mvs[col].extend(mv_from_usual_forms(top_values, PROBABLE_MVS))
+        col_mvs[col].extend(mv_from_usual_forms(top_values, ALWAYS_MVS, 10**3))
         col_mvs[col].extend(mv_from_letter_repetition(top_values))
-        col_mvs[col] = correct_score(col_mvs[col], probable_mvs)
+        col_mvs[col] = correct_score(col_mvs[col], PROBABLE_MVS)
         col_mvs[col].sort(key=lambda x: x[1], reverse=True)
         
     

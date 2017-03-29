@@ -9,6 +9,7 @@ Class used to label data with a deduper object
 
 """
 
+import json
 import os
 
 def unique(seq) :
@@ -16,12 +17,29 @@ def unique(seq) :
     seen_add = seen.add
     return [x for x in seq if not (x in seen or seen_add(x))]
 
+class DummyLabeller():
+    """Just used to count training labels"""
+    def __init__(self, training_path=None, use_previous=False):
+        if (training_path is not None) and use_previous \
+                        and os.path.isfile(training_path):
+            with open(training_path) as f:
+                self.training = json.load(f)
+        else: 
+            self.training = {'distinct': [], 'match': []}
+
+    def to_emit(self, message=''):
+        dict_to_emit = dict()
+        dict_to_emit['n_match'] = len(self.training['match'])
+        dict_to_emit['n_distinct'] = len(self.training['distinct'])
+        return dict_to_emit
+        
+    
 class Labeller():
     def __init__(self, deduper, training_path=None, use_previous=False):
         self.deduper = deduper
         self.finished = False
         self.use_previous = False
-        self. fields = unique(field.field 
+        self.fields = unique(field.field 
                               for field
                               in deduper.data_model.primary_fields)
         self.buffer_len = 1
@@ -30,8 +48,12 @@ class Labeller():
         
         if (training_path is not None) and use_previous \
                         and os.path.isfile(training_path):
-            with open(training_path) as f:
-                self.deduper.readTraining(f)
+            try:
+                with open(training_path) as f:
+                    self.deduper.readTraining(f)
+            except:
+                # TODO: replace by logging
+                print('WARNING: Unable to read training data')
         
 
     def answer_is_valid(self, user_input):
@@ -105,7 +127,7 @@ class Labeller():
                 self.deduper.markPairs(examples)
 
     def cleanup_training(self):
-        deduper.cleanupTraining()
+        self.deduper.cleanupTraining()
 
     def write_training(self, file_path):
         with open(file_path, 'w') as f:

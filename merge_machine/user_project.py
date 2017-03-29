@@ -8,7 +8,9 @@ Created on Fri Feb 24 14:04:51 2017
 
 TODO: Add private flag to user project so you have to log in to see/use
 
+TODO: rename column header on upload (remove whitespaces)
 
+TODO: Categorial extraction
 
 """
 import os
@@ -41,12 +43,10 @@ class UserProject(Project):
             
         if file_role:
             self.check_file_role(file_role)
-        try:
-            path = os.path.join(DATA_PATH, 'projects', self.project_id, file_role, 
+        
+        path = os.path.join(DATA_PATH, 'projects', self.project_id, file_role, 
                                 module_name, file_name)
-        except:
-            import pdb
-            pdb.set_trace()
+
         return os.path.abspath(path)    
 
     def create_metadata(self):

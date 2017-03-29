@@ -100,8 +100,6 @@
 
 
         $(document).ready(function(){
-
-
         	// Prefill with colors if previous config was given
 			{% for group in config %}
 				label = {{ loop.index }}
@@ -116,7 +114,6 @@
 			{% endfor %}
 
 
-
 			$("#submitBtn").on("click", function() {
 				json_to_send = 	format_for_api(source_label, ref_label)
 				
@@ -128,12 +125,10 @@
 		            traditional: true,
 		            success: function (data) {
 		            	alert("sent: ".concat(JSON.stringify(json_to_send)))
+						// Redirect
+						window.location = "{{ next_url }}"
 		            }
-	        	});
-
-			// Redirect
-			window.location = "{{ next_url }}"	        	
-				
+	        	});		
 			});
 		});
 
@@ -178,23 +173,7 @@
 			<!-- SELECT SOURCE -->
 			<div id="display_source" style="float:left; overflow: auto; max-width: 40%">
 				<h2>Source</h2>
-				<!--
-				<table id="source_table" style="font-size: 75%;">
-					<tr>
-					    {% for key, _ in source_sample[0].items() %}
-					        <th class="{{ key |replace(' ', '_') }}">{{ key }}</th>
-					    {% endfor %}
-					</tr>
 
-					{% for row in source_sample %}
-					    <tr>
-					    {% for key, val in row.items() %}
-					        <td class="{{ key |replace(' ', '_') }}">{{ val }}</td>
-					    {% endfor %}
-					    </tr>
-					{% endfor %}
-				 </table>
-				 -->
 
 				<table id="source_table" style="font-size: 75%;">
 					{% for col in source_index %}

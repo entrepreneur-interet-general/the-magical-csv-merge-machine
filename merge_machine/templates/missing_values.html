@@ -1,0 +1,40 @@
+<html>
+    <head>
+        <title>Missing values</title>
+        <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap-tagsinput-latest/src/bootstrap-tagsinput.css') }}" type = "text/css">
+        <!--<link rel="stylesheet" type="text/css" href="http://www.csszengarden.com/219/219.css?v=8may2013">-->
+        <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+        <script src="{{ url_for('static', filename='bootstrap-tagsinput-latest/src/bootstrap-tagsinput.js') }}" ></script>
+
+        <script type="text/javascript" charset="utf-8">
+        $(document).ready(function(){
+        })
+        </script>
+
+
+
+
+    </head>
+    <body>
+        <h1 id='title'>Replace Missing Values</h1>
+
+
+        <div style="overflow: auto; max-width: 80%;">
+		<table id="table" style="font-size: 75%;">
+			{% for col in index %}
+				<tr>
+					<th class="{{ col }}">{{ col }}</th>
+					{% for row in sample %}
+						<td class="{{ col }}">{{ row[col] }}</td>
+					{% endfor %}
+					<td><input type="text" value="Amsterdam" data-role="tagsinput"></td>
+				</tr>
+			{% endfor %}
+		 </table>
+
+
+
+    </body>
+</html>
+
+

@@ -1,19 +1,66 @@
 <html>
     <head>
         <title>Dedupe training</title>
+        <style>
+        	.on_load {
+        		display:none;
+        	}
+
+			.loader {
+			  border: 16px solid #f3f3f3;
+			  border-radius: 50%;
+			  border-top: 16px solid #3498db;
+			  width: 120px;
+			  height: 120px;
+			  -webkit-animation: spin 2s linear infinite;
+			  animation: spin 2s linear infinite;
+			}
+
+			@-webkit-keyframes spin {
+			  0% { -webkit-transform: rotate(0deg); }
+			  100% { -webkit-transform: rotate(360deg); }
+			}
+
+			@keyframes spin {
+			  0% { transform: rotate(0deg); }
+			  100% { transform: rotate(360deg); }
+			}
+		</style>
         <!--<link rel="stylesheet" type="text/css" href="http://www.csszengarden.com/219/219.css?v=8may2013">-->
-        <script type="text/javascript" src="//code.jquery.com/jquery-1.4.2.min.js"></script>
+        <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
         <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/1.3.6/socket.io.min.js"></script>
         <script type="text/javascript" charset="utf-8">
             var socket;
+            // Connect to socket
+            socket = io.connect('http://' + document.domain + ':' + location.port + '/');
+
+	    	// Send answer to server
+            function send_answer() {
+				answer_to_send = $("input[name='possible_answer']:checked").val();
+
+				// To uncheck checkboxes
+				//$("input[name='possible_answer']").attr('checked',false);
+		        socket.emit('answer', answer_to_send);
+            }
+
+            function finished() {
+				answer_to_send = $("input[name='possible_answer']:checked").val();
+
+				// To uncheck checkboxes
+				//$("input[name='possible_answer']").attr('checked',false);
+		        socket.emit('answer', 'f');
+            }
+
+
             $(document).ready(function(){
-				// Connect to socket
-                socket = io.connect('http://' + document.domain + ':' + location.port + '/');
+				
 				
 				// Join (not useful here)
-                socket.on('connect', function() {
-                    socket.emit('joined', {});
-                });
+                //socket.on('connect', function() {
+            	//	qsdfqsdf  
+                //});
+
+                socket.emit('load_labeller');
 
 				// Redirect when done
 				socket.on('redirect', function(data) {
@@ -22,6 +69,11 @@
 
 				// On new example, replace text to label and various metrics
 	            socket.on('message', function(data) {
+	            	// Display previously hidden and hide loader
+	            	$("#loader").hide()
+	            	$(".on_load").show();
+
+	            	// Get variables
 				    var formated_example = data.formated_example;
 				    var n_match = data.n_match;
 				    var n_distinct = data.n_distinct;
@@ -52,7 +104,6 @@
 						$('#_message').hide();
 				    }
 
-
                     //$('#chat').val($('#chat').val() + data.msg + '\n');
                     //$('#chat').scrollTop($('#chat')[0].scrollHeight);
                 });
@@ -75,34 +126,33 @@
                 });
             }
 
-	    	// Send answer to server
-            function send_answer() {
-				answer_to_send = $("input[name='possible_answer']:checked").val();
 
-				// To uncheck checkboxes
-				//$("input[name='possible_answer']").attr('checked',false);
-		        socket.emit('answer', answer_to_send);
-            }
+
         </script>
     </head>
     <body>
         <h1 id='title'>Labelling for dedupe: {{ project_id }}</h1>
 
-	<p id="example_to_label" style="white-space: pre-line"> {{ formated_example }} </p>
+        <div id="loader" id="class">Loading training examples... This can take a few minutes...</div>
 
-	<p> You have labelled <span id="n_match">{{ n_match }}</span>/10 positive and <span id="n_distinct">{{ n_distinct }}</span>/10 negative</p>
+       	<div class="on_load">
+			<p id="example_to_label" style="white-space: pre-line"> {{ formated_example }} </p>
+		</div> 
 
-	<p id="message">{{ _message }}</p>
+		<p> You have labelled <span id="n_match">{{ n_match }}</span>/10 positive and <span id="n_distinct">{{ n_distinct }}</span>/10 negative</p>
 
-	<form id="answer">
-	  <input type="radio" name="possible_answer" value="y" /> (y)es
-	  <input type="radio" name="possible_answer" value="n" /> (n)o
-	  <input type="radio" name="possible_answer" value="u" id="uncertain_button"/> (u)ncertain
-	  <input type="radio" name="possible_answer" value="f" /> (f)inished
-	  <input type="radio" name="possible_answer" value="p" id="previous_button" style="display: none"/><span id="previous_button_text" style="display: none"> (p)revious</span>
-	</form>
-	
-	<button id="send_answer" onclick="send_answer()"> Send Answer </button>
+		<p id="message">{{ _message }}</p>
+
+		<form id="answer">
+		  <input type="radio" class="on_load" name="possible_answer" value="y" /><span class="on_load"> (y)es</span>
+		  <input type="radio" class="on_load" name="possible_answer" value="n" /><span class="on_load"> (n)o</span>
+		  <input type="radio" class="on_load" name="possible_answer" value="u" id="uncertain_button"/><span class="on_load"> (u)ncertain</span>
+		  <!--<input type="radio" name="possible_answer" value="f" /> (f)inished -->
+		  <input type="radio" name="possible_answer" value="p" id="previous_button" style="display: none"/><span id="previous_button_text" style="display: none"> (p)revious</span>
+		</form>
+		
+		<button id="send_answer" class="on_load" onclick="send_answer()"> Send Answer </button>
+		<button id="finished" class="on_load" onclick="finished()"> Finished Labelling / Next step... </button>
  
         <!--<textarea id="chat" cols="80" rows="20"></textarea><br><br>
         <input id="text" size="80" placeholder="Enter your message here"><br><br>-->

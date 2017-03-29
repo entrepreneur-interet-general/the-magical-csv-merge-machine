@@ -25,6 +25,7 @@ import os
 import re
 
 import pandas as pd
+import unidecode
 
 # Dedupe data format: {rec_id_a: {field_1: val_1a, field_2: val_2a}, 
 #                      rec_id_b: {field_1: val_1b, field_2: val_2b}}
@@ -48,6 +49,7 @@ def preProcess(val):
     val = val.strip().strip('"').strip("'").lower().strip()
     if val == '' :
         val = None
+    val = unidecode.unidecode(val)
     return val
 
 

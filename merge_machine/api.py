@@ -31,8 +31,11 @@ TODO:
     
     - DOWNLOAD full config
     
+    - ADD Metadata to file upload (file name, date of validity)
+    - User account
+    - Auto train 
+    
     - ABSOLUTELY: CHANGE to user context rather than _app_ctx_stack . handle memory issues
-
     - Allocate memory by user/ by IP?
 
 DEV GUIDELINES:
@@ -82,14 +85,14 @@ import os
 import flask
 from flask import Flask, jsonify, render_template, request, send_file, url_for
 from flask_session import Session
-from flask_socketio import emit, SocketIO
+from flask_socketio import disconnect, emit, SocketIO
 from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
 
 import pandas as pd
 
 from dedupe_linker import format_for_dedupe, load_deduper
-from labeller import Labeller
+from labeller import Labeller, DummyLabeller
 
 from admin import Admin
 from user_project import UserProject
@@ -112,7 +115,7 @@ Session(app)
 
 app.debug = True
 app.config['SECRET_KEY'] = open('secret_key.txt').read()
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 # Check that files are not too big
+app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024 # Check that files are not too big (2GB)
           
 socketio = SocketIO(app)       
 
@@ -236,6 +239,9 @@ def web_select_files(project_id=None):
     all_csvs = proj.list_files(extensions=['.csv'])
     
     all_internal_refs = [] # TODO: take care of this
+    
+    next_url = url_for('web_missing_values', project_id=project_id, file_role='source')
+    
     return render_template('select_files.html', 
                            project_id=project_id,
                            previous_sources=all_csvs['source'],
@@ -243,8 +249,58 @@ def web_select_files(project_id=None):
                            internal_references=all_internal_refs,
                            upload_api_url=url_for('upload', project_id=project_id),
                            select_file_url=url_for('select_file', project_id=project_id),
-                           next_url=url_for('web_match_columns', project_id=project_id),
+                           next_url=next_url,
                            MAX_FILE_SIZE=MAX_FILE_SIZE)
+
+
+# order:
+# select_project; select_files; missing_values_source; missing_values_ref; dedupe 1 dedupe 2
+
+@app.route('/web/project/missing_values/<project_id>/<file_role>', methods=['GET'])
+@cross_origin()
+def web_missing_values(project_id, file_role):
+    NUM_ROWS_TO_DISPLAY = 30
+    NUM_PER_MISSING_VAL_TO_DISPLAY = 4
+    
+    if file_role not in ['source', 'ref']:
+        raise Exception('Can only detect missing values for source of ref as file_role')
+    
+    # TODO: add click on missing values
+    
+    proj = init_project(project_id, existing_only=True)
+    (file_role, module_name, file_name) = proj.get_last_written(file_role, None, None)   
+    proj.load_data(file_role, module_name, file_name)
+    
+    
+    # Infer missing values
+    infered_mvs = proj.infer('infer_mvs', params=None)
+    
+    # Select rows to display based on result
+    row_idxs = []
+    for mv_col in infered_mvs['mvs_dict']['columns']:
+        for mv in mv_col['missing_vals']:
+            sel = proj.mem_data[mv_col['col_name']].str.lower().str.contains(mv['val'].lower()).diff().fillna(True)
+            sel.index = range(len(sel))
+            row_idxs.extend(list(sel[sel].index)[:NUM_PER_MISSING_VAL_TO_DISPLAY])
+            
+    if not row_idxs:
+        row_idxs = range(NUM_ROWS_TO_DISPLAY)
+
+    sample = proj.get_sample(file_role, module_name, file_name,
+                                 row_idxs=[0] + [x+1 for x in sel[sel].index])
+
+    if file_role == 'source':
+        next_url = url_for('web_missing_values', project_id=project_id, file_role='ref')
+    else:
+        next_url = url_for('web_match_columns', project_id=project_id)
+    
+    return render_template('missing_values.html',
+                           project_id=project_id, 
+                           infered_mvs=infered_mvs,
+                           index=list(sample[0].keys()),
+                           sample=sample,
+                           next_url=next_url)
+
 
 @app.route('/web/project/match_columns/<project_id>/', methods=['GET'])
 @cross_origin()
@@ -287,90 +343,105 @@ def web_match_columns(project_id):
                            next_url=url_for('web_dedupe', project_id=project_id))
   
 
-    
 @socketio.on('answer', namespace='/')
 def web_get_answer(user_input):
     # TODO: avoiid multiple click
     # TODO: add safeguards  if not enough train
     message = ''
     #message = 'Expect to have about 50% of good proposals in this phase. The more you label, the better...'
-    if flask._app_ctx_stack.labeller.answer_is_valid(user_input):
-        flask._app_ctx_stack.labeller.parse_valid_answer(user_input)
-        if flask._app_ctx_stack.labeller.finished:
-            print('Writing train')
-            flask._app_ctx_stack.labeller.write_training(flask._app_ctx_stack.paths['train'])
-            print('Wrote train')
-
-            # TODO: Do dedupe
-            emit('redirect', {'url': url_for('web_download', project_id=flask._app_ctx_stack.project_id)})
-        else:
-            flask._app_ctx_stack.labeller.new_label()
+    if 'labeller' not in dir(flask._app_ctx_stack):
+        emit('redirect', {'url': url_for('web_download', project_id=flask._app_ctx_stack.project_id)})
+        disconnect
     else:
-        message = 'Sent an invalid answer'
-    emit('message', flask._app_ctx_stack.labeller.to_emit(message=message))
+        if flask._app_ctx_stack.labeller.answer_is_valid(user_input):
+            flask._app_ctx_stack.labeller.parse_valid_answer(user_input)
+            if flask._app_ctx_stack.labeller.finished:
+                print('Writing train')
+                flask._app_ctx_stack.labeller.write_training(flask._app_ctx_stack.paths['train'])
+                print('Wrote train')
+    
+                # TODO: Do dedupe
+                emit('redirect', {'url': url_for('web_download', project_id=flask._app_ctx_stack.project_id)})
+            else:
+                flask._app_ctx_stack.labeller.new_label()
+        else:
+            message = 'Sent an invalid answer'
+        emit('message', flask._app_ctx_stack.labeller.to_emit(message=message))
     
 
-@app.route('/web/project/link/dedupe_linker/<project_id>/', methods=['GET'])
+@socketio.on('load_labeller', namespace='/')
+def load_labeller():
+    '''Loads labeller. Necessary to have a separate call to preload page'''    
+    # assert flask.session.project_id == project_id   
+    def load_dis_labeller():
+
+        print('Got here')
+        
+        project_id = flask._app_ctx_stack.project_id
+        proj = init_project(project_id, existing_only=True)
+        flask._app_ctx_stack.proj = proj
+        
+        # TODO: Add extra config page
+        # TODO: move this to user_project
+    
+        col_matches = proj.read_col_matches()
+        
+        # Generate variable definition for dedupe
+    
+        my_variable_definition = gen_dedupe_variable_definition(col_matches)
+        
+        paths = proj.gen_paths_dedupe()  
+        flask._app_ctx_stack.paths = paths
+        
+        # Put to dedupe input format
+        ref = pd.read_csv(paths['ref'], encoding='utf-8', dtype='unicode')
+        data_ref = format_for_dedupe(ref, my_variable_definition, 'ref') 
+        del ref # To save memory
+        gc.collect()
+        
+        # Put to dedupe input format
+        source = pd.read_csv(paths['source'], encoding='utf-8', dtype='unicode')
+        data_source = format_for_dedupe(source, my_variable_definition, 'source')
+        del source
+        gc.collect()
+        
+        #==========================================================================
+        # Should really start here
+        #==========================================================================
+        deduper = load_deduper(data_ref, data_source, my_variable_definition)
+    
+        flask._app_ctx_stack.labeller = Labeller(deduper, 
+                                                 training_path=paths['train'], 
+                                                 use_previous=True)
+        flask._app_ctx_stack.labeller.new_label()   
+        
+        print('got there')
+        emit('message', flask._app_ctx_stack.labeller.to_emit(message=''))
+    load_dis_labeller()
+    # socketio.start_background_task(load_dis_labeller)
+
+
+@app.route('/web/project/dedupe_linker/<project_id>/', methods=['GET'])
 @cross_origin()    
 def web_dedupe(project_id):
     '''Labelling / training and matching using dedupe'''
     
-    #    import json
-    #    with open('local_test_data/rnsr/my_dedupe_rnsr_config.json') as f:
-    #       my_config = json.load(f)    
-    #    paths = my_config['paths']
-    #    params = my_config['params']  
-    #    ref_path = paths['ref']
-    #    source_path = paths['source']      
-    #    my_variable_definition = params['variable_definition']      
-    #    flask._app_ctx_stack.training_path = paths['train']
-    
-    
+    # Set project ID in session
+    flask.session.project_id = project_id
     flask._app_ctx_stack.project_id = project_id
+    
+    # TODO: deal with duplicate with load_labeller 
     proj = init_project(project_id, existing_only=True)
-    flask._app_ctx_stack.proj = proj
-    
-    # TODO: Add extra config page
-    # TODO: move this to user_project
-
-    col_matches = proj.read_col_matches()
-    
-    # Generate variable definition for dedupe
-
-    my_variable_definition = gen_dedupe_variable_definition(col_matches)
-    
     paths = proj.gen_paths_dedupe()  
-    flask._app_ctx_stack.paths = paths
     
-    # Put to dedupe input format
-    ref = pd.read_csv(paths['ref'], encoding='utf-8', dtype='unicode')
-    data_ref = format_for_dedupe(ref, my_variable_definition, 'ref') 
-    del ref # To save memory
-    gc.collect()
+    dummy_labeller = DummyLabeller(training_path=paths['train'], use_previous=True)
     
-    # Put to dedupe input format
-    source = pd.read_csv(paths['source'], encoding='utf-8', dtype='unicode')
-    data_source = format_for_dedupe(source, my_variable_definition, 'source')
-    del source
-    gc.collect()
-    
-    #==========================================================================
-    # Should really start here
-    #==========================================================================
-    deduper = load_deduper(data_ref, data_source, my_variable_definition)
-
-    flask._app_ctx_stack.labeller = Labeller(deduper, 
-                                             training_path=paths['train'], 
-                                             use_previous=True)
-    flask._app_ctx_stack.labeller.new_label()   
-    
-    print(flask._app_ctx_stack.labeller.to_emit(''))
     return render_template('dedupe_training.html', 
-                           **flask._app_ctx_stack.labeller.to_emit(''))
+                           **dummy_labeller.to_emit(''))
     #return render_template('dedupe_training.html', **DUMMY_EMIT)
 
 
-@app.route('/web/project/link/download/<project_id>/', methods=['GET'])
+@app.route('/web/project/download/<project_id>/', methods=['GET'])
 @cross_origin()
 def web_download(project_id):    
     
@@ -451,9 +522,9 @@ def web_download(project_id):
 
 
     # Choose rows to display # TODO: Absolutely move this
-    num_rows_to_display = 1000
+    NUM_ROWS_TO_DISPLAY = 1000
     rows_to_display = [0] + list(proj.mem_data.index[proj.mem_data.__CONFIDENCE.notnull()] + 1)
-    rows_to_display = rows_to_display[:num_rows_to_display + 1]
+    rows_to_display = rows_to_display[:NUM_ROWS_TO_DISPLAY + 1]
 
     # Generate display sample
     match_sample = proj.get_sample('link', 'dedupe_linker', res_file_name,
@@ -562,10 +633,8 @@ def project_exists(project_id):
     '''Check if project exists'''
     try:
         _ = UserProject(project_id=secure_filename(project_id), create_new=False)
-        print('YO')
         return jsonify(error=False, exists=True)
     except: 
-        print('LO')
         return jsonify(error=False, exists=False)
     
 
