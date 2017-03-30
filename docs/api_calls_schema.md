@@ -1,4 +1,4 @@
-# Pseudo API request for the main recoding service
+# Pseudo API request for the main recoding service [OBSOLETE]
 
 Use `POST` request to post the following fields:
 
