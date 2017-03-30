@@ -219,11 +219,10 @@ def infer_mvs(tab, params=None):
 
     # Transfer output to satisfy API standards
     def triplet_to_dict(val):
-
         return {'val': val[0], 'score': val[1], 'origin': val[2]}
 
     common_mvs = [triplet_to_dict(val) for val in mv_from_common_values_2(col_mvs)]
-    columns_mvs = [{'col_name':key, 'missing_vals': [triplet_to_dict(val) for val in vals]} for key, vals in col_mvs.items() if vals]
+    columns_mvs = {key:[triplet_to_dict(val) for val in vals] for key, vals in col_mvs.items() if vals}
     infered_mvs = {'columns': columns_mvs, 'all': common_mvs}
     return {'mvs_dict': infered_mvs, 'thresh': 0.6} # TODO: remove harcode
 
@@ -237,6 +236,7 @@ def replace_mvs(tab, params):
     
     INPUT:
         tab: pandas DataFrame to modify
+        OBSOLETE
         mvs_dict: dict indicating mv values with scores. For example:
                 {
                     'all': [],
@@ -262,9 +262,7 @@ def replace_mvs(tab, params):
         if score >= thresh:
             tab.replace(val, np.nan, inplace=True)
     
-    for resp in mvs_dict['columns']:
-        col = resp.get('col_name')
-        mv_values = resp.get('missing_vals')
+    for col, mv_values in mvs_dict['columns'].items():
         for mv in mv_values:
             val, score = mv['val'], mv['score']
             if score >= thresh:
@@ -285,7 +283,7 @@ if __name__ == '__main__':
     tab = pd.read_csv(file_path, nrows=nrows, encoding=encoding, dtype='unicode')
     
     # Frequent missing value expressions
-    PROBABLE_MISSING_VALUES = [u'nan', u'none', u'na', u'\\n', u' ', 'non renseigne', 
+    PROBABLE_MISSING_VALUES = [u'nan', u'none', u'na', u'\\n', u' ', 'non renseigne', 'nr',
                      'no value', 'null', 'missing value']
     ALWAYS_MISSING_VALUES = [u'']
     num_top_values = 15 # Number of most frequent values to look at
