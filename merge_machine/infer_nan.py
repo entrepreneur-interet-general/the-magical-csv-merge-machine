@@ -249,10 +249,11 @@ def replace_mvs(tab, params):
         tab: same table with values replaced by np.nan
     
     """
+    DEFAULT_THRESH = 0.6
     
     # Set variables and replace by default values
     mvs_dict = params['mvs_dict']
-    thresh = params.get('thresh', 0.6)
+    thresh = params.get('thresh', DEFAULT_THRESH)
     
     # Replace
     assert sorted(list(mvs_dict.keys())) == ['all', 'columns']

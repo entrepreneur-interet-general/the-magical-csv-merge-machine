@@ -18,6 +18,8 @@ TODO:
     
     - API: Error codes / remove error
     
+    - API: DOWNLOAD CONFIG and run pipeline
+    
     - Change metadata to use_internal and ref_name to last used or smt. Data to
       use is specified on api call and not read from metadata (unless using last used)
     
@@ -28,6 +30,9 @@ TODO:
     - Gray out next button until all fields are properly filled
     - Do not go to next page if an error occured
     - General error handling
+    
+    - transform_and_download button
+    - Download config
     
     - DOWNLOAD full config
     
@@ -277,9 +282,9 @@ def web_missing_values(project_id, file_role):
     
     # Select rows to display based on result
     row_idxs = []
-    for mv_col in infered_mvs['mvs_dict']['columns']:
-        for mv in mv_col['missing_vals']:
-            sel = proj.mem_data[mv_col['col_name']].str.lower().str.contains(mv['val'].lower()).diff().fillna(True)
+    for col, mvs in infered_mvs['mvs_dict']['columns'].items():
+        for mv in mvs:
+            sel = proj.mem_data[col].str.contains(mv['val']).diff().fillna(True)
             sel.index = range(len(sel))
             row_idxs.extend(list(sel[sel].index)[:NUM_PER_MISSING_VAL_TO_DISPLAY])
             
@@ -287,18 +292,28 @@ def web_missing_values(project_id, file_role):
         row_idxs = range(NUM_ROWS_TO_DISPLAY)
 
     sample = proj.get_sample(file_role, module_name, file_name,
-                                 row_idxs=[0] + [x+1 for x in sel[sel].index])
+                                 row_idxs=[0] + [x+1 for x in row_idxs])
 
     if file_role == 'source':
         next_url = url_for('web_missing_values', project_id=project_id, file_role='ref')
     else:
         next_url = url_for('web_match_columns', project_id=project_id)
     
+    formated_infered_mvs = dict()
+    formated_infered_mvs['columns'] = {col:[mv['val'] for mv in mvs] for col, mvs in infered_mvs['mvs_dict']['columns'].items()}
+    formated_infered_mvs['all'] = [mv['val'] for mv in infered_mvs['mvs_dict']['all']]
+    
+    
+    data_params = {'file_role': file_role, 'module': module_name, 'file_name': file_name}
+
     return render_template('missing_values.html',
                            project_id=project_id, 
-                           infered_mvs=infered_mvs,
+                           formated_infered_mvs=formated_infered_mvs,
                            index=list(sample[0].keys()),
                            sample=sample,
+                           
+                           data_params=data_params,
+                           recode_missing_values_api_url=url_for('replace_mvs', project_id=project_id),
                            next_url=next_url)
 
 
@@ -329,6 +344,7 @@ def web_match_columns(project_id):
     
     # Load previous config
     config = proj.read_col_matches()
+    
     
     return render_template('match_columns.html',
                            config=config,
@@ -490,7 +506,7 @@ def web_download(project_id):
     metrics['num_match'] = proj.mem_data.__CONFIDENCE.notnull().sum()
 
     # Choose the columns to display # TODO: Absolutely move this
-    col_matches = proj.read_col_matches()
+    col_matches = proj.read_col_matches() # TODO: API this
     suffixes = ('_x', '_y')
     cols_to_display_match = []
     for match in col_matches:

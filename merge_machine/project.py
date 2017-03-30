@@ -17,6 +17,7 @@ DEV GUIDELINES:
     - Each module shall take care of creating it's own directory
     - File name is unique (not accross reference)
 
+    - Follow module writing order (MODULE_ORDER)
 
     - Dedupe: Numbers predicate ? Lycée Acajou 1	LYCEE POLYVALENT ACAJOU 2
 
@@ -217,7 +218,7 @@ class Project():
             
 
 
-    def get_last_written(self, file_role=None, module=None, file_name=None):
+    def get_last_written(self, file_role=None, module=None, file_name=None, before_module=None):
         '''
         Return info on data that was last successfully written (from log)
         
@@ -225,17 +226,30 @@ class Project():
             - file_role: filter on file role (last data with given file_role)
             - module: filter on given module
             - file_name: filter on file_name
+            - before_module: Looks for file that was written in a module previous or
+              or equal to before_module (in the order defined by MODULE_ORDER)
             
         OUTPUT:
-            - module_name ('INIT' if no previous module)
+            - (file_role, module, file_name)
         '''
+        
+        MODULE_ORDER = ['INIT', 'replace_mvs', 'dedupe_linker']
+        
+        for module in MODULE_ORDER:
+            assert (module in MODULES['transform']) or (module in MODULES['link'])
+            
+        
+        previous_modules = {MODULE_ORDER[i]: MODULE_ORDER[:i+1] for i in range(len(MODULE_ORDER))}
+        
         self.check_file_role(file_role)
     
         for log in self.metadata['log'][::-1]:
             if (not log['error']) and log['written'] \
                       and ((log['file_role'] == file_role) or file_role is None) \
                       and ((log['module'] == module) or module is None) \
-                      and ((log['file_name'] == file_name) or file_name is None):
+                      and ((log['file_name'] == file_name) or file_name is None) \
+                      and ((log['module'] in previous_modules[before_module]) or before_module is None):
+                        
                 break
         else:
             raise Exception('No written data could be found in logs')
