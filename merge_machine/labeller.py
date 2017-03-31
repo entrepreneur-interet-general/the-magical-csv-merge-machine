@@ -64,11 +64,17 @@ class Labeller():
             valid_responses = {'y', 'n', 'u', 'f'}
         return user_input in valid_responses
 
+    def _format_record_pair(self):
+        '''Return list of triplets (field, val_source, val_ref)'''
+        formated_record_pair = [(field, self.record_pair[0][field], 
+                        self.record_pair[1][field]) for field in self.fields]
+        return formated_record_pair
         
     def to_emit(self, message):
         '''Creates a dict to be sent to the template'''
         dict_to_emit = dict()
-        dict_to_emit['formated_example'] = self._format_fields()
+        dict_to_emit['formated_record_pair'] = self._format_record_pair()
+        dict_to_emit['formated_example'] = self._format_fields() # TODO: remove this
         dict_to_emit['n_match'] = str(self.n_match)
         dict_to_emit['n_distinct'] = str(self.n_distinct)
         dict_to_emit['has_previous'] = len(self.examples_buffer) >= 1

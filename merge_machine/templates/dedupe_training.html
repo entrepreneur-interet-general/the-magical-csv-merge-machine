@@ -69,19 +69,22 @@
 
 				// On new example, replace text to label and various metrics
 	            socket.on('message', function(data) {
+
+					replace_table(data.formated_record_pair)
+
 	            	// Display previously hidden and hide loader
 	            	$("#loader").hide()
 	            	$(".on_load").show();
 
 	            	// Get variables
-				    var formated_example = data.formated_example;
+				    //var formated_example = data.formated_example;
 				    var n_match = data.n_match;
 				    var n_distinct = data.n_distinct;
 				    var _message = data._message;
 				    var has_previous = data.has_previous;
 
 				    // Update text to display
-				    $('#example_to_label').text(formated_example);
+				    //$('#example_to_label').text(formated_example);
 				    $('#n_match').text(n_match);
 				    $('#n_distinct').text(n_distinct);
 				    $('#_message').text(_message);
@@ -116,6 +119,22 @@
                     }
                 });
             });
+
+            function replace_table(formated_record_pair) {
+	            	var container = $('#example_to_label_container');
+	            	$('#example_to_label').remove();
+					table = $('<table id="example_to_label">');
+
+					formated_record_pair.forEach(function(field_pair) {
+					  	var tr = $('<tr>');
+					  	tr.append('<th>' + field_pair[0] + '</th>')
+				  		tr.append('<td>' + field_pair[1] + '</td>')
+			  			tr.append('<td>' + field_pair[2] + '</td>')
+	
+					  	table.append(tr);
+					});
+					container.append(table);
+            }
             
 	   		// Not used here (to disconnect or leave room)
             function leave_room() {
@@ -136,7 +155,7 @@
         <div id="loader" id="class">Loading training examples... This can take a few minutes...</div>
 
        	<div class="on_load">
-			<p id="example_to_label" style="white-space: pre-line"> {{ formated_example }} </p>
+			<p id="example_to_label_container" style="white-space: pre-line"> {{ formated_example }} </p>
 		</div> 
 
 		<p> You have labelled <span id="n_match">{{ n_match }}</span>/10 positive and <span id="n_distinct">{{ n_distinct }}</span>/10 negative</p>
