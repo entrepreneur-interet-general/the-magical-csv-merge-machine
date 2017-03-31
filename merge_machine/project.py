@@ -41,11 +41,33 @@ from infer_nan import infer_mvs, replace_mvs
 from dedupe_linker import dedupe_linker
 
 MODULES = {
-        'transform':{'replace_mvs': replace_mvs},
-        'infer':{'infer_mvs': infer_mvs},
-        'link': {'dedupe_linker': dedupe_linker}
+        'transform':{
+                    'INIT': {
+                            'desc': 'Initial upload (cannot be called)'                            
+                            },
+                    'replace_mvs': {
+                                    'func': replace_mvs,
+                                    'desc': 'Replace strings that represent missing values'
+                                    }
+                    },
+        'infer':{
+                'infer_mvs': {
+                            'func': infer_mvs,
+                            'write_to': 'replace_mvs',
+                            'desc': 'Infer values that represent missing values'
+                            }
+                },
+        'link': {
+                'dedupe_linker': {
+                            'func': dedupe_linker,
+                            'desc': 'Link CSV files'
+                            }
+                }
         }
 
+
+        
+        
 
 def gen_proj_id():
     '''Generate unique non-guessable string for project ID'''
@@ -156,10 +178,10 @@ class Project():
         assert module_type in ['transform', 'infer', 'link']
         log = { # Data being modified
                'file_name': self.mem_data_info.get('file_name', None), 
-               'origin': self.mem_data_info.get('module', None),
+               'origin': self.mem_data_info.get('module_name', None),
                'file_role': self.mem_data_info.get('file_role', None),
                 # Modification at hand                        
-               'module': module_name, # Module to be executed
+               'module_name': module_name, # Module to be executed
                'module_type': module_type, # Type (transform, infer, or dedupe)
                'start_timestamp': time.time(),
                'end_timestamp': None, 'error':None, 'error_msg':None, 'written': False}
@@ -218,25 +240,25 @@ class Project():
             
 
 
-    def get_last_written(self, file_role=None, module=None, file_name=None, before_module=None):
+    def get_last_written(self, file_role=None, module_name=None, file_name=None, before_module=None):
         '''
         Return info on data that was last successfully written (from log)
         
         INPUT:
             - file_role: filter on file role (last data with given file_role)
-            - module: filter on given module
+            - module_name: filter on given module
             - file_name: filter on file_name
             - before_module: Looks for file that was written in a module previous or
               or equal to before_module (in the order defined by MODULE_ORDER)
             
         OUTPUT:
-            - (file_role, module, file_name)
+            - (file_role, module_name, file_name)
         '''
         
         MODULE_ORDER = ['INIT', 'replace_mvs', 'dedupe_linker']
         
-        for module in MODULE_ORDER:
-            assert (module in MODULES['transform']) or (module in MODULES['link'])
+        for module_from_loop in MODULE_ORDER:
+            assert (module_from_loop in MODULES['transform']) or (module_from_loop in MODULES['link'])
             
         
         previous_modules = {MODULE_ORDER[i]: MODULE_ORDER[:i+1] for i in range(len(MODULE_ORDER))}
@@ -245,18 +267,22 @@ class Project():
     
         for log in self.metadata['log'][::-1]:
             if (not log['error']) and log['written'] \
-                      and ((log['file_role'] == file_role) or file_role is None) \
-                      and ((log['module'] == module) or module is None) \
-                      and ((log['file_name'] == file_name) or file_name is None) \
-                      and ((log['module'] in previous_modules[before_module]) or before_module is None):
-                        
+                      and ((file_role is None) or (log['file_role'] == file_role)) \
+                      and ((module_name is None) or (log['module_name'] == module_name)) \
+                      and ((file_name is None) or (log['file_name'] == file_name)) \
+                      and ((before_module is None) or (log['module_name'] in previous_modules[before_module])):                
                 break
+            #            else:
+            #                print(log)
+            #                import pdb; pdb.set_trace()
         else:
+            import pdb
+            pdb.set_trace()
             raise Exception('No written data could be found in logs')
         file_role = log['file_role']
-        module = log['module']
+        module_name = log['module_name']
         file_name = log['file_name']        
-        return (file_role, module, file_name)
+        return (file_role, module_name, file_name)
 
     def check_mem_data(self):
         if self.mem_data is None:
@@ -268,7 +294,7 @@ class Project():
         path_to_proj = self.path_to()
         shutil.rmtree(path_to_proj)
     
-    def add_init_data(self, file, file_role, file_name):
+    def upload_init_data(self, file, file_role, file_name):
         """
         Upload source or reference to the project. Will write. Can only add table 
         as INIT (not in modules) by design.
@@ -282,7 +308,7 @@ class Project():
         #
         self.mem_data_info = {'file_role': file_role, 
                               'file_name': file_name,
-                              'module': 'INIT'}
+                              'module_name': 'INIT'}
         log = self.init_log('INIT', 'transform')
         
         # TODO: add separator detection
@@ -314,27 +340,37 @@ class Project():
         self.write_log_buffer(written=True)
         self.clear_memory()
     
-    def add_config_data(self, config_dict, file_role, module, file_name):
+    def upload_config_data(self, config_dict, file_role, module_name, file_name):
         '''Will write config file'''
-        if (file_role != 'link') or (module != 'dedupe_linker'):
-            raise Exception('Can only upload config files to file_role: link\
-                            and module:dedupe_linker') # TODO: Is this good? Yes/No?
+        if config_dict is None:
+            return
+        
+        if (module_name not in MODULES['link']) and (module_name not in MODULES['transform']) :
+            raise Exception('Config files can only be uploaded to module \
+                            directories of type link or transform') # TODO: Is this good? Yes/No?
             
-        if file_name not in ['training.json', 'column_matches.json']:
+        if file_name not in ['config.json', 'infered_config.json', \
+                             'training.json', 'column_matches.json']:
             raise Exception('For now you can only upload files named training.json or column_matches.json')
 
         # Create directories
-        dir_path = self.path_to(file_role, module)
+        dir_path = self.path_to(file_role, module_name)
         if not os.path.isdir(dir_path):
             os.makedirs(dir_path)   
         
         # Write file
-        file_path = self.path_to(file_role, module, file_name)
+        file_path = self.path_to(file_role, module_name, file_name)
         with open(file_path, 'w') as w:
             json.dump(config_dict, w)
-            
-    
 
+    def read_config_data(self, file_role, module_name, file_name):
+        '''Reads json file'''
+        file_path = self.path_to(file_role=file_role, module_name=module_name, file_name=file_name)
+        if os.path.isfile(file_path):
+            config = json.loads(open(file_path).read())
+        else: 
+            config = {}
+        return config    
     
     def remove_data(self, file_role, module_name='', file_name=''):
         '''Removes the corresponding data file'''
@@ -345,14 +381,7 @@ class Project():
         else:
             raise Exception('{0} (in: {1}, as: {1}) could not be found in project'.format(file_name, module_name, file_role))
  
-    def read_config_data(self, file_role, module, file_name):
-        '''Reads json file'''
-        file_path = self.path_to(file_role=file_role, module_name=module, file_name=file_name)
-        if os.path.isfile(file_path):
-            config = json.loads(open(file_path).read())
-        else: 
-            config = {}
-        return config    
+
     
     def read_metadata(self):
         '''Wrapper around read_config_data'''
@@ -385,7 +414,7 @@ class Project():
         self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype='unicode')
         self.mem_data_info = {'file_role': file_role, 
                                'file_name': file_name,
-                               'module': module_name}
+                               'module_name': module_name}
         
     def get_sample(self, file_role, module_name, file_name, row_idxs=range(5), 
                    columns=None, drop_duplicates=True):
@@ -440,28 +469,14 @@ class Project():
             
         # Write data
         dir_path = self.path_to(self.mem_data_info['file_role'], 
-                                self.mem_data_info['module'])
+                                self.mem_data_info['module_name'])
         if not os.path.isdir(dir_path):
             os.makedirs(dir_path)        
         file_path = self.path_to(self.mem_data_info['file_role'], 
-                                 self.mem_data_info['module'], 
+                                 self.mem_data_info['module_name'], 
                                  self.mem_data_info['file_name'])
         self.mem_data.to_csv(file_path, encoding='utf-8', index=False)
-
-
-    def write_infered_params(self, params, file_role, module_name):
-        '''
-        Writes dictionary params in a file named "infered_params" at the 
-        specified path.    
-        '''
-        dir_path = self.path_to(self.mem_data_info['file_role'], module_name)
-        if not os.path.isdir(dir_path):
-            os.makedirs(dir_path)        
-        file_path = self.path_to(file_role, 
-                                 module_name, 
-                                 'infered_params.json')
-        with open(file_path, 'w') as w:
-            json.dump(params, w)
+        print('Wrote to ', file_path)
 
         
     def clear_memory(self):
@@ -480,8 +495,8 @@ class Project():
 
         # TODO: catch module errors and add to log
         # Run module on pandas DataFrame 
-        self.mem_data = MODULES['transform'][module_name](self.mem_data, params)
-        self.mem_data_info['module'] = module_name
+        self.mem_data = MODULES['transform'][module_name]['func'](self.mem_data, params)
+        self.mem_data_info['module_name'] = module_name
         
         # Complete log
         log = self.end_log(log, error=False)
@@ -492,16 +507,22 @@ class Project():
     
 
     def infer(self, module_name, params):
-        '''Just runs the module on pandas DataFrame data in memory and returns answer'''
+        '''
+        Runs the module on pandas DataFrame data in memory and 
+        returns answer + writes to appropriate location
+        '''
         self.check_mem_data()  
         
         # Initiate log
         log = self.init_log(module_name, 'infer')
             
-        infered_params = MODULES['infer'][module_name](self.mem_data, params)
+        infered_params = MODULES['infer'][module_name]['func'](self.mem_data, params)
                 
         # Write result of inference
-        self.write_infered_params(params, self.mem_data_info['file_role'], module_name)
+        module_to_write_to = MODULES['infer'][module_name]['write_to']
+        self.upload_config_data(params, self.mem_data_info['file_role'], \
+                                module_to_write_to, 'infered_config.json')
+
 
         # Update log buffer
         self.log_buffer.append(log)     

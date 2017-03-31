@@ -213,8 +213,6 @@ def infer_mvs(tab, params=None):
         col_mvs[col].extend(mv_from_letter_repetition(top_values))
         col_mvs[col] = correct_score(col_mvs[col], PROBABLE_MVS)
         col_mvs[col].sort(key=lambda x: x[1], reverse=True)
-        
-    
 
 
     # Transfer output to satisfy API standards

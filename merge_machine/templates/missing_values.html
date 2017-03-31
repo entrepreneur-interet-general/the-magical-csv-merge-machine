@@ -1,6 +1,6 @@
 <html>
     <head>
-        <title>Missing values</title>
+        <title>Missing values ({{file_role}}) </title>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap-theme.min.css">
@@ -17,38 +17,58 @@
         <script type="text/javascript" charset="utf-8">
         $(document).ready(function(){
         	$("#finished").on('click', function() {
-        		// Create json to send to api
-	        var mvs_dict = {
-	        	'columns': {
-				    {% for col in index%}
-				    		"{{ col }}":  $("#{{ col }}").tagsinput('items').map(function(val){return {"val":val, "score": 1}; }),
-				    {% endfor %}
-				},
-				'all': $("#ALL_COLUMNS_xYzAbC").tagsinput('items')
-	        }
+        		// Create json to send to recoding
+		        var mvs_dict = {
+		        	'columns': {
+					    {% for col in index%}
+					    		"{{ col }}":  $("#{{ col }}").tagsinput('items').map(function(val){return {"val":val, "score": 1}; }),
+					    {% endfor %}
+					},
+					'all': $("#ALL_COLUMNS_xYzAbC").tagsinput('items').map(function(val){return {"val":val, "score": 1}; })
+		        }
 
 
-			var json_to_send = {
-									data: {
-										'file_role': "{{ data_params['file_role'] }}",
-										'module': "{{ data_params['module'] }}",
-										'file_name': "{{ data_params['file_name'] }}",
-										},
-									params: {"mvs_dict": mvs_dict}
-								}
-			
-    		$.ajax({
-            type: 'post',
-	            url: "{{ recode_missing_values_api_url }}",
-	            data: JSON.stringify(json_to_send),
-	            contentType: "application/json; charset=utf-8",
-	            traditional: true,
-	            success: function (data) {
-	            	alert("sent: ".concat(JSON.stringify(json_to_send)))
-					// Redirect
-					window.location = "{{ next_url }}"
-	            }
-        	});	
+				var json_to_send_1 = {
+										data: {
+											'file_role': "{{ data_params['file_role'] }}",
+											'module_name': "replace_mvs",
+											'file_name': "config.json",
+											},
+										params: {"mvs_dict": mvs_dict}
+									}
+
+				var json_to_send_2 = {
+										data: {
+											'file_role': "{{ data_params['file_role'] }}",
+											'module_name': "{{ data_params['module_name'] }}",
+											'file_name': "{{ data_params['file_name'] }}",
+											},
+										params: {"mvs_dict": mvs_dict}
+									}
+
+	    		$.ajax({
+	            type: 'post',
+		            url: "{{ add_config_api_url }}",
+		            data: JSON.stringify(json_to_send_1),
+		            contentType: "application/json; charset=utf-8",
+		            traditional: true,
+		            success: function (data) {
+		            	alert("Wrote config file")
+		            	$.ajax({	
+				            type: 'post',
+					            url: "{{ recode_missing_values_api_url }}",
+					            data: JSON.stringify(json_to_send_2),
+					            contentType: "application/json; charset=utf-8",
+					            traditional: true,
+					            success: function (data) {
+					            	alert("sent: ".concat(JSON.stringify(json_to_send_2)))
+									// Redirect
+									window.location = "{{ next_url }}"
+					            }
+				        });		
+		            }
+	        	});	
+				
 
         	});
         });

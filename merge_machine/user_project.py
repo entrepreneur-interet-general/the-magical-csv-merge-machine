@@ -70,7 +70,7 @@ class UserProject(Project):
     def add_col_matches(self, column_matches):
         '''column_matches is a json file as list of dict of list'''
         # TODO: add checks on file
-        self.add_config_data(column_matches, 'link', 'dedupe_linker', 'column_matches.json')
+        self.upload_config_data(column_matches, 'link', 'dedupe_linker', 'column_matches.json')
 
     def read_col_matches(self):
         return self.read_config_data('link', 'dedupe_linker', 'column_matches.json')
@@ -95,9 +95,9 @@ class UserProject(Project):
         
         log = self.init_log(module_name, 'link')
 
-        self.mem_data, thresh = MODULES['link'][module_name](paths, params)
+        self.mem_data, thresh = MODULES['link'][module_name]['func'](paths, params)
         
-        self.mem_data_info['module'] = module_name
+        self.mem_data_info['module_name'] = module_name
         
         # Complete log
         log = self.end_log(log, error=False)
@@ -143,6 +143,8 @@ class UserProject(Project):
         return paths
 
 if __name__ == '__main__':
+    import json
+    
     # Create/Load a project
     project_id = "4e8286f034eef40e89dd99ebe6d87f21"
     proj = UserProject(None, create_new=True)
@@ -162,17 +164,18 @@ if __name__ == '__main__':
     # Load source data to memory
     proj.load_data(file_role='source', module_name='INIT' , file_name='source.csv')
     
-    assert False
     
     infered_params = proj.infer('infer_mvs', None)
     
     # Try transformation
-    params = {'mvs_dict': {'all': [],
-              'columns': [{'col_name': u'uai',
-                           'missing_vals': [{'origin': ['len_ratio'],
-                                             'score': 0.2,
-                                             'val': u'NR'}]}]},
-                'thresh': 0.6}
+    params = {
+                'mvs_dict': {'all': [],
+                           'columns': {'uai': 
+                               [{'origin': ['len_ratio'], 'score': 0.2,'val': u'NR'}]
+                                    },
+                            },
+                'thresh': 0.6
+            }
     proj.transform('replace_mvs', params)
     
     # Write transformed file
@@ -192,6 +195,10 @@ if __name__ == '__main__':
     
     (file_role, module_name, file_name) = proj.get_last_written(file_role='source')
     paths['source'] = proj.path_to(file_role, module_name, file_name)
+    
+    
+    paths['train'] = proj.path_to('link', 'dedupe_linker', 'training.json')
+    paths['learned_settings'] = proj.path_to('link', 'dedupe_linker', 'learned_settings')
     
     ## Parameters
     # Variables
@@ -219,8 +226,10 @@ if __name__ == '__main__':
               'selected_columns_from_ref': selected_columns_from_ref}
 
     # Add training data
-    with open('local_test_data/training.json') as file:
-        proj.add_config_data(file, 'link', 'dedupe_linker', 'training.json')                 
+    with open('local_test_data/training.json') as f:
+        config_dict = json.load(f)
+    proj.upload_config_data(config_dict, 'link', 'dedupe_linker', 'training.json')
+                
               
               
     proj.linker('dedupe_linker', paths, params)

@@ -12,7 +12,7 @@ TODO:
     - API: List of finished modules for given project / source
     - API: List of loaded sources
     
-    - API: Fetch infered parametersx
+    - API: Fetch infered parameters
     - API: Fetch logs
     - API: Move implicit load out of API
     
@@ -145,7 +145,7 @@ def parse_data_params(proj, data_params, file_role=None):
     
     INPUT:
         - proj: a user project
-        - data_params: {'file_role': ..., 'module': ..., 'file_name': ...}
+        - data_params: {'file_role': ..., 'module_name': ..., 'file_name': ...}
         - file_role: Constrain the file role (for use in linking...)
     '''
     if data_params is None:
@@ -159,7 +159,7 @@ def parse_data_params(proj, data_params, file_role=None):
         
         # Load data from last run (or from user specified)
         file_name = data_params.setdefault('file_name', None)
-        module_name = data_params.setdefault('module', None)
+        module_name = data_params.setdefault('module_name', None)
         
     if any(x is None for x in [file_role, module_name, file_name]):
         (file_role, module_name, file_name) = proj.get_last_written(\
@@ -246,6 +246,7 @@ def web_select_files(project_id=None):
     all_internal_refs = [] # TODO: take care of this
     
     next_url = url_for('web_missing_values', project_id=project_id, file_role='source')
+    # next_url = next_url = url_for('web_match_columns', project_id=project_id)
     
     return render_template('select_files.html', 
                            project_id=project_id,
@@ -273,16 +274,19 @@ def web_missing_values(project_id, file_role):
     # TODO: add click on missing values
     
     proj = init_project(project_id, existing_only=True)
-    (file_role, module_name, file_name) = proj.get_last_written(file_role, None, None)   
+    (file_role, module_name, file_name) = proj.get_last_written(file_role, 'INIT', None) # TODO: replace INIT with before_module
+    print(file_role, module_name, file_name)
     proj.load_data(file_role, module_name, file_name)
     
     
-    # Infer missing values
-    infered_mvs = proj.infer('infer_mvs', params=None)
+    mvs_config = proj.read_config_data(file_role, 'replace_mvs', 'config.json')
+    if not mvs_config:
+        # Infer missing values + save
+        mvs_config = proj.infer('infer_mvs', params=None)
     
     # Select rows to display based on result
     row_idxs = []
-    for col, mvs in infered_mvs['mvs_dict']['columns'].items():
+    for col, mvs in mvs_config['mvs_dict']['columns'].items():
         for mv in mvs:
             sel = proj.mem_data[col].str.contains(mv['val']).diff().fillna(True)
             sel.index = range(len(sel))
@@ -300,19 +304,22 @@ def web_missing_values(project_id, file_role):
         next_url = url_for('web_match_columns', project_id=project_id)
     
     formated_infered_mvs = dict()
-    formated_infered_mvs['columns'] = {col:[mv['val'] for mv in mvs] for col, mvs in infered_mvs['mvs_dict']['columns'].items()}
-    formated_infered_mvs['all'] = [mv['val'] for mv in infered_mvs['mvs_dict']['all']]
+    formated_infered_mvs['columns'] = {col:[mv['val'] for mv in mvs] \
+                    for col, mvs in mvs_config['mvs_dict']['columns'].items()}
+    formated_infered_mvs['all'] = [mv['val'] for mv in mvs_config['mvs_dict']['all']]
     
     
-    data_params = {'file_role': file_role, 'module': module_name, 'file_name': file_name}
+    data_params = {'file_role': file_role, 'module_name': module_name, 'file_name': file_name}
 
     return render_template('missing_values.html',
                            project_id=project_id, 
+                           file_role=file_role, 
                            formated_infered_mvs=formated_infered_mvs,
                            index=list(sample[0].keys()),
                            sample=sample,
                            
                            data_params=data_params,
+                           add_config_api_url=url_for('upload_config', project_id=project_id, module_name='replace_mvs'),
                            recode_missing_values_api_url=url_for('replace_mvs', project_id=project_id),
                            next_url=next_url)
 
@@ -355,6 +362,7 @@ def web_match_columns(project_id):
                            source_sample=source_sample,
                            ref_sample=ref_sample,
                            
+                           
                            add_column_matches_api_url=url_for('add_column_matches', project_id=project_id),
                            next_url=url_for('web_dedupe', project_id=project_id))
   
@@ -377,7 +385,8 @@ def web_get_answer(user_input):
                 print('Wrote train')
     
                 # TODO: Do dedupe
-                emit('redirect', {'url': url_for('web_download', project_id=flask._app_ctx_stack.project_id)})
+                emit('redirect', {'url': url_for('web_download', 
+                                    project_id=flask._app_ctx_stack.project_id)})
             else:
                 flask._app_ctx_stack.labeller.new_label()
         else:
@@ -407,6 +416,7 @@ def load_labeller():
         my_variable_definition = gen_dedupe_variable_definition(col_matches)
         
         paths = proj.gen_paths_dedupe()  
+        print('XXXXXXXXX', paths, 'XXXXXXXXXXXXXXXXXX')
         flask._app_ctx_stack.paths = paths
         
         # Put to dedupe input format
@@ -493,7 +503,7 @@ def web_download(project_id):
         proj.write_log_buffer(True)
         
         file_path = proj.path_to(proj.mem_data_info['file_role'], 
-                                 proj.mem_data_info['module'], 
+                                 proj.mem_data_info['module_name'], 
                                  proj.mem_data_info['file_name'])
         print('Wrote data to: ', file_path)
 
@@ -607,24 +617,24 @@ def download(project_id):
             data_params = {}
             
         file_role = data_params.get('file_role', None)
-        module = data_params.get('module', None)
+        module_name = data_params.get('module_name', None)
         file_name = data_params.get('file_name', None)
         
         if file_role is not None:
             file_role = secure_filename(file_role)
-        if module is not None:
-            module = secure_filename(module)
+        if module_name is not None:
+            module_name = secure_filename(module_name)
         if file_name is not None:
             file_name = secure_filename(file_name)
             
-        (file_role, module, file_name) = proj.get_last_written(file_role, module, file_name)
+        (file_role, module_name, file_name) = proj.get_last_written(file_role, module_name, file_name)
             
-        if module == 'INIT':
+        if module_name == 'INIT':
             return jsonify(error=True,
                    message='No changes were made since upload. Download is not \
                            permitted. Please do not use this service for storage')
         
-        file_path = proj.path_to(file_role, module, file_name)
+        file_path = proj.path_to(file_role, module_name, file_name)
         return send_file(file_path, as_attachment=True, attachment_filename='m3_merged.csv')
     
     except Exception as e:
@@ -672,11 +682,21 @@ def upload(project_id=None):
         if key in request.files:
             file = request.files[key]
             if file:
-                proj.add_init_data(file.stream, key, file.filename)    
+                proj.upload_init_data(file.stream, key, file.filename)    
     
     return jsonify(error=False,
                metadata=proj.metadata,
                project_id=proj.project_id)
+
+
+@app.route('/api/project/<module_name>/upload_confid/<project_id>/', methods=['POST'])
+@cross_origin()
+def upload_config(module_name, project_id):
+    proj = init_project(project_id)    
+    paths = request.json['data']
+    params = request.json['params']
+    proj.upload_config_data(params, paths['file_role'], paths['module_name'], paths['file_name'])
+    return jsonify(error=False)
 
 
 @app.route('/api/project/add_column_matches/<project_id>/', methods=['POST'])

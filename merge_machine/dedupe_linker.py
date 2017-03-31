@@ -229,6 +229,15 @@ def main_dedupe(data_ref,
 def dedupe_linker(paths, params):
     '''
     Takes as inputs file paths and returnes the merge table as a pandas DataFrame
+    
+    Sample arguments:
+    
+    paths={'ref': 'path_to_reference',
+           'source': 'path_to_source',
+           'train': 'path_to_training_file',
+           'learned_settings': 'path_to_learned_settings'}
+    params={'variable_definition': dict_of_variable_definitions TODO: add this,
+            'selected_columns_from_ref': unknown: TODO: add this}
     '''
     ref_path = paths['ref']
     source_path = paths['source']    
