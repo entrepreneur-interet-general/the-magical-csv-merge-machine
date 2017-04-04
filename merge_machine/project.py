@@ -474,7 +474,7 @@ class Project():
     
         # Write metadata and clear log buffer
         self.write_metadata()
-        self.log_buffer = init_log_buffer()
+        self.log_buffer = []
 
 
     def write_data(self):
