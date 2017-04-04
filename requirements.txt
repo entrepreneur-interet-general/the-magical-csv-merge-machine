@@ -1,2 +1,9 @@
 pandas==0.19.2
+dedupe
+unidecode
+
 flask
+flask-cors
+flask-session
+flask-socketio
+
