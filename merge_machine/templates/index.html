@@ -66,7 +66,7 @@
         <h1 id='title'>Welcome to the Magical CSV Merge Machine Experience (MCSVMME)</h1>
 
 		<form id="existing_project">
-			 Project ID: <input type="text" name="project_id_old" placeholder='Ex: af8b2be7b759313f375df12e34ab3b72' list='project_ids'/>
+			 <input type="text" name="project_id_old" placeholder='Project ID (ex: af8b2be7b75931...)' list='project_ids'/>
 			 <datalist id="project_ids">
 			 {% for _id in list_of_projects %}
 				<option value="{{ _id }}">
@@ -77,12 +77,16 @@
 
 		<form id="new_project" method="post" enctype="multipart/form-data">
 			{% if project_type=='admin' %}
-				Project ID: <input type="text" name="project_id_new" placeholder='Ex: Name files...'/>
+				<input type="text" name="project_id_new" placeholder='Project ID (ex: sirene)'/>
 			{% endif %}
 			<input type="text" name="new_project_description" placeholder='[Optional] Describe your project'/>
 		    <input type="submit" name="submitNew" value="Create New Project" />
 		</form>
-		
+
+		<footer>
+			<a href="/web/">User interface</a>
+			<a href="/web/admin/">Admin interface</a>
+		</footer>		
     </body>
 </html>
 

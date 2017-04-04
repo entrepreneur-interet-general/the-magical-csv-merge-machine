@@ -205,15 +205,15 @@ class Project():
         Lists csv files (from data) in data directory and presents a list of modules in 
         which they are present. You can combine this with get_last_written
         '''
-        def is_dir(x):
-            return os.path.isdir(x)
+        def is_dir(root_path, x):
+            return os.path.isdir(os.path.join(root_path, x))
         
         all_files = dict()
         root_path = self.path_to()
-        for file_role in filter(is_dir, os.listdir(root_path)):
+        for file_role in filter(lambda x: is_dir(root_path, x), os.listdir(root_path)):
             all_files[file_role] = dict()
             sub_root_path = self.path_to(file_role=file_role)
-            for _dir in filter(is_dir, os.listdir(sub_root_path)):
+            for _dir in filter(lambda x: is_dir(sub_root_path, x), os.listdir(sub_root_path)):
                 for file_name in os.listdir(os.path.join(sub_root_path, _dir)):
                     if any(file_name[-len(ext):] == ext for ext in extensions):
                         if file_name not in all_files[file_role]:

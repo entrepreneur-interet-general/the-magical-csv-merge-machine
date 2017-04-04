@@ -46,6 +46,7 @@ TODO:
     - Allocate memory by user/ by IP?
     
     - TODO: look why I can get 90% or 30% match on same file
+    - Study impact of training set size on match rate
 
 DEV GUIDELINES:
     - By default the API will use the file with the same name in the last 
@@ -274,7 +275,8 @@ def web_select_files(project_type, project_id=None):
     proj = init_project(project_type=project_type, project_id=project_id)
     all_csvs = proj.list_files(extensions=['.csv'])
     
-    all_internal_refs = [] # TODO: take care of this
+    admin = Admin()
+    all_internal_refs = admin.list_referentials() # TODO: take care of this
     
     if project_type == 'admin':
         next_url = url_for('web_missing_values', project_type=project_type, 
@@ -283,7 +285,7 @@ def web_select_files(project_type, project_id=None):
         next_url = url_for('web_missing_values', project_type=project_type, 
                            project_id=project_id, file_role='source')
     # next_url = next_url = url_for('web_match_columns', project_id=project_id)
-    
+    print(all_internal_refs)
     return render_template('select_files.html', 
                            project_id=project_id,
                            project_type=project_type,
@@ -292,7 +294,7 @@ def web_select_files(project_type, project_id=None):
                            internal_references=all_internal_refs,
                            upload_source_api_url=url_for('upload', project_type='user', project_id=project_id, file_role='source'),
                            upload_ref_api_url=url_for('upload', project_type=project_type, project_id=project_id, file_role='ref'),
-                           select_file_url=url_for('select_file', project_type='user', project_id=project_id),
+                           select_file_api_url=url_for('select_file', project_type='user', project_id=project_id),
                            next_url=next_url,
                            MAX_FILE_SIZE=MAX_FILE_SIZE)
 
@@ -339,7 +341,7 @@ def web_missing_values(project_type, project_id, file_role):
     if project_type == 'admin':
         next_url = url_for('web_index', project_type=project_type)
     else:
-        if file_role == 'source':
+        if (file_role == 'source') and not (proj.metadata['current']['ref']['internal']):
             next_url = url_for('web_missing_values', project_type=project_type, 
                                project_id=project_id, file_role='ref')
         else:
@@ -392,7 +394,9 @@ def web_match_columns(project_id):
         ref_sample = proj.get_sample('ref', 'INIT', ref_data['file_name'], 
                                      row_idxs=ROWS_TO_DISPLAY)
     else:
-        raise Exception('Internal source not yet implemented')
+        proj_ref = Referential(proj.metadata['current']['ref']['project_id'])
+        ref_sample = proj_ref.get_sample('ref', 'INIT', ref_data['file_name'], 
+                                     row_idxs=ROWS_TO_DISPLAY)
     
     # Load previous config
     config = proj.read_col_matches()
@@ -713,7 +717,9 @@ def select_file(project_type, project_id):
     '''send {file_role: "source", file_name: "XXX", internal: False}'''
     proj = init_project(project_type=project_type, project_id=project_id)
     params = request.json
-    proj.select_file(params['file_role'], params['file_name'], params['internal'])
+    proj.select_file(params['file_role'], params.get('file_name', None), \
+                     params['internal'], params.get('project_id', project_id))
+
     return jsonify(error=False)
  
     

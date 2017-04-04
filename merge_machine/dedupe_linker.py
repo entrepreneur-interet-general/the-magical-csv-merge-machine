@@ -39,10 +39,8 @@ NO_TRAINING_MESSAGE = 'No training file could be found. Use the interface (XXX)'
 
 def preProcess(val):
     """
-    Do a little bit of data cleaning with the help of
-    [AsciiDammit](https://github.com/tnajdek/ASCII--Dammit) and
-    Regex. Things like casing, extra spaces, quotes and new lines can
-    be ignored.
+    Do a little bit of data cleaning. Things like casing, extra spaces, 
+    quotes and new lines can be ignored.
     """
     val = re.sub('  +', ' ', val)
     val = re.sub('\n', ' ', val)

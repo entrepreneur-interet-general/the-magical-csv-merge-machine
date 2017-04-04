@@ -58,7 +58,6 @@ class UserProject(Project):
         metadata = dict()
         metadata['timestamp'] = time.time()
         metadata['user_id'] = 'NOT IMPlEMENTED'
-        metadata['use_internal_ref'] = None
         metadata['ref_name'] = None
         metadata['current'] = {'source': None, 'ref': None} # {'source': {internal: False, file_name: "source.csv.csv"}, 'ref': None}
         metadata['description'] = description
@@ -66,10 +65,22 @@ class UserProject(Project):
         metadata['project_id'] = self.project_id
         return metadata   
 
-    def select_file(self, file_role, file_name, internal=False):
+    def select_file(self, file_role, file_name, internal=False, project_id=None):
         # TODO: Validate that the file exists
         self.check_file_role(file_role)
         self.metadata['current'][file_role] = {'internal': internal, 'file_name': file_name}  
+        
+        if file_name is None:
+            assert project_id is not None
+            ref_proj = Referential(project_id)
+            (_, _, file_name) = ref_proj.get_last_written(file_role)   
+            self.metadata['current'][file_role]['file_name'] = file_name
+            
+        if project_id is not None:
+            self.metadata['current'][file_role]['project_id'] = project_id
+        else:
+            assert internal
+            self.metadata['current'][file_role]['project_id'] = self.project_id
         self.write_metadata()
 
 
@@ -128,15 +139,19 @@ class UserProject(Project):
         else:
             (file_role, module_name, file_name) = self.get_last_written('source', 
                                 None, self.metadata['current']['source']['file_name'])
-        source_path = self.path_to(file_role, module_name, file_name)
+            source_path = self.path_to(file_role, module_name, file_name)
         
         # Get path to ref
         if self.metadata['current']['ref']['internal']:
-            raise Exception('Not dealing with internal sources yet')
+            ref_project_id = self.metadata['current']['ref']['project_id']
+            ref_proj = Referential(ref_project_id)
+            (file_role, module_name, file_name) = ref_proj.get_last_written('ref', 
+                                                    before_module='dedupe_linker')            
+            ref_path = ref_proj.path_to(file_role, module_name, file_name)
         else:
             (file_role, module_name, file_name) = self.get_last_written('ref', 
                                 None, self.metadata['current']['ref']['file_name'])
-        ref_path = self.path_to(file_role, module_name, file_name)
+            ref_path = self.path_to(file_role, module_name, file_name)
     
         # Add paths
         paths = {

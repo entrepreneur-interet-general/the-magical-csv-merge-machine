@@ -36,9 +36,9 @@
 						alert("Using previous referential: ".concat(file_name))
 						break;
 					case "internal":
-						file_name = $("input[type=radio][name='internal_ref']:checked").val()
-						call_select_file("ref", file_name, true)
-						alert("Using internal referential: ".concat(file_name))
+						project_id = $("input[type=radio][name='internal_ref']:checked").val()
+						call_select_file("ref", project_id, true)
+						alert("Using internal referential: ".concat(project_id))
 						break;
 					case "upload":
 						var form = new FormData($("#ref_to_upload")[0]);
@@ -92,11 +92,17 @@
 		});
 
 
-        function call_select_file(file_role, file_name, internal){
+        function call_select_file(file_role, _input, internal){
+        	if (internal){
+				json_to_send = {file_role: file_role, project_id: _input, internal: internal}
+        	} else {
+        		json_to_send = {file_role: file_role, file_name: _input, internal: internal}
+        	}
+        	alert(JSON.stringify(json_to_send))
     		$.ajax({
             type: 'post',
-	            url: "{{ select_file_url }}",
-	            data: JSON.stringify({file_role: file_role, file_name: file_name, internal: internal}),
+	            url: "{{ select_file_api_url }}",
+	            data: JSON.stringify(json_to_send),
 	            contentType: "application/json; charset=utf-8",
 	            traditional: true,
 	            success: function (data) {
@@ -174,13 +180,13 @@
 
 		 	  	{% if internal_references %}
 				 	<input type="radio" name="select_ref" value="internal" /> Use internal referential </br>
-				 	<div id="internal_references" style="display: none; color: gray">
+				 	<div id="internal_ref" style="display: none; color: gray">
 					    {% for item in internal_references %}
 					    	<input type="radio" name="internal_ref" value="{{ item }}" /> {{ item }} </br>
 					    {% endfor %}
 			 		</div>
 				{% else %}
-					<input type="radio" name="select_ref" value="internal" disabled="true"/> Use internal referential (NOT YET IMPLEMENTED) </br>
+					<input type="radio" name="select_ref" value="internal" disabled="true"/> Use internal referential (No internal referential available) </br>
 				{% endif %}
 
 		 	  	{% if previous_references %}
