@@ -14,6 +14,9 @@ Examples of missing data that can be found:
     - '999999'
     - 'NONE'
     - '-' 
+    
+TODO:
+    - For probable missing values, check entire file
 """
 
 import string
@@ -184,8 +187,9 @@ def infer_mvs(tab, params=None):
     
     Run mv inference processes for each column and for the entire table
     """
-    PROBABLE_MVS=['nan', 'none', 'n/a']
-    ALWAYS_MVS=[' ']
+    PROBABLE_MVS = ['nan', 'none', 'na', 'n/a', '\\n', ' ', 'non renseigne', \
+                    'nr', 'no value', 'null', 'missing value']
+    ALWAYS_MVS = ['']
     
     if params is None:
         params = {}
@@ -238,8 +242,8 @@ def replace_mvs(tab, params):
         mvs_dict: dict indicating mv values with scores. For example:
                 {
                     'all': [],
-                    'columns': {u'dech': [(u'-', 2.0, 'unknown')],
-                                u'distance': [(u'-', 1, 'unknown')]}
+                    'columns': {'dech': [('-', 2.0, 'unknown')],
+                                'distance': [('-', 1, 'unknown')]}
                 }
         thresh: minimum score to remove mvs
     
@@ -282,9 +286,8 @@ if __name__ == '__main__':
     tab = pd.read_csv(file_path, nrows=nrows, encoding=encoding, dtype='unicode')
     
     # Frequent missing value expressions
-    PROBABLE_MISSING_VALUES = [u'nan', u'none', u'na', u'\\n', u' ', 'non renseigne', 'nr',
-                     'no value', 'null', 'missing value']
-    ALWAYS_MISSING_VALUES = [u'']
+    PROBABLE_MISSING_VALUES = ['nan', 'none', 'na', '\\n', ' ', 'non renseigne', 'nr', 'no value', 'null', 'missing value']
+    ALWAYS_MISSING_VALUES = ['']
     num_top_values = 15 # Number of most frequent values to look at
          
     # Guess expressions for missing values

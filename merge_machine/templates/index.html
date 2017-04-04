@@ -13,22 +13,42 @@
 			$("#existing_project").submit(function(e) {
 				e.preventDefault();
 			    var formData = new FormData($(this)[0]);
-			    go_to_next(formData.get('project_id'))
+			    go_to_next(formData.get('project_id_old'))
 			}); 
+
 			$("#new_project").submit(function(e) {
 				e.preventDefault();
-				var new_project_url = '/api/project/new'
-				$.getJSON(new_project_url, function(json) {
-					var project_id = json.project_id
-					alert("Created new project with ID:".concat(project_id, ". Save this ID somewhere safe..."))
-					go_to_next(project_id)
-				});
+
+				var formData = new FormData($(this)[0]);
+
+				{% if project_type=='admin' %}
+					json_to_send = {'project_id':formData.get('project_id_new'), 'description': formData.get('new_project_description')}
+				{% else %}
+					json_to_send = {'description': formData.get('new_project_description')}
+				{% endif %}
+				
+
+            	$.ajax({	
+		            type: 'post',
+			            url: "{{ new_project_api_url }}",
+			            data: JSON.stringify(json_to_send),
+			            contentType: "application/json; charset=utf-8",
+			            traditional: true,
+			            success: function (json) {
+			            	alert(JSON.stringify(json_to_send))
+							var project_id = json.project_id
+							alert("Created new project with ID:".concat(project_id, ". Save this ID somewhere safe..."))
+							go_to_next(project_id)
+			            }
+		        });
+
+
 			    
 			}); 
 		});
 
        function go_to_next(project_id){
-       		var exists_url = '/api/project/exists'.concat('/', project_id)
+       		var exists_url = '/api/{{ project_type }}/exists'.concat('/', project_id)
 			$.getJSON(exists_url, function(json){
 			    if (json.exists) {
 		       		var next_url = '{{ next_url }}'
@@ -46,12 +66,21 @@
         <h1 id='title'>Welcome to the Magical CSV Merge Machine Experience (MCSVMME)</h1>
 
 		<form id="existing_project">
-			 Project ID: <input type="text" name="project_id" placeholder='Ex: af8b2be7b759313f375df12e34ab3b72'/>
+			 Project ID: <input type="text" name="project_id_old" placeholder='Ex: af8b2be7b759313f375df12e34ab3b72' list='project_ids'/>
+			 <datalist id="project_ids">
+			 {% for _id in list_of_projects %}
+				<option value="{{ _id }}">
+			 {% endfor %}
+			 </datalist>
 		     <input type="submit" name="submitExisting" value="Join Existing Project" />
 		</form>
 
 		<form id="new_project" method="post" enctype="multipart/form-data">
-		     <input type="submit" name="submitNew" value="Create New Project" />
+			{% if project_type=='admin' %}
+				Project ID: <input type="text" name="project_id_new" placeholder='Ex: Name files...'/>
+			{% endif %}
+			<input type="text" name="new_project_description" placeholder='[Optional] Describe your project'/>
+		    <input type="submit" name="submitNew" value="Create New Project" />
 		</form>
 		
     </body>

@@ -23,7 +23,7 @@ class Referential(Project):
     This class provides tools to manage internal referentials.
     """
     def check_file_role(self, file_role):
-        if (file_role is not None) and (file_role != 'referentials'):
+        if (file_role is not None) and (file_role != 'ref'):
             raise Exception('"file_role" should be "referentials" for internal \
                             referentials')
     
@@ -34,13 +34,15 @@ class Referential(Project):
         '''
         if file_role:
             self.check_file_role(file_role)
-        path = os.path.join(DATA_PATH, file_role, module_name, file_name)
+        path = os.path.join(DATA_PATH, 'referentials', self.project_id, 
+                            file_role, module_name, file_name)
         return os.path.abspath(path)    
 
-    def create_metadata(self):
+    def create_metadata(self, description=''):
         metadata = dict()
         metadata['timestamp'] = time.time()
-        metadata['description'] = ''
+        metadata['description'] = description
+        metadata['current'] = {'source': None, 'ref': None} 
         metadata['log'] = []
         return metadata  
     

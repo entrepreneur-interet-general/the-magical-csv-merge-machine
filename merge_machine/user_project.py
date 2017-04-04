@@ -25,6 +25,12 @@ class UserProject(Project):
     """
     This class provides tools to manage user projects
     """
+    def __init__(self, project_id=None, create_new=False, description=''):
+        print('Description 4', description)
+        if (project_id is not None) and create_new:
+            raise Exception('Set project_id to None or create_new to False')
+        super().__init__(project_id, create_new, description)
+    
     def check_file_role(self, file_role):
         if (file_role not in ['ref', 'source', 'link']) and (file_role is not None):
             raise Exception('"file_role" is either "source" or "ref"')
@@ -49,13 +55,15 @@ class UserProject(Project):
 
         return os.path.abspath(path)    
 
-    def create_metadata(self):
+    def create_metadata(self, description=''):
+        print('description metadata', description)
         metadata = dict()
         metadata['timestamp'] = time.time()
         metadata['user_id'] = 'NOT IMPlEMENTED'
         metadata['use_internal_ref'] = None
         metadata['ref_name'] = None
         metadata['current'] = {'source': None, 'ref': None} # {'source': {internal: False, file_name: "source.csv.csv"}, 'ref': None}
+        metadata['description'] = description
         metadata['log'] = []
         metadata['project_id'] = self.project_id
         return metadata   
@@ -165,7 +173,7 @@ if __name__ == '__main__':
     proj.load_data(file_role='source', module_name='INIT' , file_name='source.csv')
     
     
-    infered_params = proj.infer('infer_mvs', None)
+    infered_params = proj.infer('infer_mvs', params=None)
     
     # Try transformation
     params = {
@@ -185,8 +193,6 @@ if __name__ == '__main__':
     # Remove previously uploaded file
     # proj.remove_data('source', 'INIT', 'source.csv')    
 
-    
-    
     # Try deduping
     paths = dict()
     

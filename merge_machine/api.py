@@ -20,6 +20,8 @@ TODO:
     
     - API: DOWNLOAD CONFIG and run pipeline
     
+    - Use logging module
+    
     - Change metadata to use_internal and ref_name to last used or smt. Data to
       use is specified on api call and not read from metadata (unless using last used)
     
@@ -91,7 +93,6 @@ USES: /python-memcached
 import gc
 import os
 
-import celery
 import flask
 from flask import Flask, jsonify, render_template, request, send_file, url_for
 from flask_session import Session
@@ -135,24 +136,26 @@ socketio = SocketIO(app)
 # HELPER FUNCTIONS
 #==============================================================================
     
+def check_project_type(project_type):
+    if project_type not in ['user', 'admin']:
+        raise Exception('project_type can be only user or admin')
+
 def check_request():
     '''Check that input request is valid'''
     pass
 
-def init_project(project_type, project_id=None, existing_only=False):
+def init_project(project_type, project_id=None, create_new=False, description=''):
     '''Initialize project'''
-    if project_type not in ['user', 'admin']:
-        raise Exception('Projects are either user projects or referentials ("project" or "admin")')
     
-    if (project_id is None) and existing_only:
-        raise Exception('Cannot pass None to project_id. \
-                        Use `upload` to create a new project')
-        
-        
+    check_project_type(project_type)
+    
+    if description:
+        assert create_new
+    
     if project_type == 'user':
-        proj = UserProject(project_id)
+        proj = UserProject(project_id, create_new=create_new, description=description)
     else:
-        proj = Referential(project_id)
+        proj = Referential(project_id, create_new=create_new, description=description)
     return proj
 
 def parse_data_params(proj, data_params, file_role=None):
@@ -244,15 +247,22 @@ def gen_dedupe_variable_definition(col_matches):
 
 @app.route('/')
 @app.route('/web/', methods=['GET'])
-@app.route('/web/user/', methods=['GET'])
+@app.route('/web/<project_type>/', methods=['GET'])
 @cross_origin()
-def web_index():
+def web_index(project_type='user'):
     # TODO: Replace with call to list_projects + Use USER projects
+    check_project_type(project_type)
+    
     admin = Admin()
-    list_of_projects = admin.list_projects()    
+    if project_type == 'user':
+        list_of_projects = admin.list_projects()    
+    elif project_type == 'admin':
+        list_of_projects = admin.list_referentials()
     return render_template('index.html', 
-                           list_of_projects=list_of_projects,
-                           next_url=url_for('web_select_files', project_type='user'))
+                       project_type=project_type,
+                       list_of_projects=list_of_projects,
+                       new_project_api_url=url_for('new_project', project_type=project_type),
+                       next_url=url_for('web_select_files', project_type=project_type))
 
 
 @app.route('/web/<project_type>/select/', methods=['GET'])
@@ -261,7 +271,7 @@ def web_index():
 def web_select_files(project_type, project_id=None):
     MAX_FILE_SIZE = 1048576
     
-    proj = init_project(project_type='user', project_id=project_id, existing_only=True)
+    proj = init_project(project_type=project_type, project_id=project_id)
     all_csvs = proj.list_files(extensions=['.csv'])
     
     all_internal_refs = [] # TODO: take care of this
@@ -272,10 +282,12 @@ def web_select_files(project_type, project_id=None):
     
     return render_template('select_files.html', 
                            project_id=project_id,
+                           project_type=project_type,
                            previous_sources=all_csvs['source'],
                            previous_references=all_csvs['ref'],
                            internal_references=all_internal_refs,
-                           upload_api_url=url_for('upload', project_type='user', project_id=project_id),
+                           upload_source_api_url=url_for('upload', project_type='user', project_id=project_id, file_role='source'),
+                           upload_ref_api_url=url_for('upload', project_type='user', project_id=project_id, file_role='ref'),
                            select_file_url=url_for('select_file', project_type='user', project_id=project_id),
                            next_url=next_url,
                            MAX_FILE_SIZE=MAX_FILE_SIZE)
@@ -295,7 +307,7 @@ def web_missing_values(project_type, project_id, file_role):
     
     # TODO: add click on missing values
     
-    proj = init_project(project_type=project_type, project_id=project_id, existing_only=True)
+    proj = init_project(project_type=project_type, project_id=project_id)
     (file_role, module_name, file_name) = proj.get_last_written(file_role, 'INIT', None) # TODO: replace INIT with before_module
     print(file_role, module_name, file_name)
     proj.load_data(file_role, module_name, file_name)
@@ -355,7 +367,7 @@ def web_missing_values(project_type, project_id, file_role):
 def web_match_columns(project_id):
     ROWS_TO_DISPLAY = range(3)
     
-    proj = init_project(project_type='user', project_id=project_id, existing_only=True)
+    proj = init_project(project_type='user', project_id=project_id)
     
     # Load source sample
     source_data = proj.metadata['current']['source']
@@ -392,12 +404,11 @@ def web_match_columns(project_id):
                            add_column_matches_api_url=url_for('add_column_matches', project_id=project_id),
                            next_url=url_for('web_dedupe', project_id=project_id))
   
-
-
+    
 @socketio.on('answer', namespace='/')
 def web_get_answer(user_input):
-    # TODO: avoiid multiple click
-    # TODO: add safeguards  if not enough train
+    # TODO: avoid multiple click (front)
+    # TODO: add safeguards  if not enough train (front)
     message = ''
     #message = 'Expect to have about 50% of good proposals in this phase. The more you label, the better...'
     if 'labeller' not in dir(flask._app_ctx_stack):
@@ -420,9 +431,11 @@ def web_get_answer(user_input):
             message = 'Sent an invalid answer'
         emit('message', flask._app_ctx_stack.labeller.to_emit(message=message))
     
+
 @socketio.on('skip', namespace='/terminate')
 def web_terminate_labeller_load():
     pass
+
 
 @socketio.on('load_labeller', namespace='/')
 def load_labeller():
@@ -433,7 +446,7 @@ def load_labeller():
         print('Got here')
         
         project_id = flask._app_ctx_stack.project_id
-        proj = init_project(project_type='user', project_id=project_id, existing_only=True)
+        proj = init_project(project_type='user', project_id=project_id)
         flask._app_ctx_stack.proj = proj
         
         # TODO: Add extra config page
@@ -487,7 +500,7 @@ def web_dedupe(project_id):
     flask._app_ctx_stack.project_id = project_id
     
     # TODO: deal with duplicate with load_labeller 
-    proj = init_project(project_type='user', project_id=project_id, existing_only=True)
+    proj = init_project(project_type='user', project_id=project_id)
     paths = proj.gen_paths_dedupe()  
     
     dummy_labeller = DummyLabeller(training_path=paths['train'], use_previous=True)
@@ -501,7 +514,7 @@ def web_dedupe(project_id):
 @cross_origin()
 def web_download(project_id):    
     
-    proj = init_project(project_type='user', project_id=project_id, existing_only=True)
+    proj = init_project(project_type='user', project_id=project_id)
     
     res_file_name = 'm3_result.csv'
     
@@ -611,9 +624,23 @@ def web_download(project_id):
 # API
 #==============================================================================
 
-@app.route('/api/user/new/', methods=['GET'])
-def new_project():
-    proj = UserProject(create_new=True)
+@app.route('/api/<project_type>/new/', methods=['GET', 'POST'])
+def new_project(project_type):
+    check_project_type(project_type)
+
+    if project_type == 'admin':
+        if request.json:
+            project_id = request.json.get('project_id', None)
+            description = request.json.get('description', '')
+            proj = init_project(project_type, project_id, create_new=True, description=description)
+        else:
+            raise Exception('Missing POST argument project_id to create new internal referential')
+    else:
+        if request.json:
+            description = request.json.get('description', '')
+        else:
+            description = ''
+        proj = init_project(project_type, create_new=True, description=description)
     return jsonify(error=False, 
                    project_id=proj.project_id)
 
@@ -622,7 +649,7 @@ def new_project():
 @cross_origin()
 def metadata(project_type, project_id):
     '''Fetch metadata for project ID'''
-    proj = init_project(project_type=project_type, project_id=project_id, existing_only=True)
+    proj = init_project(project_type=project_type, project_id=project_id)
     resp = jsonify(error=False,
                    metadata=proj.metadata, 
                    project_id=proj.project_id)
@@ -641,7 +668,7 @@ def download(project_id):
     '''
     project_id = secure_filename(project_id)
     try:
-        proj = init_project(project_type='user', project_id=project_id, existing_only=True)
+        proj = init_project(project_type='user', project_id=project_id)
         data_params, _ = parse_1file_request()
         
         if data_params is None:
@@ -677,43 +704,46 @@ def download(project_id):
 @app.route('/api/<project_type>/select_file/<project_id>/', methods=['POST'])
 def select_file(project_type, project_id):
     '''send {file_role: "source", file_name: "XXX", internal: False}'''
-    proj = init_project(project_type=project_type, project_id=project_id, existing_only=True)
+    proj = init_project(project_type=project_type, project_id=project_id)
     params = request.json
     proj.select_file(params['file_role'], params['file_name'], params['internal'])
     return jsonify(error=False)
  
     
-    
-@app.route('/api/user/exists/<project_id>/', methods=['GET', 'POST'])
+@app.route('/api/<project_type>/exists/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
-def project_exists(project_id):
+def project_exists(project_type, project_id):
     '''Check if project exists'''
     try:
-        _ = UserProject(project_id=secure_filename(project_id), create_new=False)
+        init_project(project_type, project_id)
         return jsonify(error=False, exists=True)
     except: 
         return jsonify(error=False, exists=False)
     
 
-@app.route('/api/<project_type>/upload/<project_id>/', methods=['POST'])
+@app.route('/api/<project_type>/upload/<project_id>/<file_role>', methods=['POST'])
 @cross_origin()
-def upload(project_type, project_id=None):
+def upload(project_type, project_id, file_role):
     '''
     Uploads source and reference files to project either passed as variable or
     loaded from request parameters
     '''
-    if  isinstance(project_id, str) and project_id.lower() == 'new_project':
-        project_id = None # TODO: Dirty fix bc swagger doesnt take optional path parameters
+    if file_role not in ['ref', 'source']:
+        raise Exception('file_role should be ref or source')
     
-    # Create or Load project
+    # Load project
     proj = init_project(project_type=project_type, project_id=project_id) 
     
-    # 
-    for key in ['source', 'ref']:
-        if key in request.files:
-            file = request.files[key]
-            if file:
-                proj.upload_init_data(file.stream, key, file.filename)    
+    # Upload data
+    if file_role in request.files:
+        file = request.files[file_role]
+        if file:
+            proj.upload_init_data(file.stream, file_role, file.filename)
+        else:
+            raise Exception('Empty file')
+    else:
+        raise Exception('Could not find file named {0}'.format(file_role))
+    
     
     return jsonify(error=False,
                metadata=proj.metadata,
@@ -734,7 +764,7 @@ def upload_config(project_type, module_name, project_id):
 @cross_origin()
 def add_column_matches(project_id):
     column_matches = request.json
-    proj = init_project(project_type='user', project_id=project_id, existing_only=True)
+    proj = init_project(project_type='user', project_id=project_id)
     proj.add_col_matches(column_matches)
     return jsonify(error=False)
     
@@ -755,7 +785,7 @@ def list_modules():
 @cross_origin()
 def infer_mvs(project_type, project_id):
     '''Runs the infer_mvs module'''
-    proj = init_project(project_type=project_type, project_id=project_id, existing_only=True)
+    proj = init_project(project_type=project_type, project_id=project_id)
     data_params, module_params = parse_1file_request()    
     
     load_from_params(proj, data_params)
@@ -773,7 +803,7 @@ def infer_mvs(project_type, project_id):
 @cross_origin()
 def replace_mvs(project_type, project_id):
     '''Runs the mvs replacement module'''
-    proj = init_project(project_type=project_type, project_id=project_id, existing_only=True)
+    proj = init_project(project_type=project_type, project_id=project_id)
     data_params, module_params = parse_1file_request()
     
     load_from_params(proj, data_params)
@@ -800,7 +830,7 @@ def linker(project_id):
     }
     
     '''
-    proj = init_project(project_type='user', project_id=project_id, existing_only=True)
+    proj = init_project(project_type='user', project_id=project_id)
     data_params, module_params = parse_linking_request()
     
     # Set paths

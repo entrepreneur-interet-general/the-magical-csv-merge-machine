@@ -11,6 +11,13 @@
         <script type="text/javascript" charset="utf-8">
 
         $(document).ready(function(){
+
+        	// Hide source upload if we are in admin mode (i.e. uploading referentials)
+        	if ("{{ project_type }} == 'admin'") {
+        		$("choose_source").hide();
+        	}
+
+
 			$("#submitBtn").on("click", function() {
 				// http://blog.w3villa.com/websites/uploading-filesimage-with-ajax-jquery-without-submitting-a-form/
 				// Select source
@@ -83,7 +90,6 @@
 					$("#internal_ref").hide()
 				}
 			});
-
 		});
 
 
@@ -100,7 +106,14 @@
         };
 
         function upload(form, file_role) {
-        	var upload_api_url = "{{ upload_api_url }}"
+        	if (file_role=="source") {
+        		var upload_api_url = "{{ upload_source_api_url }}"
+        	} else if (file_role=="ref") {
+        		var upload_api_url = "{{ upload_ref_api_url }}"
+        	} else {
+        		alert('Problem selecting API call. File_role can only be source or ref')
+        	}
+
 			$.ajax({
 			        url: upload_api_url,
 			        method: "POST",

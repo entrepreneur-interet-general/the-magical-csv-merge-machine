@@ -289,11 +289,13 @@ class Project():
         """
         Upload and write source or reference to the project. Tables will
         be added to the "INIT" module.
+        
+        The file will be re-coded in utf-8 with a "," separator. Also, chars
+        specified in CHARS_TO_REPLACE will be replaced by "_" in the header.
         """
         CHARS_TO_REPLACE = [' ', ',', '.', '(', ')', '\'', '\"']
         ENCODINGS = ['utf-8', 'windows-1252']
         SEPARATORS = [',', ';', '\t']
-        
         
         self.check_file_role(file_role)
         
