@@ -7,6 +7,7 @@
     
         <title>Dedupe training</title>
         <style>
+
         	.on_load {
         		display:none;
         	}
@@ -30,6 +31,11 @@
 			  0% { transform: rotate(0deg); }
 			  100% { transform: rotate(360deg); }
 			}
+
+			th, td {
+    			padding: 15px;
+    		}
+
 		</style>
         <!--<link rel="stylesheet" type="text/css" href="http://www.csszengarden.com/219/219.css?v=8may2013">-->
         <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
@@ -59,12 +65,10 @@
 
             $(document).ready(function(){
 				
-				
 				// Join (not useful here)
                 //socket.on('connect', function() {
             	//	qsdfqsdf  
                 //});
-
                 socket.emit('load_labeller');
 
 				// Redirect when done
@@ -128,7 +132,7 @@
             function replace_table(formated_record_pair) {
 	            	var container = $('#example_to_label_container');
 	            	$('#example_to_label').remove();
-					table = $('<table id="example_to_label">');
+					table = $('<table id="example_to_label" cellpadding=10>');
 
 					formated_record_pair.forEach(function(field_pair) {
 					  	var tr = $('<tr>');
@@ -149,9 +153,6 @@
                     window.location.href = "{{ url_for('web_dedupe', project_id='{{ project_id }}') }}";
                 });
             }
-
-
-
         </script>
     </head>
     <body>

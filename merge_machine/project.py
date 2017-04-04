@@ -130,7 +130,7 @@ class Project():
     def __init__(self, project_id=None, create_new=False, description=''):
         if (project_id is None) and (not create_new):
             raise Exception('Set create_new to True or specify project_id')
-        
+
         if create_new: 
             # Generate project id if none is passed
             if project_id is None:
@@ -205,19 +205,21 @@ class Project():
         Lists csv files (from data) in data directory and presents a list of modules in 
         which they are present. You can combine this with get_last_written
         '''
+        def is_dir(x):
+            return os.path.isdir(x)
+        
         all_files = dict()
-        for file_role in ['ref', 'source', 'link']:
+        root_path = self.path_to()
+        for file_role in filter(is_dir, os.listdir(root_path)):
             all_files[file_role] = dict()
-            root_path = self.path_to(file_role=file_role)
-            if os.path.isdir(root_path):
-                for _dir in os.listdir(root_path):
-                    if os.path.isdir(os.path.join(root_path, _dir)):
-                        for file_name in os.listdir(os.path.join(root_path, _dir)):
-                            if any(file_name[-len(ext):] == ext for ext in extensions):
-                                if file_name not in all_files[file_role]:
-                                    all_files[file_role][file_name] = [_dir]
-                                else:
-                                    all_files[file_role][file_name].append(_dir)
+            sub_root_path = self.path_to(file_role=file_role)
+            for _dir in filter(is_dir, os.listdir(sub_root_path)):
+                for file_name in os.listdir(os.path.join(sub_root_path, _dir)):
+                    if any(file_name[-len(ext):] == ext for ext in extensions):
+                        if file_name not in all_files[file_role]:
+                            all_files[file_role][file_name] = [_dir]
+                        else:
+                            all_files[file_role][file_name].append(_dir)
         return all_files
 
     def log_by_file_name(self):

@@ -12,12 +12,6 @@
 
         $(document).ready(function(){
 
-        	// Hide source upload if we are in admin mode (i.e. uploading referentials)
-        	if ("{{ project_type }} == 'admin'") {
-        		$("choose_source").hide();
-        	}
-
-
 			$("#submitBtn").on("click", function() {
 				// http://blog.w3villa.com/websites/uploading-filesimage-with-ajax-jquery-without-submitting-a-form/
 				// Select source
@@ -90,6 +84,11 @@
 					$("#internal_ref").hide()
 				}
 			});
+
+        	// Hide source upload if we are in admin mode (i.e. uploading referentials)
+        	if ("{{ project_type }}" == "admin") {
+        		$("#choose_source").hide();
+        	};			
 		});
 
 

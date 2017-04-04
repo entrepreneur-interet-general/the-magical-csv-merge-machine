@@ -26,14 +26,13 @@ class UserProject(Project):
     This class provides tools to manage user projects
     """
     def __init__(self, project_id=None, create_new=False, description=''):
-        print('Description 4', description)
         if (project_id is not None) and create_new:
             raise Exception('Set project_id to None or create_new to False')
         super().__init__(project_id, create_new, description)
     
     def check_file_role(self, file_role):
         if (file_role not in ['ref', 'source', 'link']) and (file_role is not None):
-            raise Exception('"file_role" is either "source" or "ref"')
+            raise Exception('"file_role" is either "source" or "ref" or "link"')
     
     def path_to(self, file_role='', module_name='', file_name=''):
         '''
@@ -56,7 +55,6 @@ class UserProject(Project):
         return os.path.abspath(path)    
 
     def create_metadata(self, description=''):
-        print('description metadata', description)
         metadata = dict()
         metadata['timestamp'] = time.time()
         metadata['user_id'] = 'NOT IMPlEMENTED'

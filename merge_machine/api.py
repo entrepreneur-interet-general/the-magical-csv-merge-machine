@@ -276,18 +276,22 @@ def web_select_files(project_type, project_id=None):
     
     all_internal_refs = [] # TODO: take care of this
     
-    next_url = url_for('web_missing_values', project_type=project_type, 
-                       project_id=project_id, file_role='source')
+    if project_type == 'admin':
+        next_url = url_for('web_missing_values', project_type=project_type, 
+                           project_id=project_id, file_role='ref')
+    else:
+        next_url = url_for('web_missing_values', project_type=project_type, 
+                           project_id=project_id, file_role='source')
     # next_url = next_url = url_for('web_match_columns', project_id=project_id)
     
     return render_template('select_files.html', 
                            project_id=project_id,
                            project_type=project_type,
-                           previous_sources=all_csvs['source'],
-                           previous_references=all_csvs['ref'],
+                           previous_sources=all_csvs.get('source', []),
+                           previous_references=all_csvs.get('ref', []),
                            internal_references=all_internal_refs,
                            upload_source_api_url=url_for('upload', project_type='user', project_id=project_id, file_role='source'),
-                           upload_ref_api_url=url_for('upload', project_type='user', project_id=project_id, file_role='ref'),
+                           upload_ref_api_url=url_for('upload', project_type=project_type, project_id=project_id, file_role='ref'),
                            select_file_url=url_for('select_file', project_type='user', project_id=project_id),
                            next_url=next_url,
                            MAX_FILE_SIZE=MAX_FILE_SIZE)
@@ -332,11 +336,14 @@ def web_missing_values(project_type, project_id, file_role):
     sample = proj.get_sample(file_role, module_name, file_name,
                                  row_idxs=[0] + [x+1 for x in row_idxs])
 
-    if file_role == 'source':
-        next_url = url_for('web_missing_values', project_type=project_type, 
-                           project_id=project_id, file_role='ref')
+    if project_type == 'admin':
+        next_url = url_for('web_index', project_type=project_type)
     else:
-        next_url = url_for('web_match_columns', project_id=project_id)
+        if file_role == 'source':
+            next_url = url_for('web_missing_values', project_type=project_type, 
+                               project_id=project_id, file_role='ref')
+        else:
+            next_url = url_for('web_match_columns', project_id=project_id)
     
     formated_infered_mvs = dict()
     formated_infered_mvs['columns'] = {col:[mv['val'] for mv in mvs] \
