@@ -24,6 +24,8 @@ DEV GUIDELINES:
 TODO:
     - Store user params
     - Deal with log for merge 
+    
+    - Create Data Class ?
 """
 
 import gc
@@ -65,8 +67,6 @@ MODULES = {
                 }
         }
 
-
-        
         
 
 def gen_proj_id():
@@ -77,10 +77,6 @@ def gen_proj_id():
     project_id = h.hexdigest()
     return project_id
 
-def allowed_file(filename):
-    '''Check if file name is correct'''
-    # Check if extension is .csv
-    return filename[-4:] == '.csv'
     
 def get_arb(dir_path):
     '''Return arborescence as dict'''
@@ -94,10 +90,6 @@ def get_arb(dir_path):
 
 
 
-def init_log_buffer():
-    return []
-
-
 NOT_IMPLEMENTED_MESSAGE = 'NOT IMPLEMENTED in abstract class'
 
 class Project():
@@ -109,7 +101,7 @@ class Project():
         transformations. Before and after transformation, data is stored in 
         memory as Pandas DataFrame. Transformations are only written to disk if
         write_data is called. A log that describes the changes made to the 
-        data in memory is stored in log_buffer. When writing data, you should
+        data in memory is stored in log_buffer. Agter writing data, you should
         also write the log_buffer (write_log_buffer) to log the changes that 
         were performed.
     
@@ -128,53 +120,49 @@ class Project():
     def path_to(self, file_role='', module_name='', file_name=''):
         raise Exception(NOT_IMPLEMENTED_MESSAGE)
 
-    def create_metadata(self):
+    def create_metadata(self, description=''):
         raise Exception(NOT_IMPLEMENTED_MESSAGE)    
         
 #==============================================================================
 # Actual class
 #==============================================================================
 
-    def __init__(self, project_id=None, create_new=False):
-        if (project_id is not None) and create_new:
-            raise Exception('Set project_id to None or create_new to False')
+    def __init__(self, project_id=None, create_new=False, description=''):
         if (project_id is None) and (not create_new):
             raise Exception('Set create_new to True or specify project_id')
         
         if create_new: 
-            self.new_project()
+            # Generate project id if none is passed
+            if project_id is None:
+                self.project_id = gen_proj_id()
+            else:
+                self.project_id = project_id
+            
+            path_to_proj = self.path_to()
+            
+            if os.path.isdir(path_to_proj):
+                raise Exception('Project already exists. Choose a new path or \
+                                delete the existing: {}'.format(path_to_proj))
+            else:
+                os.makedirs(path_to_proj)
+                
+            # Create metadata
+            self.metadata = self.create_metadata(description=description)
+            self.write_metadata()
         else:
             self.project_id = project_id
             self.metadata = self.read_metadata()
             
-        # No data in memory initially
+        # Initiate with no data in memory
         self.mem_data = None
         self.mem_data_info = {} # Information on data in memory
-        self.log_buffer = init_log_buffer() # List of logs not yet written to metadata.json    
+        self.log_buffer = [] # List of logs not yet written to metadata.json    
     
-    def new_project(self, project_id=None):
-        '''
-        Create new project. Will use a specified project_id or generate it 
-        otherwise
-        '''
-        # Create directory
-        if project_id is None:
-            self.project_id = gen_proj_id()
-        else:
-            self.project_id = project_id
-        
-        path_to_proj = self.path_to()
-        
-        if os.path.isdir(path_to_proj):
-            raise Exception('Project already exists. \
-                    Choose a new path or delete the existing: {}'.format(path_to_proj))
-        else:
-            os.makedirs(path_to_proj)
-        # Create metadata
-        self.metadata = self.create_metadata()
-        self.write_metadata()
-    
+
     def init_log(self, module_name, module_type):
+        '''
+        Initiate a log (before a module call). Use end_log to complete log message
+        '''
         assert module_type in ['transform', 'infer', 'link']
         log = { # Data being modified
                'file_name': self.mem_data_info.get('file_name', None), 
@@ -188,6 +176,9 @@ class Project():
         return log
         
     def end_log(self, log, error=False):
+        '''
+        Close a log mesage started with init_log (right after module call)
+        '''
         log['end_timestamp'] = time.time()
         log['error'] = error
         return log
@@ -196,6 +187,7 @@ class Project():
         return time.time() - float(self.metadata['timestamp'])
     
     # TODO: add shared to metadata
+    # TODO: change this in generic using get_last...
     def time_since_last_action(self):
         last_time = float(self.metadata['timestamp'])
         if self.metadata['log']:
@@ -240,7 +232,8 @@ class Project():
             
 
 
-    def get_last_written(self, file_role=None, module_name=None, file_name=None, before_module=None):
+    def get_last_written(self, file_role=None, module_name=None, file_name=None, 
+                         before_module=None):
         '''
         Return info on data that was last successfully written (from log)
         
@@ -258,7 +251,8 @@ class Project():
         MODULE_ORDER = ['INIT', 'replace_mvs', 'dedupe_linker']
         
         for module_from_loop in MODULE_ORDER:
-            assert (module_from_loop in MODULES['transform']) or (module_from_loop in MODULES['link'])
+            assert (module_from_loop in MODULES['transform']) \
+                or (module_from_loop in MODULES['link'])
             
         
         previous_modules = {MODULE_ORDER[i]: MODULE_ORDER[:i+1] for i in range(len(MODULE_ORDER))}
@@ -272,19 +266,16 @@ class Project():
                       and ((file_name is None) or (log['file_name'] == file_name)) \
                       and ((before_module is None) or (log['module_name'] in previous_modules[before_module])):                
                 break
-            #            else:
-            #                print(log)
-            #                import pdb; pdb.set_trace()
         else:
-            import pdb
-            pdb.set_trace()
             raise Exception('No written data could be found in logs')
+        
         file_role = log['file_role']
         module_name = log['module_name']
         file_name = log['file_name']        
         return (file_role, module_name, file_name)
 
     def check_mem_data(self):
+        '''Check that there is data loaded in memory'''
         if self.mem_data is None:
             raise Exception('No data in memory: use `load_data` (reload is \
                         mandatory after dedupe)')        
@@ -296,10 +287,13 @@ class Project():
     
     def upload_init_data(self, file, file_role, file_name):
         """
-        Upload source or reference to the project. Will write. Can only add table 
-        as INIT (not in modules) by design.
+        Upload and write source or reference to the project. Tables will
+        be added to the "INIT" module.
         """
         CHARS_TO_REPLACE = [' ', ',', '.', '(', ')', '\'', '\"']
+        ENCODINGS = ['utf-8', 'windows-1252']
+        SEPARATORS = [',', ';', '\t']
+        
         
         self.check_file_role(file_role)
         
@@ -311,13 +305,9 @@ class Project():
                               'module_name': 'INIT'}
         log = self.init_log('INIT', 'transform')
         
-        # TODO: add separator detection
-        print(file_role)
         could_read = False
-        for encoding in ['utf-8', 'windows-1252']:
-            if could_read:
-                break
-            for sep in [',', ';']:
+        for encoding in ENCODINGS:
+            for sep in SEPARATORS:
                 try:
                     self.mem_data = pd.read_csv(file, sep=sep, encoding=encoding, dtype='unicode')
                     for char in CHARS_TO_REPLACE:
@@ -327,8 +317,12 @@ class Project():
                 except Exception as e:
                     print(e)
                     file.seek(0)
+            if could_read:
+                break        
+            
         if not could_read:
-            raise Exception('Separator or Encoding not found. Try uploading standard csv in utf-8')
+            raise Exception('Separator and/or Encoding not detected. Try uploading \
+                            a csv with "," as separator with utf-8 encoding')
 
         # Complete log
         log = self.end_log(log, error=False)
@@ -336,22 +330,27 @@ class Project():
         # Update log buffer
         self.log_buffer.append(log)
         
+        # write data and log
         self.write_data()
         self.write_log_buffer(written=True)
         self.clear_memory()
     
+
     def upload_config_data(self, config_dict, file_role, module_name, file_name):
         '''Will write config file'''
+        VALID_FILE_NAMES = ['config.json', 'infered_config.json', \
+                             'training.json', 'column_matches.json']
+        
         if config_dict is None:
             return
         
         if (module_name not in MODULES['link']) and (module_name not in MODULES['transform']) :
             raise Exception('Config files can only be uploaded to module \
-                            directories of type link or transform') # TODO: Is this good? Yes/No?
+                            directories of type link or transform') 
             
-        if file_name not in ['config.json', 'infered_config.json', \
-                             'training.json', 'column_matches.json']:
-            raise Exception('For now you can only upload files named training.json or column_matches.json')
+        if file_name not in VALID_FILE_NAMES:
+            raise Exception('For now you can only upload files named \
+                            training.json or column_matches.json')
 
         # Create directories
         dir_path = self.path_to(file_role, module_name)
@@ -364,25 +363,18 @@ class Project():
             json.dump(config_dict, w)
 
     def read_config_data(self, file_role, module_name, file_name):
-        '''Reads json file'''
-        file_path = self.path_to(file_role=file_role, module_name=module_name, file_name=file_name)
+        '''
+        Reads json file and returns dictionary (empty dict if file is not found)
+        '''
+        file_path = self.path_to(file_role=file_role, module_name=module_name, 
+                                 file_name=file_name)
         if os.path.isfile(file_path):
             config = json.loads(open(file_path).read())
         else: 
             config = {}
         return config    
     
-    def remove_data(self, file_role, module_name='', file_name=''):
-        '''Removes the corresponding data file'''
-        self.check_file_role(file_role)
-        file_path = self.path_to(file_role, module_name, file_name)
-        if os.path.isfile(file_path):
-            os.remove(file_path)
-        else:
-            raise Exception('{0} (in: {1}, as: {1}) could not be found in project'.format(file_name, module_name, file_role))
- 
 
-    
     def read_metadata(self):
         '''Wrapper around read_config_data'''
         metadata = self.read_config_data('', '', file_name='metadata.json')
@@ -393,15 +385,30 @@ class Project():
         path_to_metadata = self.path_to(file_name='metadata.json')
         json.dump(self.metadata, open(path_to_metadata, 'w'))
 
-    def remove(self, file_name):
-        '''Remove all files and clear metadata with given name from project'''
+
+    def remove(self, file_role, module_name='', file_name=''):
+        '''Removes a file from the project'''
+        self.check_file_role(file_role)
+        file_path = self.path_to(file_role, module_name, file_name)
+        
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+        else:
+            raise Exception('{0} (in: {1}, as: {1}) could not be found in \
+                            project'.format(file_name, module_name, file_role))
+
+    def remove_all(self, file_name):
+        '''
+        Remove all occurences of files with a given file_name from the project
+        and clears all mentions of this file_name in metadata
+        '''
         # TODO: deal with .csv dependency
         all_files = self.list_files(extensions=['.csv'])
         
         for file_role, name_dict in all_files.items():
             for _file_name, module_name in name_dict.items():
                 if file_name == _file_name:
-                    self.remove_data(file_role, module_name, file_name)
+                    self.remove(file_role, module_name, file_name)
         
         self.metadata['log'] = filter(lambda x: (x['file_name']!=file_name), 
                                                  self.metadata['log'])     
@@ -409,7 +416,7 @@ class Project():
         
         
     def load_data(self, file_role, module_name, file_name):
-        '''Load data as pandas DataFrame'''
+        '''Load data as pandas DataFrame to memory'''
         file_path = self.path_to(file_role, module_name, file_name)
         self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype='unicode')
         self.mem_data_info = {'file_role': file_role, 
@@ -422,10 +429,16 @@ class Project():
         file_path = self.path_to(file_role, module_name, file_name)
         
         if row_idxs is not None:
-            assert row_idxs[0] == 0
+            if row_idxs[0] != 0:
+                raise Exception('Row selection for samples (row_idxs) should\
+                                include header (row_idxs[0]==0)')
+                
+            # Load the right amount of rows
             max_rows = max(row_idxs)    
-            tab = pd.read_csv(file_path, encoding='utf-8', dtype='unicode', usecols=columns, nrows=max_rows)
+            tab = pd.read_csv(file_path, encoding='utf-8', dtype='unicode', 
+                              usecols=columns, nrows=max_rows)
             
+            # row_idxs counts lines in csv including header --> de-increment
             tab = tab.iloc[[x - 1 for x in row_idxs], :]
         else:
             tab = pd.read_csv(file_path, encoding='utf-8', dtype='unicode', usecols=columns)
@@ -445,7 +458,8 @@ class Project():
         
         '''
         if not self.log_buffer:
-            raise Exception('No log buffer or write; no operations since last write')
+            raise Exception('No log buffer: no operations were executed since \
+                            write_log_buffer was last called')
         
         # Indicate if any data was written
         if written:
@@ -484,7 +498,6 @@ class Project():
         self.mem_data = None
         self.mem_data_info = None
         gc.collect()
-
 
     def transform(self, module_name, params):
         '''Run module on pandas DataFrame in memory and update memory state'''
