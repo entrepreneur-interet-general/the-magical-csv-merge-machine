@@ -15,17 +15,20 @@
 			$("#submitBtn").on("click", function() {
 				// http://blog.w3villa.com/websites/uploading-filesimage-with-ajax-jquery-without-submitting-a-form/
 				// Select source
-				switch ($("input[type=radio][name='select_source']:checked").val()) {
-					case "previous":
-						file_name = $("input[type=radio][name='previous_source']:checked").val()
-						alert("Using previous source: ".concat(file_name))
-						call_select_file("source", file_name, false)
-						break;
-					case "upload":
-						var form = new FormData($("#source_to_upload")[0]);
-						upload(form, "source");
-						break;
-				};
+
+				{% if "{{ project_type }}" == "user" %}
+					switch ($("input[type=radio][name='select_source']:checked").val()) {
+						case "previous":
+							file_name = $("input[type=radio][name='previous_source']:checked").val()
+							alert("Using previous source: ".concat(file_name))
+							call_select_file("source", file_name, false)
+							break;
+						case "upload":
+							var form = new FormData($("#source_to_upload")[0]);
+							upload(form, "source");
+							break;
+					};
+				{% endif %}
 
 
 				// Select referential
@@ -87,7 +90,7 @@
 
         	// Hide source upload if we are in admin mode (i.e. uploading referentials)
         	if ("{{ project_type }}" == "admin") {
-        		$("#choose_source").hide();
+        		$(".user_only").hide();
         	};			
 		});
 
@@ -149,7 +152,7 @@
 
 		<div style="width: 100%;">
 			<!-- SELECT SOURCE -->
-			<div id="choose_source" style="float:left; width: 50%">
+			<div id="choose_source" class="user_only" style="float:left; width: 50%">
 				<h2 id='title'>Source</h2>
 
 		 	  	{% if previous_sources %}
@@ -179,14 +182,14 @@
 			 	<h2 id='title'>Referential</h2>
 
 		 	  	{% if internal_references %}
-				 	<input type="radio" name="select_ref" value="internal" /> Use internal referential </br>
-				 	<div id="internal_ref" style="display: none; color: gray">
+				 	<input type="radio" name="select_ref" class="user_only" value="internal" /> Use internal referential </br>
+				 	<div id="internal_ref" class="user_only" style="display: none; color: gray">
 					    {% for item in internal_references %}
 					    	<input type="radio" name="internal_ref" value="{{ item }}" /> {{ item }} </br>
 					    {% endfor %}
 			 		</div>
 				{% else %}
-					<input type="radio" name="select_ref" value="internal" disabled="true"/> Use internal referential (No internal referential available) </br>
+					<input type="radio" name="select_ref" class="user_only" value="internal" disabled="true"/> Use internal referential (No internal referential available) </br>
 				{% endif %}
 
 		 	  	{% if previous_references %}

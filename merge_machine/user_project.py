@@ -65,24 +65,6 @@ class UserProject(Project):
         metadata['project_id'] = self.project_id
         return metadata   
 
-    def select_file(self, file_role, file_name, internal=False, project_id=None):
-        # TODO: Validate that the file exists
-        self.check_file_role(file_role)
-        self.metadata['current'][file_role] = {'internal': internal, 'file_name': file_name}  
-        
-        if file_name is None:
-            assert project_id is not None
-            ref_proj = Referential(project_id)
-            (_, _, file_name) = ref_proj.get_last_written(file_role)   
-            self.metadata['current'][file_role]['file_name'] = file_name
-            
-        if project_id is not None:
-            self.metadata['current'][file_role]['project_id'] = project_id
-        else:
-            assert internal
-            self.metadata['current'][file_role]['project_id'] = self.project_id
-        self.write_metadata()
-
 
     def add_col_matches(self, column_matches):
         '''column_matches is a json file as list of dict of list'''
@@ -91,7 +73,6 @@ class UserProject(Project):
 
     def read_col_matches(self):
         return self.read_config_data('link', 'dedupe_linker', 'column_matches.json')
-
 
     def linker(self, module_name, paths, params):
         '''
@@ -163,6 +144,26 @@ class UserProject(Project):
         
         return paths
 
+    def select_file(self, file_role, file_name, internal=False, project_id=None):
+        # TODO: was initially in user_project
+        # TODO: Validate that the file exists
+        self.check_file_role(file_role)
+        self.metadata['current'][file_role] = {'internal': internal, 'file_name': file_name}  
+        
+        if internal:
+            assert project_id is not None
+            ref_proj = Referential(project_id)
+            (_, _, file_name) = ref_proj.get_last_written(file_role, file_name=file_name)   
+            self.metadata['current'][file_role]['file_name'] = file_name
+            
+        if project_id is not None:
+            self.metadata['current'][file_role]['project_id'] = project_id
+        else:
+            assert internal
+            self.metadata['current'][file_role]['project_id'] = self.project_id
+        self.write_metadata()
+
+
 if __name__ == '__main__':
     import json
     
@@ -175,12 +176,12 @@ if __name__ == '__main__':
     for file_name in file_names:
         file_path = os.path.join('local_test_data', file_name)
         with open(file_path) as f:
-            proj.add_init_data(f, 'source', file_name)
+            proj.upload_init_data(f, 'source', file_name)
 
     # Upload ref to project
     file_path = 'local_test_data/ref.csv'
     with open(file_path) as f:
-        proj.add_init_data(f, 'ref', file_name)
+        proj.upload_init_data(f, 'ref', file_name)
 
     # Load source data to memory
     proj.load_data(file_role='source', module_name='INIT' , file_name='source.csv')

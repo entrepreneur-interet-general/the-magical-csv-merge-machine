@@ -51,3 +51,21 @@ class Referential(Project):
     def add_description(self, description):
         '''Add description to metadata'''
         self.metadata['description'] = description
+
+
+
+    def select_file(self, file_role, file_name, internal=False, project_id=None):
+        # TODO: was initially in user_project
+        # TODO: Validate that the file exists
+        self.check_file_role(file_role)
+        self.metadata['current'][file_role] = {'internal': internal, 'file_name': file_name}  
+        
+        if internal:
+            raise Exception('Trying to use internal referential from within\
+                            an internal referential')
+        if project_id is not None:
+            self.metadata['current'][file_role]['project_id'] = project_id
+        else:
+            assert internal
+            self.metadata['current'][file_role]['project_id'] = self.project_id
+        self.write_metadata()

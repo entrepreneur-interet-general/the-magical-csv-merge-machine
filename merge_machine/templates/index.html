@@ -41,9 +41,6 @@
 							go_to_next(project_id)
 			            }
 		        });
-
-
-			    
 			}); 
 		});
 
@@ -63,7 +60,7 @@
         </script>
     </head>
     <body>
-        <h1 id='title'>Welcome to the Magical CSV Merge Machine Experience (MCSVMME)</h1>
+        <h1 id='title'>Welcome to the Magical CSV Merge Machine Experience{% if project_type=='admin' %} (Admin Mode){% endif %}</h1>
 
 		<form id="existing_project">
 			 <input type="text" name="project_id_old" placeholder='Project ID (ex: af8b2be7b75931...)' list='project_ids'/>
@@ -79,6 +76,7 @@
 			{% if project_type=='admin' %}
 				<input type="text" name="project_id_new" placeholder='Project ID (ex: sirene)'/>
 			{% endif %}
+
 			<input type="text" name="new_project_description" placeholder='[Optional] Describe your project'/>
 		    <input type="submit" name="submitNew" value="Create New Project" />
 		</form>

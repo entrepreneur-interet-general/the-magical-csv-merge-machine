@@ -122,7 +122,10 @@ class Project():
 
     def create_metadata(self, description=''):
         raise Exception(NOT_IMPLEMENTED_MESSAGE)    
-        
+
+    def select_file(self, file_role, file_name, internal=False, project_id=None):
+        raise Exception(NOT_IMPLEMENTED_MESSAGE)
+    
 #==============================================================================
 # Actual class
 #==============================================================================
@@ -276,6 +279,13 @@ class Project():
         file_name = log['file_name']        
         return (file_role, module_name, file_name)
 
+    def path_to_last_written(self, file_role=None, module_name=None, 
+                             file_name=None, before_module=None):
+        (file_role, module_name, file_name) = self.get_last_written(file_role, 
+                                        module_name, file_name, before_module)
+        path = self.path_to(file_role, module_name, file_name)
+        return path
+
     def check_mem_data(self):
         '''Check that there is data loaded in memory'''
         if self.mem_data is None:
@@ -382,7 +392,12 @@ class Project():
     def read_metadata(self):
         '''Wrapper around read_config_data'''
         metadata = self.read_config_data('', '', file_name='metadata.json')
-        assert metadata['project_id'] == self.project_id
+        try:
+            assert metadata['project_id'] == self.project_id
+        except:
+            import pdb
+            pdb.set_trace()
+            assert False
         return metadata
     
     def write_metadata(self):
@@ -427,6 +442,11 @@ class Project():
                                'file_name': file_name,
                                'module_name': module_name}
         
+    def get_header(self, file_role, module_name, file_name):
+        file_path = self.path_to(file_role, module_name, file_name)
+        header = list(pd.read_csv(file_path, encoding='utf-8', nrows=0).columns)
+        return header
+    
     def get_sample(self, file_role, module_name, file_name, row_idxs=range(5), 
                    columns=None, drop_duplicates=True):
         '''Returns a dict with the selected rows (including header)'''
@@ -502,6 +522,7 @@ class Project():
         self.mem_data = None
         self.mem_data_info = None
         gc.collect()
+
 
     def transform(self, module_name, params):
         '''Run module on pandas DataFrame in memory and update memory state'''

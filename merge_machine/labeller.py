@@ -12,6 +12,8 @@ Class used to label data with a deduper object
 import json
 import os
 
+import pandas as pd
+
 def unique(seq) :
     seen = set()
     seen_add = seen.add
@@ -19,11 +21,23 @@ def unique(seq) :
 
 class DummyLabeller():
     """Just used to count training labels"""
-    def __init__(self, training_path=None, use_previous=False):
+    def __init__(self, paths, use_previous=False):
+        training_path=paths['train']
         if (training_path is not None) and use_previous \
                         and os.path.isfile(training_path):
+                            
             with open(training_path) as f:
                 self.training = json.load(f)
+                
+            # Check that training examples match header
+            source_cols = set(pd.read_csv(paths['source'], encoding='utf-8', nrows=0).columns)
+            ref_cols = set(pd.read_csv(paths['source'], encoding='utf-8', nrows=0).columns)
+            
+            for pair in self.training['distinct'] + self.training['match']:
+                if source_cols != set(pair['__value__'][0].keys())\
+                        or ref_cols != set(pair['__value__'][1].keys()):
+                    self.training = {'distinct': [], 'match': []}
+                    break        
         else: 
             self.training = {'distinct': [], 'match': []}
 

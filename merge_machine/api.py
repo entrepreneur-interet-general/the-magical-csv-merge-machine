@@ -69,7 +69,7 @@ DEV GUIDELINES:
     - All securing will be done in the API part
     - Always return {"error": ..., "project_id": ..., "response": ...}
 
-
+    - All methods to load specific configs should raise an error if the config is not coherent
     - For each module, store user input
 
 NOTES:
@@ -292,9 +292,9 @@ def web_select_files(project_type, project_id=None):
                            previous_sources=all_csvs.get('source', []),
                            previous_references=all_csvs.get('ref', []),
                            internal_references=all_internal_refs,
-                           upload_source_api_url=url_for('upload', project_type='user', project_id=project_id, file_role='source'),
+                           upload_source_api_url=url_for('upload', project_type=project_type, project_id=project_id, file_role='source'),
                            upload_ref_api_url=url_for('upload', project_type=project_type, project_id=project_id, file_role='ref'),
-                           select_file_api_url=url_for('select_file', project_type='user', project_id=project_id),
+                           select_file_api_url=url_for('select_file', project_type=project_type, project_id=project_id),
                            next_url=next_url,
                            MAX_FILE_SIZE=MAX_FILE_SIZE)
 
@@ -380,7 +380,6 @@ def web_match_columns(project_id):
     
     # Load source sample
     source_data = proj.metadata['current']['source']
-
     if not source_data['internal']:
         # NB: Displaying initial file
         source_sample = proj.get_sample('source', 'INIT', source_data['file_name'],
@@ -398,9 +397,27 @@ def web_match_columns(project_id):
         ref_sample = proj_ref.get_sample('ref', 'INIT', ref_data['file_name'], 
                                      row_idxs=ROWS_TO_DISPLAY)
     
+    # Check valid onfirm valid columns for 
+    def config_is_coherent(config, source_sample, ref_sample):
+        do_break = False
+        for pair in config:
+            for col in pair['source']:
+                if col not in source_sample[0]:
+                    do_break = True
+                    break
+            for col in pair['ref']:
+                if col not in ref_sample[0]:
+                    do_break = True
+                    break     
+            if do_break:
+                config = []
+                break
+        
+        return config != []
+
     # Load previous config
     config = proj.read_col_matches()
-    
+    config = config * config_is_coherent(config, source_sample, ref_sample)                    
     
     return render_template('match_columns.html',
                            config=config,
@@ -514,7 +531,7 @@ def web_dedupe(project_id):
     proj = init_project(project_type='user', project_id=project_id)
     paths = proj.gen_paths_dedupe()  
     
-    dummy_labeller = DummyLabeller(training_path=paths['train'], use_previous=True)
+    dummy_labeller = DummyLabeller(paths, use_previous=True)
     
     return render_template('dedupe_training.html', 
                            **dummy_labeller.to_emit(''))
