@@ -16,7 +16,7 @@
 				// http://blog.w3villa.com/websites/uploading-filesimage-with-ajax-jquery-without-submitting-a-form/
 				// Select source
 
-				{% if "{{ project_type }}" == "user" %}
+				{% if project_type == "user" %}
 					switch ($("input[type=radio][name='select_source']:checked").val()) {
 						case "previous":
 							file_name = $("input[type=radio][name='previous_source']:checked").val()

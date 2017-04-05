@@ -328,7 +328,7 @@ def web_missing_values(project_type, project_id, file_role):
     row_idxs = []
     for col, mvs in mvs_config['mvs_dict']['columns'].items():
         for mv in mvs:
-            sel = proj.mem_data[col].str.contains(mv['val']).diff().fillna(True)
+            sel = (proj.mem_data[col] == mv['val']).diff().fillna(True)
             sel.index = range(len(sel))
             row_idxs.extend(list(sel[sel].index)[:NUM_PER_MISSING_VAL_TO_DISPLAY])
             
@@ -491,22 +491,27 @@ def load_labeller():
         flask._app_ctx_stack.paths = paths
         
         # Put to dedupe input format
+        print('loading ref')
         ref = pd.read_csv(paths['ref'], encoding='utf-8', dtype='unicode')
         data_ref = format_for_dedupe(ref, my_variable_definition, 'ref') 
         del ref # To save memory
         gc.collect()
+        print('loaded_ref')
         
         # Put to dedupe input format
+        print('loading source')
         source = pd.read_csv(paths['source'], encoding='utf-8', dtype='unicode')
         data_source = format_for_dedupe(source, my_variable_definition, 'source')
         del source
         gc.collect()
+        print('loaded_source')
         
         #==========================================================================
         # Should really start here
         #==========================================================================
+        print('yo')
         deduper = load_deduper(data_ref, data_source, my_variable_definition)
-    
+        print('lo')
         flask._app_ctx_stack.labeller = Labeller(deduper, 
                                                  training_path=paths['train'], 
                                                  use_previous=True)

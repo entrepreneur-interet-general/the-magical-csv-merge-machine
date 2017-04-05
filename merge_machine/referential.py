@@ -23,7 +23,6 @@ class Referential(Project):
     This class provides tools to manage internal referentials.
     """
     def check_file_role(self, file_role):
-        print('File_role: ', file_role)
         if (file_role is not None) and (file_role != 'ref'):
             raise Exception('"file_role" should be "ref" for internal \
                             referentials (input: {0})'.format(file_role))

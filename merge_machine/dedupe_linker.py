@@ -36,7 +36,6 @@ NO_TRAINING_MESSAGE = 'No training file could be found. Use the interface (XXX)'
                       ', specify a matching ID to generate train (YYY), or ' \
                       'upload a training file using (ZZZ)'
 
-
 def preProcess(val):
     """
     Do a little bit of data cleaning. Things like casing, extra spaces, 
@@ -49,7 +48,6 @@ def preProcess(val):
         val = None
     val = unidecode.unidecode(val)
     return val
-
 
 def exact_matches(data_1, data_2, match_fields):
     '''
@@ -134,10 +132,13 @@ def format_for_dedupe(tab, my_variable_definition, file_role):
         tab.columns = [col_map.get(x, x) for x in tab.columns]
     
     # Pre-process
+    print('before preprocessing')
     cols_for_match = get_cols_for_match(my_variable_definition)
     for col in cols_for_match:
+        print('At column', col)
         sel = tab[col].notnull()
         tab.loc[sel, col] = tab.loc[sel, col].apply(preProcess)
+    print('after preprocessing')
     
     # Replace np.NaN by None
     tab = tab.where(tab.notnull(), None)

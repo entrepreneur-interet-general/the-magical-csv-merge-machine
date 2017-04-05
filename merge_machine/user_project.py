@@ -72,7 +72,10 @@ class UserProject(Project):
         self.upload_config_data(column_matches, 'link', 'dedupe_linker', 'column_matches.json')
 
     def read_col_matches(self):
-        return self.read_config_data('link', 'dedupe_linker', 'column_matches.json')
+        config = self.read_config_data('link', 'dedupe_linker', 'column_matches.json')
+        if not config:
+            config = []
+        return config
 
     def linker(self, module_name, paths, params):
         '''
