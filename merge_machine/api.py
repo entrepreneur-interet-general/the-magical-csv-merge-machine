@@ -541,7 +541,7 @@ def web_dedupe(project_id):
     
     dummy_labeller = DummyLabeller(paths, use_previous=True)
     
-    next_url = url_for('web_dedupe', project_id='{{ project_id }}')
+    # next_url = url_for('web_dedupe', project_id='{{ project_id }}')
     
     return render_template('dedupe_training.html', 
                            **dummy_labeller.to_emit(''))
@@ -964,4 +964,4 @@ def list_referentials():
 
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    socketio.run(app, debug=True, threaded=True)

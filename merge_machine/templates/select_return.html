@@ -29,8 +29,6 @@
 				{% for col in index %}
 			        $("#table .{{ col }}").on("click", function() {
 			        	label["{{ col }}"] = !label["{{ col }}"] 
-			        	alert(JSON.stringify(label))
-
 				        // Change color
 			        	if (label["{{ col }}"]){
 			        		$("#table .{{ col }}").css('background-color', color_selected)

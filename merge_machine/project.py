@@ -478,6 +478,9 @@ class Project():
         if drop_duplicates:
             tab.drop_duplicates(inplace=True)
         
+        # Replace missing values
+        tab.fillna('', inplace=True)
+        
         return tab.to_dict('records')
         
     
