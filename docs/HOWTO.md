@@ -29,7 +29,7 @@ What it won't do:
 
 A project contains the information for: **Matching a format of source with a format of referential**. Projects are identified by their project ID (save yours somewhere...).
 
-When to keep the same project:
+When to load an existing project:
 - You are uploading a new source/referential that has the same fields and the same input type as what you already uploaded
 - You selected the wrong source/referential last time, you don't care about keeping the changes you made
 
@@ -55,11 +55,42 @@ Some people write "Missing Value" or "N/A" or "XXX" in their data to represent m
 ### What should I do?
 We suggest possible representations of missing values for each column and for the entire file (ALL). You should check that these values are indeed representing missing values and you can add your own if you know better (if in your data, missing values are represented by "nan" and we didn't catch that, just add "nan").
 
-options:
+Choices:
 - columns: representations of missing values only for a given column
 - all: representations of missing values valid for the entire file
 
 ## STEP 4: SELECT COLUMN PAIRS
 
+Select column matches between source and referential (addr_source <-> ADDRESS_MATCH; nomen <-> FULL_NAME, etc...)
 
+Guidelines:
+- Include columns which would suffice for a non expert human discern if a (source entity, referential entity) pair is a match
+- MULTIPLE COLUMNS NOT YET IMPLEMENTED
 
+## STEP 5: DEDUPE LABELLING
+
+This step can be a bit long to load. Please be patient...
+
+### Why?
+[Dedupe](https://github.com/datamade/dedupe) uses ground truth examples to learn what is the best way to compare values. For example, if most of your examples are:
+
+- 50 cent <-> 50 cents : a good metric might be the number of letter insertions between source and referential
+- FCC <->  Federal Communications Commission : a good metric will compare acronyms on the right with values on the left
+
+### What should I do?
+We suggest pairs of rows in (source, referential). You should tell us whether or not these values represent the same entity.; You can choose "uncertain" when you are not sure and can use "previous" (once) if you made a mistake. Once you are done, hit next...
+
+### What is going on?
+Each time you label a pair, dedupe updates its rules.. It then proposes a new match that will best reduce uncertainty on what are good rules to use if you answer.
+
+Guidelines:
+- The more you label, the better our tool will work. Take the time, it's worth it!
+- Try to be as accurate as you can. Use "uncertain" if you have a doubt. 
+- Try not to use your field knowledge to label pairs. Remember: all information should somehow be included in the text...
+- You might be asked to label obvious matches or non-matches. Don't mind that! Everything is going along the plan...
+
+## STEP 6: GET RESULTS
+
+Download the result 
+select columns to match
+user feedback 
