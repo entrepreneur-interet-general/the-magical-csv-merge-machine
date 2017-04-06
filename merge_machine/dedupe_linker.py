@@ -79,8 +79,6 @@ def exact_matches(data_1, data_2, match_fields):
     return nonexact_1, nonexact_2, exact_pairs
 
 
-
-
 def merge_results(ref, source, matched_records, selected_columns_from_ref):
     '''
     Takes the output of of matched records and merges the ref and source files.
@@ -92,12 +90,11 @@ def merge_results(ref, source, matched_records, selected_columns_from_ref):
         - matched_records: output of gazetteer.match
         - selected_columns_from_ref: list of columns in ref that we want to 
                                         include in the file we return
-
     '''
-    if selected_columns_from_ref is None:
-        selected_columns_from_ref = list(ref.columns)
-    
-    assert selected_columns_from_ref # TODO: This should be done in checking input parameters
+    selected_columns_from_ref = list(ref.columns)
+    #    if selected_columns_from_ref is None:
+    #        selected_columns_from_ref = list(ref.columns)
+    #    assert selected_columns_from_ref # TODO: This should be done in checking input parameters
     
     # Turn matched_records into pandas DataFrame
     source_idx = [x[0][0][0] for x in matched_records]
@@ -268,7 +265,6 @@ def dedupe_linker(paths, params):
     
     # Generate out file
     source = merge_results(ref, source, matched_records, selected_columns_from_ref)
-        
     return source, threshold
 
 

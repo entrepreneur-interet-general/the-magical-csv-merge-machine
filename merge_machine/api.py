@@ -47,6 +47,9 @@ TODO:
     
     - TODO: look why I can get 90% or 30% match on same file
     - Study impact of training set size on match rate
+    - POSTGRES all this ish
+    
+    - Choose btw add/select/upload and read/load/get
 
 DEV GUIDELINES:
     - By default the API will use the file with the same name in the last 
@@ -273,7 +276,7 @@ def web_select_files(project_type, project_id=None):
     MAX_FILE_SIZE = 1048576
     
     proj = init_project(project_type=project_type, project_id=project_id)
-    all_csvs = proj.list_files(extensions=['.csv'])
+    all_csvs = proj._list_files(extensions=['.csv'])
     
     admin = Admin()
     all_internal_refs = admin.list_referentials() # TODO: take care of this
@@ -451,8 +454,8 @@ def web_get_answer(user_input):
                 print('Wrote train')
     
                 # TODO: Do dedupe
-                emit('redirect', {'url': url_for('web_download', 
-                                    project_id=flask._app_ctx_stack.project_id)})
+                next_url = url_for('web_select_return', project_id=flask._app_ctx_stack.project_id, file_role='ref')
+                emit('redirect', {'url': next_url})
             else:
                 flask._app_ctx_stack.labeller.new_label()
         else:
@@ -538,10 +541,50 @@ def web_dedupe(project_id):
     
     dummy_labeller = DummyLabeller(paths, use_previous=True)
     
+    next_url = url_for('web_dedupe', project_id='{{ project_id }}')
+    
     return render_template('dedupe_training.html', 
                            **dummy_labeller.to_emit(''))
     #return render_template('dedupe_training.html', **DUMMY_EMIT)
 
+@app.route('/web/user/select_return/<project_id>/<file_role>', methods=['GET'])
+@cross_origin()
+def web_select_return(project_id, file_role):
+    '''Configurate file to return'''
+    # TODO: default to matching columns
+    
+    ROWS_TO_DISPLAY = range(3)
+    
+    proj = init_project('user', project_id)
+    
+    if file_role != 'ref':
+        raise Exception('Only "ref" is managed for column selection for now')
+
+    # Load sample
+    data = proj.metadata['current'][file_role]
+    if not data['internal']:
+        (_, module_name, _) = proj.get_last_written(file_role, None, 
+                                data['file_name'], before_module='dedupe_linker')
+        sample = proj.get_sample(file_role, module_name, data['file_name'], 
+                                     row_idxs=ROWS_TO_DISPLAY)
+    else:
+        proj_ref = Referential(proj.metadata['current'][file_role]['project_id'])
+        (_, module_name, _) = proj_ref.get_last_written(file_role, None, 
+                                data['file_name'], before_module='dedupe_linker')
+        sample = proj_ref.get_sample(file_role, module_name, data['file_name'], 
+                                     row_idxs=ROWS_TO_DISPLAY)   
+    
+    selected_columns_to_return = proj.read_cols_to_return(file_role) 
+    
+    next_url = url_for('web_download', project_id=project_id)
+    return render_template('select_return.html', 
+                           index=list(sample[0].keys()),
+                           sample=sample,
+                           selected_columns_to_return=selected_columns_to_return,
+                           select_return_api_url=url_for('add_columns_to_return', 
+                                        project_id=project_id, file_role=file_role),
+                           next_url=next_url)
+    
 
 @app.route('/web/user/download/<project_id>/', methods=['GET'])
 @cross_origin()
@@ -564,6 +607,7 @@ def web_download(project_id):
         
         module_params = {
                         'variable_definition': my_variable_definition,
+                        'selected_columns_from_source': None,
                         'selected_columns_from_ref': None
                         }  
         
@@ -595,17 +639,21 @@ def web_download(project_id):
     col_matches = proj.read_col_matches() # TODO: API this
     suffixes = ('_x', '_y')
     cols_to_display_match = []
-    for match in col_matches:
-        for file_role in ['source', 'ref']:
-            for col in match[file_role]:
-                if col in cols_to_display_match:
-                    cols_to_display_match.remove(col)
-                    cols_to_display_match.append(col + suffixes[0])
-                    cols_to_display_match.append(col + suffixes[1])
-                else:
-                    cols_to_display_match.append(col)
+    
+    source_cols = list(set(col for match in col_matches for col in match['source']))
+    ref_cols = list(set([col for match in col_matches for col in match['ref']] \
+                                + proj.read_cols_to_return('ref')))
+        
+    for col in source_cols + ref_cols:
+        if col in cols_to_display_match:
+            cols_to_display_match.remove(col)
+            cols_to_display_match.append(col + suffixes[0])
+            cols_to_display_match.append(col + suffixes[1])
+        else:
+            cols_to_display_match.append(col)
 
-    # Choose the columns to display # TODO: Absolutely change this
+    # Choose the columns to display for single source and single ref 
+    # TODO: Absolutely change this
     cols_to_display_source = []
     for match in col_matches:
         for col in match['source']:
@@ -634,8 +682,8 @@ def web_download(project_id):
     
     source_sample = proj.get_sample('source', 'INIT', proj.metadata['current']['source']['file_name'],
                                 row_idxs=rows_to_display, columns=cols_to_display_source)
-    ref_sample = proj.get_sample('ref', 'INIT', proj.metadata['current']['ref']['file_name'],
-                                row_idxs=rows_to_display, columns=cols_to_display_ref)
+    #ref_sample = proj.get_sample('ref', 'INIT', proj.metadata['current']['ref']['file_name'],
+    #                            row_idxs=rows_to_display, columns=cols_to_display_ref)
 
     return render_template('last_page.html', 
                            project_id=project_id,
@@ -645,8 +693,7 @@ def web_download(project_id):
                            source_index=cols_to_display_source,
                            source_sample=source_sample,
                            ref_index=cols_to_display_ref,
-                           ref_sample=ref_sample,   
-                           
+                           # ref_sample=ref_sample,  
                            metrics=metrics,
                            download_api_url=url_for('download', 
                                     project_type='user', project_id=project_id))
@@ -700,39 +747,35 @@ def download(project_id):
     
     '''
     project_id = secure_filename(project_id)
-    try:
-        proj = init_project(project_type='user', project_id=project_id)
-        data_params, _ = parse_1file_request()
-        
-        if data_params is None:
-            data_params = {}
-            
-        file_role = data_params.get('file_role', None)
-        module_name = data_params.get('module_name', None)
-        file_name = data_params.get('file_name', None)
-        
-        if file_role is not None:
-            file_role = secure_filename(file_role)
-        if module_name is not None:
-            module_name = secure_filename(module_name)
-        if file_name is not None:
-            file_name = secure_filename(file_name)
-            
-        (file_role, module_name, file_name) = proj.get_last_written(file_role, module_name, file_name)
-            
-        if module_name == 'INIT':
-            return jsonify(error=True,
-                   message='No changes were made since upload. Download is not \
-                           permitted. Please do not use this service for storage')
-        
-        file_path = proj.path_to(file_role, module_name, file_name)
-        return send_file(file_path, as_attachment=True, attachment_filename='m3_merged.csv')
+
+    proj = init_project(project_type='user', project_id=project_id)
+    data_params, _ = parse_1file_request()
     
-    except Exception as e:
-        import pdb
-        pdb.set_trace()
+    if data_params is None:
+        data_params = {}
+        
+    file_role = data_params.get('file_role', None)
+    module_name = data_params.get('module_name', None)
+    file_name = data_params.get('file_name', None)
+    
+    if file_role is not None:
+        file_role = secure_filename(file_role)
+    if module_name is not None:
+        module_name = secure_filename(module_name)
+    if file_name is not None:
+        file_name = secure_filename(file_name)
+        
+    (file_role, module_name, file_name) = proj.get_last_written(file_role, module_name, file_name)
+        
+    if module_name == 'INIT':
         return jsonify(error=True,
-                       message=e)
+               message='No changes were made since upload. Download is not \
+                       permitted. Please do not use this service for storage')
+    
+    file_path = proj.path_to(file_role, module_name, file_name)
+    return send_file(file_path, as_attachment=True, attachment_filename='m3_merged.csv')
+    
+
 
 @app.route('/api/<project_type>/select_file/<project_id>/', methods=['POST'])
 def select_file(project_type, project_id):
@@ -741,6 +784,7 @@ def select_file(project_type, project_id):
     params = request.json
     proj.select_file(params['file_role'], params.get('file_name', None), \
                      params['internal'], params.get('project_id', project_id))
+    
 
     return jsonify(error=False)
  
@@ -788,6 +832,7 @@ def upload(project_type, project_id, file_role):
 @app.route('/api/<project_type>/<module_name>/upload_confid/<project_id>/', methods=['POST'])
 @cross_origin()
 def upload_config(project_type, module_name, project_id):
+    # TODO: do not expose ?
     proj = init_project(project_type=project_type, project_id=project_id)    
     paths = request.json['data']
     params = request.json['params']
@@ -803,6 +848,14 @@ def add_column_matches(project_id):
     proj.add_col_matches(column_matches)
     return jsonify(error=False)
     
+
+@app.route('/api/user/add_columns_to_return/<project_id>/<file_role>/', methods=['POST'])
+@cross_origin()
+def add_columns_to_return(project_id, file_role):
+    columns_to_return = request.json
+    proj = init_project(project_type='user', project_id=project_id)
+    proj.add_cols_to_return(file_role, columns_to_return)    
+    return jsonify(error=False)
 
 #==============================================================================
 # MODULES

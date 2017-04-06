@@ -76,6 +76,22 @@ class UserProject(Project):
         if not config:
             config = []
         return config
+    
+    def add_cols_to_return(self, file_role, columns):
+        '''
+        columns is a list of columns in the referential that we want to 
+        return during download
+        '''
+        config_file_name = 'columns_to_return_{0}.json'.format(file_role)
+        self.upload_config_data(columns, 'link', 'dedupe_linker', config_file_name)
+        
+    def read_cols_to_return(self, file_role):
+        config_file_name = 'columns_to_return_{0}.json'.format(file_role)
+        config = self.read_config_data('link', 'dedupe_linker', config_file_name)
+        if not config:
+            config = []
+        return config
+        
 
     def linker(self, module_name, paths, params):
         '''

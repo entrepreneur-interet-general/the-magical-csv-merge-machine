@@ -197,13 +197,14 @@ class Project():
             last_time = max(last_time, float(self.metadata['log'][-1]['end_timestamp']))
         return time.time() - last_time
 
+
     def get_arb(self):
         '''List directories and files in project'''
         path_to_proj = self.path_to()
         return get_arb(path_to_proj)
+    
 
-
-    def list_files(self, extensions=['.csv']):
+    def _list_files(self, extensions=['.csv']):
         '''
         Lists csv files (from data) in data directory and presents a list of modules in 
         which they are present. You can combine this with get_last_written
@@ -352,8 +353,10 @@ class Project():
 
     def upload_config_data(self, config_dict, file_role, module_name, file_name):
         '''Will write config file'''
-        VALID_FILE_NAMES = ['config.json', 'infered_config.json', \
-                             'training.json', 'column_matches.json']
+        VALID_FILE_NAMES = ['config.json', 'infered_config.json', 
+                             'training.json', 'column_matches.json',
+                             'columns_to_return_source.json', 
+                             'columns_to_return_ref.json']
         
         if config_dict is None:
             return
@@ -422,7 +425,7 @@ class Project():
         and clears all mentions of this file_name in metadata
         '''
         # TODO: deal with .csv dependency
-        all_files = self.list_files(extensions=['.csv'])
+        all_files = self._list_files(extensions=['.csv'])
         
         for file_role, name_dict in all_files.items():
             for _file_name, module_name in name_dict.items():
@@ -459,11 +462,16 @@ class Project():
                 
             # Load the right amount of rows
             max_rows = max(row_idxs)    
+
             tab = pd.read_csv(file_path, encoding='utf-8', dtype='unicode', 
                               usecols=columns, nrows=max_rows)
             
             # row_idxs counts lines in csv including header --> de-increment
-            tab = tab.iloc[[x - 1 for x in row_idxs], :]
+            try:
+                tab = tab.iloc[[x - 1 for x in row_idxs[1:]], :]
+            except:
+                import pdb
+                pdb.set_trace()
         else:
             tab = pd.read_csv(file_path, encoding='utf-8', dtype='unicode', usecols=columns)
         

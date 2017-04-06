@@ -1,0 +1,108 @@
+<html>
+    <head>
+        <title>Select return</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap-theme.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/rainbow/1.2.0/themes/github.css">
+ 
+        <!--<link rel="stylesheet" type="text/css" href="http://www.csszengarden.com/219/219.css?v=8may2013">-->
+        <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+        <script type="text/javascript" charset="utf-8">
+
+	        var orig_color = '#ffffff'
+	        var color_selected = '#5697ff'
+
+	        var label = {
+			    {% for col in index %}
+			    		"{{ col }}": false,
+			    {% endfor %}
+	        }
+
+	       
+			{% for col in selected_columns_to_return %}
+				label["{{ col }}"] = true
+				$("#table .{{ col }}").css('background-color', color_selected) 
+			{% endfor %}
+
+			$("#table").ready(function() {
+				{% for col in index %}
+			        $("#table .{{ col }}").on("click", function() {
+			        	label["{{ col }}"] = !label["{{ col }}"] 
+			        	alert(JSON.stringify(label))
+
+				        // Change color
+			        	if (label["{{ col }}"]){
+			        		$("#table .{{ col }}").css('background-color', color_selected)
+			        	} else {
+			        		$("#table .{{ col }}").css('background-color', orig_color)
+			        	}
+			        });
+		        {% endfor %}
+	    	});
+	        
+	        $(document).ready(function(){
+
+				$("#submitBtn").on("click", function() {
+					// http://blog.w3villa.com/websites/uploading-filesimage-with-ajax-jquery-without-submitting-a-form/
+					// Select source
+
+		        	json_to_send = []
+		        	for (var col in label) {
+		        		if (label[col]) {
+		        			json_to_send.push(col)
+		        		}
+		        	}
+
+		    		$.ajax({
+		            type: 'post',
+			            url: "{{ select_return_api_url }}",
+			            data: JSON.stringify(json_to_send),
+			            contentType: "application/json; charset=utf-8",
+			            traditional: true,
+			            success: function (data) {
+			            	alert(JSON.stringify(json_to_send))
+			            	window.location = "{{ next_url }}"
+			            }
+		        	});
+		        });
+			});
+
+
+
+        </script>
+    </head>
+
+
+    <body>
+        <h1 id='title'>Select columns from referential to return: {{ project_id }}</h1>
+
+		<div style="width: 100%;">
+			 <!-- SELECT REF -->
+			 <div style="float:left;">
+			 	<h2 id='title'>Referential</h2>
+
+				<table id="table" style="font-size: 75%;">
+					{% for col in index %}
+						<tr>
+							<th class="{{ col }}">{{ col }}</th>
+							{% for row in sample %}
+								<td class="{{ col }}">{{ row[col] }}</td>
+							{% endfor %}
+						</tr>
+					{% endfor %}
+				 </table>
+
+			</div>
+
+			<div style="clear:both">
+
+				</br>
+				<button type="button" id="submitBtn" >Next Step...</button>
+			</div>
+		</div>
+	
+    </body>
+</html>
+
+
