@@ -47,17 +47,19 @@ Choices:
 - internal: Use a file we uploaded for you
 - upload: (please be responsible) Upload a new file. Uploading a file with the same file name within a project will erase the previously uploaded file
 
-## STEP 3: DETECT/REPLACE MISSING VALUES
-
+## STEP 3: DETECT/REPLACE MISSING VALUES (OPTIONAL)
 
 ### Why?
-Some people us "Missing Values" or "N/A" or "XXX" to represent missing values. This can be confusing for dedupe which treats this like any other value and tries to find matches if they are not explicitly flagged as missing values.
+Some people write "Missing Value" or "N/A" or "XXX" in their data to represent missing values. This can be confusing for dedupe which treats this like any other value and tries to find matches if they are not explicitly flagged as missing values.
 
 ### What should I do?
-We suggest possible representations for each column and for the entire file (ALL). You should check that these values are indeed representing missing values and you can add your own if you know better (if for some reason, in your data, missing values are represented by "i like spinach", just add "i like spinach").
+We suggest possible representations of missing values for each column and for the entire file (ALL). You should check that these values are indeed representing missing values and you can add your own if you know better (if in your data, missing values are represented by "nan" and we didn't catch that, just add "nan").
 
 options:
 - columns: representations of missing values only for a given column
 - all: representations of missing values valid for the entire file
+
+## STEP 4: SELECT COLUMN PAIRS
+
 
 
