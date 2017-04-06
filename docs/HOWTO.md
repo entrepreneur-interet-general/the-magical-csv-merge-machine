@@ -5,7 +5,7 @@ The Merge Machine can be performant if used properly. Take a few minutes to unde
 ### Before we start: Definitions
 
 - **source**: The dirty data you are trying to normalise
-- **referential**: A reference that contains all elements you are trying to identify in the source
+- **referential**: A reference that contains all elements you are trying to identify in the source without duplicate entities (important)
 - **internal referential**: A frequently used referential that we pre-loaded on our server (so you don't have to do it)
 
 ### Before we start: How it all works 
