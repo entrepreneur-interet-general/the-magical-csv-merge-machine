@@ -89,7 +89,10 @@ Guidelines:
 - Try not to use your field knowledge to label pairs. Remember: all information should somehow be included in the text...
 - You might be asked to label obvious matches or non-matches. Don't mind that! Everything is going along the plan...
 
-## STEP 6: GET RESULTS
+## STEP 6: CHOOSE HOW TO ENRICH YOUR DATA
+Select the columns from the referential you wish to enclude in the downloadable file.
+
+## STEP 7: GET RESULTS
 
 Download the result 
 select columns to match
