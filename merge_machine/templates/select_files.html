@@ -16,17 +16,31 @@
 				// http://blog.w3villa.com/websites/uploading-filesimage-with-ajax-jquery-without-submitting-a-form/
 				// Select source
 
+				var no_source_msg = 'Select or upload a source to continue'
+				var no_ref_msg = 'Select or upload a referential to continue'
+
 				{% if project_type == "user" %}
 					switch ($("input[type=radio][name='select_source']:checked").val()) {
 						case "previous":
 							file_name = $("input[type=radio][name='previous_source']:checked").val()
+							if (file_name===undefined){
+								alert(no_source_msg)
+								return false
+							}
 							alert("Using previous source: ".concat(file_name))
 							call_select_file("source", file_name, false)
 							break;
 						case "upload":
 							var form = new FormData($("#source_to_upload")[0]);
+							if (form.get('source').name == '') {
+								alert(no_source_msg)
+								return false
+							}
 							upload(form, "source");
 							break;
+						default:
+							alert(no_source_msg)
+							return false
 					};
 				{% endif %}
 
@@ -35,25 +49,39 @@
 				switch ($("input[type=radio][name='select_ref']:checked").val()) {
 					case "previous":
 						file_name = $("input[type=radio][name='previous_ref']:checked").val()
+						if (file_name===undefined){
+							alert(no_ref_msg)
+							return false
+						}
 						call_select_file("ref", file_name, false)
 						alert("Using previous referential: ".concat(file_name))
 						break;
 					case "internal":
 						project_id = $("input[type=radio][name='internal_ref']:checked").val()
+						if (project_id===undefined){
+							alert(no_ref_msg)
+							return false 
+						}
 						call_select_file("ref", project_id, true)
 						alert("Using internal referential: ".concat(project_id))
 						break;
 					case "upload":
 						var form = new FormData($("#ref_to_upload")[0]);
+						if (form.get('ref').name == '') {
+							alert(no_ref_msg)
+							return false
+						}
 						upload(form, "ref");
 						break;
+					default:
+						alert(no_ref_msg)
+						return false
 				};
 
 			// Redirect
 			window.location = "{{ next_url }}"
 
 			}); 
-
 
 			// Display function for source
 			$("input[type=radio][name='select_source']").on("change", function() {
@@ -96,21 +124,26 @@
 
 
         function call_select_file(file_role, _input, internal){
-        	if (internal){
-				json_to_send = {file_role: file_role, project_id: _input, internal: internal}
+        	if (_input === undefined){
+        		alert('Missing information in form')
         	} else {
-        		json_to_send = {file_role: file_role, file_name: _input, internal: internal}
-        	}
-        	alert(JSON.stringify(json_to_send))
-    		$.ajax({
-            type: 'post',
-	            url: "{{ select_file_api_url }}",
-	            data: JSON.stringify(json_to_send),
-	            contentType: "application/json; charset=utf-8",
-	            traditional: true,
-	            success: function (data) {
-	            }
-        	});
+
+	        	if (internal){
+					json_to_send = {file_role: file_role, project_id: _input, internal: internal}
+	        	} else {
+	        		json_to_send = {file_role: file_role, file_name: _input, internal: internal}
+	        	}
+	        	alert(JSON.stringify(json_to_send))
+	    		$.ajax({
+	            type: 'post',
+		            url: "{{ select_file_api_url }}",
+		            data: JSON.stringify(json_to_send),
+		            contentType: "application/json; charset=utf-8",
+		            traditional: true,
+		            success: function (data) {
+		            }
+	        	});
+    		}
         };
 
         function upload(form, file_role) {
