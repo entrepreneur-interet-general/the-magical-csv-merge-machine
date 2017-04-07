@@ -207,7 +207,7 @@ def main_dedupe(data_ref,
     # TODO: Load train data
     gazetteer.train(index_predicates=True) # TODO: look into memory usage of index_predicates
     # Write settings    
-    with open(learned_settings_path, 'wb') as f:
+    with open(learned_settings_path, 'wb') as f: # TODO: replaced 'wb' by 'w'
         gazetteer.writeSettings(f, index=False)    
     
     

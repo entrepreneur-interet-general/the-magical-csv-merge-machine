@@ -395,12 +395,7 @@ class Project():
     def read_metadata(self):
         '''Wrapper around read_config_data'''
         metadata = self.read_config_data('', '', file_name='metadata.json')
-        try:
-            assert metadata['project_id'] == self.project_id
-        except:
-            import pdb
-            pdb.set_trace()
-            assert False
+        assert metadata['project_id'] == self.project_id
         return metadata
     
     def write_metadata(self):

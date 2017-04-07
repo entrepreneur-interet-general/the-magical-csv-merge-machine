@@ -171,7 +171,11 @@ class UserProject(Project):
         
         if internal:
             assert project_id is not None
-            ref_proj = Referential(project_id)
+            try:
+                ref_proj = Referential(project_id)
+            except:
+                raise Exception('Selected internal project does not exist for ID: {0}'.format(project_id))
+            
             (_, _, file_name) = ref_proj.get_last_written(file_role, file_name=file_name)   
             self.metadata['current'][file_role]['file_name'] = file_name
             

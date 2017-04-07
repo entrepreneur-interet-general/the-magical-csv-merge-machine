@@ -50,6 +50,8 @@ TODO:
     - POSTGRES all this ish
     
     - Choose btw add/select/upload and read/load/get
+    
+    - Catch exceptions. Never redirect if server error
 
 DEV GUIDELINES:
     - By default the API will use the file with the same name in the last 
@@ -784,7 +786,6 @@ def select_file(project_type, project_id):
     params = request.json
     proj.select_file(params['file_role'], params.get('file_name', None), \
                      params['internal'], params.get('project_id', project_id))
-    
 
     return jsonify(error=False)
  
@@ -822,7 +823,6 @@ def upload(project_type, project_id, file_role):
             raise Exception('Empty file')
     else:
         raise Exception('Could not find file named {0}'.format(file_role))
-    
     
     return jsonify(error=False,
                metadata=proj.metadata,
@@ -964,4 +964,4 @@ def list_referentials():
 
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, threaded=True)
+    socketio.run(app, debug=True)
