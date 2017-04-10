@@ -243,7 +243,7 @@ def gen_dedupe_variable_definition(col_matches):
     for match in col_matches:
         if (len(match['source']) != 1) or (len(match['ref']) != 1):
             raise Exception('Not dealing with multiple columns (1 source, 1 ref only)')
-        my_variable_definition.append({"crf": True, "missing_values": True, "field": 
+        my_variable_definition.append({"crf": False, "missing_values": True, "field": 
             {"ref": match['ref'][0], "source": match['source'][0]}, "type": "String"})
     return my_variable_definition
 
@@ -497,7 +497,7 @@ def load_labeller():
         
         # Put to dedupe input format
         print('loading ref')
-        ref = pd.read_csv(paths['ref'], encoding='utf-8', dtype='unicode')
+        ref = pd.read_csv(paths['ref'], encoding='utf-8', dtype=str)
         data_ref = format_for_dedupe(ref, my_variable_definition, 'ref') 
         del ref # To save memory
         gc.collect()
@@ -505,7 +505,7 @@ def load_labeller():
         
         # Put to dedupe input format
         print('loading source')
-        source = pd.read_csv(paths['source'], encoding='utf-8', dtype='unicode')
+        source = pd.read_csv(paths['source'], encoding='utf-8', dtype=str)
         data_source = format_for_dedupe(source, my_variable_definition, 'source')
         del source
         gc.collect()
@@ -580,8 +580,11 @@ def web_select_return(project_id, file_role):
     
     next_url = url_for('web_download', project_id=project_id)
     return render_template('select_return.html', 
-                           index=list(sample[0].keys()),
-                           sample=sample,
+                           ref_index=list(sample[0].keys()),
+                           ref_sample=sample,
+                           # TODO: add certain column matches API call in select_return
+                           add_column_certain_matches_api_url=url_for(\
+                                'add_column_certain_matches', project_id=project_id),
                            selected_columns_to_return=selected_columns_to_return,
                            select_return_api_url=url_for('add_columns_to_return', 
                                         project_id=project_id, file_role=file_role),
@@ -631,28 +634,31 @@ def web_download(project_id):
 
     # Identify rows to display
     proj.load_data('link', 'dedupe_linker', res_file_name)  
-    
-    # Compute metrics
-    metrics = dict()
-    metrics['perc_match'] = proj.mem_data.__CONFIDENCE.notnull().mean() * 100
-    metrics['num_match'] = proj.mem_data.__CONFIDENCE.notnull().sum()
+
+    certain_col_matches = proj.read_col_certain_matches()
+    metrics = proj.infer('results_analysis', {'col_matches': certain_col_matches, 'lower':True})
 
     # Choose the columns to display # TODO: Absolutely move this
     col_matches = proj.read_col_matches() # TODO: API this
     suffixes = ('_x', '_y')
     cols_to_display_match = []
     
-    source_cols = list(set(col for match in col_matches for col in match['source']))
-    ref_cols = list(set([col for match in col_matches for col in match['ref']] \
-                                + proj.read_cols_to_return('ref')))
-        
-    for col in source_cols + ref_cols:
+    #    source_cols = list(set(col for match in col_matches for col in match['source']))
+    #    ref_cols = list(set([col for match in col_matches for col in match['ref']] \
+    #                                + proj.read_cols_to_return('ref')))
+
+    # TODO: fix for multiple selects of same column
+    cols_to_display_match = []
+    for col in [_col for match in col_matches for _col in match['source'] + match['ref']]: #\
+                #+ proj.read_cols_to_return('ref'):
         if col in cols_to_display_match:
             cols_to_display_match.remove(col)
             cols_to_display_match.append(col + suffixes[0])
             cols_to_display_match.append(col + suffixes[1])
         else:
             cols_to_display_match.append(col)
+    print(cols_to_display_match)
+        
 
     # Choose the columns to display for single source and single ref 
     # TODO: Absolutely change this
@@ -849,6 +855,14 @@ def add_column_matches(project_id):
     return jsonify(error=False)
     
 
+@app.route('/api/user/add_column_certain_matches/<project_id>/', methods=['POST'])
+@cross_origin()
+def add_column_certain_matches(project_id):
+    column_matches = request.json
+    proj = init_project(project_type='user', project_id=project_id)
+    proj.add_col_certain_matches(column_matches)
+    return jsonify(error=False)
+
 @app.route('/api/user/add_columns_to_return/<project_id>/<file_role>/', methods=['POST'])
 @cross_origin()
 def add_columns_to_return(project_id, file_role):
@@ -941,7 +955,7 @@ def linker(project_id):
     
 
 #==============================================================================
-# Admin
+    # Admin
 #==============================================================================
 
 @app.route('/api/admin/list_projects/', methods=['GET', 'POST'])
