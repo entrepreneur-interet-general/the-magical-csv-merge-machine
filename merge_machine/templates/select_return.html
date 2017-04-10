@@ -14,27 +14,37 @@
 	        var color_selected = '#5697ff'
 
 	        var label = {
-			    {% for col in index %}
+			    {% for col in ref_index %}
 			    		"{{ col }}": false,
 			    {% endfor %}
-	        }
-
+	        }	
 	       
-			{% for col in selected_columns_to_return %}
-				label["{{ col }}"] = true
-				$("#table .{{ col }}").css('background-color', color_selected) 
-			{% endfor %}
+	       	$(document).ready(function() {
+				{% for col in selected_columns_to_return %}
+					label["{{ col }}"] = true
+					$("#ref_table .{{ col }}").css('background-color', color_selected) 
+				{% endfor %}
+			});
 
-			$("#table").ready(function() {
-				{% for col in index %}
-			        $("#table .{{ col }}").on("click", function() {
-			        	label["{{ col }}"] = !label["{{ col }}"] 
-				        // Change color
-			        	if (label["{{ col }}"]){
-			        		$("#table .{{ col }}").css('background-color', color_selected)
-			        	} else {
-			        		$("#table .{{ col }}").css('background-color', orig_color)
-			        	}
+
+			function update_color_and_label(col) {
+	        	label[col] = !label[col] 
+		        // Change color
+	        	if (label[col]){
+	        		$("#ref_table .".concat(col)).css('background-color', color_selected)
+	        	} else {
+	        		$("#ref_table .".concat(col)).css('background-color', orig_color)
+	        	}				
+			}
+
+
+			$("#ref_table").ready(function() {
+				{% for col in ref_index %}
+			        $("#ref_table .{{ col }}").on("click", function() {
+			        	update_color_and_label("{{ col }}")
+			        });
+			        $("#ref_table .ALL_XYZ").on("click", function() {
+			        	update_color_and_label("{{ col }}")
 			        });
 		        {% endfor %}
 	    	});
@@ -80,15 +90,19 @@
 			 <div style="float:left;">
 			 	<h2 id='title'>Referential</h2>
 
-				<table id="table" style="font-size: 75%;">
-					{% for col in index %}
+				<table id="ref_table" style="font-size: 75%;">
+					{% for col in ref_index %}
 						<tr>
+							<td> <input type="checkbox" name="{{ col }}" value="{{ col }}"> </td>
 							<th class="{{ col }}">{{ col }}</th>
-							{% for row in sample %}
+							{% for row in ref_sample %}
 								<td class="{{ col }}">{{ row[col] }}</td>
 							{% endfor %}
 						</tr>
 					{% endfor %}
+					<tr>
+						<th class="ALL_XYZ">ALL</th>
+					</tr>
 				 </table>
 
 			</div>
