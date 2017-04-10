@@ -65,7 +65,6 @@ class UserProject(Project):
         metadata['project_id'] = self.project_id
         return metadata   
 
-
     def add_col_matches(self, column_matches):
         '''column_matches is a json file as list of dict of list'''
         # TODO: add checks on file
@@ -76,6 +75,17 @@ class UserProject(Project):
         if not config:
             config = []
         return config
+
+    def add_col_certain_matches(self, column_matches):
+        '''column_matches is a json file as list of dict of list'''
+        # TODO: add checks on file
+        self.upload_config_data(column_matches, 'link', 'dedupe_linker', 'column_certain_matches.json')
+
+    def read_col_certain_matches(self):
+        config = self.read_config_data('link', 'dedupe_linker', 'column_certain_matches.json')
+        if not config:
+            config = []
+        return config    
     
     def add_cols_to_return(self, file_role, columns):
         '''

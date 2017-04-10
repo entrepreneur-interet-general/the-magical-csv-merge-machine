@@ -28,6 +28,7 @@ TODO:
     - Create Data Class ?
 """
 
+import csv
 import gc
 import hashlib
 import itertools
@@ -39,8 +40,10 @@ import time
 
 import pandas as pd
 
-from infer_nan import infer_mvs, replace_mvs
 from dedupe_linker import dedupe_linker
+from infer_nan import infer_mvs, replace_mvs
+from performance import results_analysis
+
 
 MODULES = {
         'transform':{
@@ -56,6 +59,11 @@ MODULES = {
                 'infer_mvs': {
                             'func': infer_mvs,
                             'write_to': 'replace_mvs',
+                            'desc': 'Infer values that represent missing values'
+                            },
+                'results_analysis': {
+                            'func': results_analysis,
+                            'write_to': 'results_analysis',
                             'desc': 'Infer values that represent missing values'
                             }
                 },
@@ -197,12 +205,10 @@ class Project():
             last_time = max(last_time, float(self.metadata['log'][-1]['end_timestamp']))
         return time.time() - last_time
 
-
     def get_arb(self):
         '''List directories and files in project'''
         path_to_proj = self.path_to()
         return get_arb(path_to_proj)
-    
 
     def _list_files(self, extensions=['.csv']):
         '''
@@ -324,7 +330,7 @@ class Project():
         for encoding in ENCODINGS:
             for sep in SEPARATORS:
                 try:
-                    self.mem_data = pd.read_csv(file, sep=sep, encoding=encoding, dtype='unicode')
+                    self.mem_data = pd.read_csv(file, sep=sep, encoding=encoding, dtype=str)
                     for char in CHARS_TO_REPLACE:
                         self.mem_data.columns = [x.replace(char, '_') for x in self.mem_data.columns]
                     could_read = True
@@ -355,19 +361,20 @@ class Project():
         '''Will write config file'''
         VALID_FILE_NAMES = ['config.json', 'infered_config.json', 
                              'training.json', 'column_matches.json',
+                             'column_certain_matches.json',
                              'columns_to_return_source.json', 
                              'columns_to_return_ref.json']
         
         if config_dict is None:
             return
         
-        if (module_name not in MODULES['link']) and (module_name not in MODULES['transform']) :
-            raise Exception('Config files can only be uploaded to module \
-                            directories of type link or transform') 
+        #        if (module_name not in MODULES['link']) and (module_name not in MODULES['transform']) :
+        #            raise Exception('Config files can only be uploaded to module \
+        #                            directories of type link or transform') 
             
         if file_name not in VALID_FILE_NAMES:
             raise Exception('For now you can only upload files named \
-                            training.json or column_matches.json')
+                            {0}'.format(' or '.join(VALID_FILE_NAMES)))
 
         # Create directories
         dir_path = self.path_to(file_role, module_name)
@@ -435,7 +442,11 @@ class Project():
     def load_data(self, file_role, module_name, file_name):
         '''Load data as pandas DataFrame to memory'''
         file_path = self.path_to(file_role, module_name, file_name)
-        self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype='unicode')
+        try:
+            self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str)
+        except:
+            import pdb
+            pdb.set_trace()
         self.mem_data_info = {'file_role': file_role, 
                                'file_name': file_name,
                                'module_name': module_name}
@@ -458,7 +469,7 @@ class Project():
             # Load the right amount of rows
             max_rows = max(row_idxs)    
 
-            tab = pd.read_csv(file_path, encoding='utf-8', dtype='unicode', 
+            tab = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
                               usecols=columns, nrows=max_rows)
             
             # row_idxs counts lines in csv including header --> de-increment
@@ -468,7 +479,7 @@ class Project():
                 import pdb
                 pdb.set_trace()
         else:
-            tab = pd.read_csv(file_path, encoding='utf-8', dtype='unicode', usecols=columns)
+            tab = pd.read_csv(file_path, encoding='utf-8', dtype=str, usecols=columns)
         
         if drop_duplicates:
             tab.drop_duplicates(inplace=True)
@@ -519,7 +530,8 @@ class Project():
         file_path = self.path_to(self.mem_data_info['file_role'], 
                                  self.mem_data_info['module_name'], 
                                  self.mem_data_info['file_name'])
-        self.mem_data.to_csv(file_path, encoding='utf-8', index=False)
+        self.mem_data.to_csv(file_path, encoding='utf-8', index=False, 
+                             quoting=csv.QUOTE_NONNUMERIC)
         print('Wrote to ', file_path)
 
         
@@ -559,15 +571,14 @@ class Project():
         
         # Initiate log
         log = self.init_log(module_name, 'infer')
-            
+        
         infered_params = MODULES['infer'][module_name]['func'](self.mem_data, params)
-                
+        
         # Write result of inference
         module_to_write_to = MODULES['infer'][module_name]['write_to']
-        self.upload_config_data(params, self.mem_data_info['file_role'], \
+        self.upload_config_data(infered_params, self.mem_data_info['file_role'], \
                                 module_to_write_to, 'infered_config.json')
-
-
+        
         # Update log buffer
         self.log_buffer.append(log)     
         

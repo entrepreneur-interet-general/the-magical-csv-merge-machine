@@ -36,10 +36,12 @@ NO_TRAINING_MESSAGE = 'No training file could be found. Use the interface (XXX)'
                       ', specify a matching ID to generate train (YYY), or ' \
                       'upload a training file using (ZZZ)'
 
-def preProcess(val):
+def pre_process(val):
     """
     Do a little bit of data cleaning. Things like casing, extra spaces, 
     quotes and new lines can be ignored.
+    
+    TODO: parallelise
     """
     val = re.sub('  +', ' ', val)
     val = re.sub('\n', ' ', val)
@@ -134,7 +136,7 @@ def format_for_dedupe(tab, my_variable_definition, file_role):
     for col in cols_for_match:
         print('At column', col)
         sel = tab[col].notnull()
-        tab.loc[sel, col] = tab.loc[sel, col].apply(preProcess)
+        tab.loc[sel, col] = tab.loc[sel, col].apply(pre_process)
     print('after preprocessing')
     
     # Replace np.NaN by None
@@ -243,13 +245,13 @@ def dedupe_linker(paths, params):
     selected_columns_from_ref = params['selected_columns_from_ref']
     
     # Put to dedupe input format
-    ref = pd.read_csv(ref_path, encoding='utf-8', dtype='unicode')
+    ref = pd.read_csv(ref_path, encoding='utf-8', dtype=str)
     data_ref = format_for_dedupe(ref, my_variable_definition, 'ref') 
     del ref # To save memory
     gc.collect()
     
     # Put to dedupe input format
-    source = pd.read_csv(source_path, encoding='utf-8', dtype='unicode')
+    source = pd.read_csv(source_path, encoding='utf-8', dtype=str)
     data_source = format_for_dedupe(source, my_variable_definition, 'source')
     del source
     gc.collect()
@@ -260,8 +262,8 @@ def dedupe_linker(paths, params):
                                              train_path,
                                              learned_settings_path)
     
-    ref = pd.read_csv(ref_path, encoding='utf-8', dtype='unicode')
-    source = pd.read_csv(source_path, encoding='utf-8', dtype='unicode')
+    ref = pd.read_csv(ref_path, encoding='utf-8', dtype=str)
+    source = pd.read_csv(source_path, encoding='utf-8', dtype=str)
     
     # Generate out file
     source = merge_results(ref, source, matched_records, selected_columns_from_ref)

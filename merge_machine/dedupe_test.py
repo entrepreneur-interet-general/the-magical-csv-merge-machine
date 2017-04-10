@@ -152,7 +152,7 @@ for prop in props:
         match_sizes.append(new_num_matches)
         distinct_sizes.append(new_num_distinct)
        
-        if match_rate >= 0.75:
+        if match_rate >= 0.7:
             break
         
 
