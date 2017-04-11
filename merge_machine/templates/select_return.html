@@ -14,11 +14,7 @@
 	        var color_selected = '#5697ff'
 
 
-	        
-
 	       	$(document).ready(function() {
-
-
 	       		label = {}
 	       		{% for file_role in ["source", "ref"] %}
 	       			// Initiate label variable
@@ -28,6 +24,11 @@
 					    {% endfor %}
 					}
 
+					// Check initial selected matches
+					{% if column_matches %}
+						var $box = $("input.{{ file_role }}:checkbox[name='{{ column_matches.get(file_role) }}']")
+						$box.prop("checked", true);
+					{% endif %}
 
 		       		// Change initial background color in table and fill label
 					{% for col in selected_columns_to_return[file_role] %}
@@ -53,7 +54,7 @@
 					  }
 					});
 
-				// On click behavior for each row in table
+				    // On click behavior for each row in table
 					$("#{{ file_role }}_table").ready(function() {
 						{% for col in indexes[file_role] %}
 					        $("#{{ file_role }}_table .{{ col }}").on("click", function() {
@@ -64,6 +65,7 @@
 					        });
 				        {% endfor %}
 			    	});
+
 			    {% endfor %}
 
 				// Submit forms and go to following page
@@ -127,9 +129,7 @@
 			        	});
 		        	{% endfor %}
             	});
-
 			});
-
 
 
 			function update_color_and_label(col, file_role) {
@@ -141,13 +141,6 @@
 	        		$("#" + file_role + "_table .".concat(col)).css('background-color', orig_color)
 	        	}				
 			}
-
-
-	        
-
-
-
-
         </script>
     </head>
 

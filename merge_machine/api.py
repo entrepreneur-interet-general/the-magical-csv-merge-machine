@@ -582,6 +582,8 @@ def web_select_return(project_id):
     
         selected_columns_to_return[file_role] = proj.read_cols_to_return(file_role) 
     
+    column_matches = proj.read_col_certain_matches()
+    
     indexes = dict()
     indexes['source'] = list(samples['source'][0].keys())
     indexes['ref'] = list(samples['ref'][0].keys())
@@ -597,6 +599,7 @@ def web_select_return(project_id):
                            indexes=indexes,                           
                            samples=samples,
                            selected_columns_to_return=selected_columns_to_return,    
+                           column_matches=column_matches,
                                                               
                            add_column_certain_matches_api_url=url_for(\
                                         'add_column_certain_matches', project_id=project_id),                          
