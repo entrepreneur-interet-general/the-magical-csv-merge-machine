@@ -9,7 +9,7 @@
         <!--<link rel="stylesheet" type="text/css" href="http://www.csszengarden.com/219/219.css?v=8may2013">-->
         <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
         <script type="text/javascript" charset="utf-8">
-        	
+
         </script>
 
 
@@ -42,6 +42,11 @@
         <h1 id='title'>Download result</h1>
 
         <h2> Matches found ({{ metrics['num_match'] }} - {{ metrics['perc_match'] }}%) </h2>
+
+        {% if metrics['num_verif_samples'] > 0 %}
+        	<h3> Precision: {{ metrics['perc_precision'] }}% on {{ metrics['num_verif_samples'] }} samples </h3>
+        {% endif %}
+
         <!-- Display results -->
         <div style="overflow: auto; max-height: 400px;">
 			<table id="match_table" style="font-size: 75%; ">

@@ -13,68 +13,138 @@
 	        var orig_color = '#ffffff'
 	        var color_selected = '#5697ff'
 
-	        var label = {
-			    {% for col in ref_index %}
-			    		"{{ col }}": false,
-			    {% endfor %}
-	        }	
-	       
+
+	        
+
 	       	$(document).ready(function() {
-				{% for col in selected_columns_to_return %}
-					label["{{ col }}"] = true
-					$("#ref_table .{{ col }}").css('background-color', color_selected) 
-				{% endfor %}
+
+
+	       		label = {}
+	       		{% for file_role in ["source", "ref"] %}
+	       			// Initiate label variable
+			        label["{{ file_role }}"] = {
+					    {% for col in indexes[file_role] %}
+					    		"{{ col }}": false,
+					    {% endfor %}
+					}
+
+
+		       		// Change initial background color in table and fill label
+					{% for col in selected_columns_to_return[file_role] %}
+						label["{{ file_role }}"]["{{ col }}"] = true
+						$("#{{ file_role }}_table .{{ col }}").css('background-color', color_selected) 
+					{% endfor %}
+
+
+					// Checkbox behavior (one or zero selected)
+					$("input.{{ file_role }}:checkbox").on('click', function() {
+					  // in the handler, 'this' refers to the box clicked on*
+					  var $box = $(this);
+					  if ($box.is(":checked")) {
+					    // the name of the box is retrieved using the .attr() method
+					    // as it is assumed and expected to be immutable
+					    var group = "input.{{ file_role }}:checkbox[name!='" + $box.attr("name") + "']";
+					    // the checked state of the group/box on the other hand will change
+					    // and the current value is retrieved using .prop() method
+					    $(group).prop("checked", false);
+					    $box.prop("checked", true);
+					  } else {
+					    $box.prop("checked", false);
+					  }
+					});
+
+				// On click behavior for each row in table
+					$("#{{ file_role }}_table").ready(function() {
+						{% for col in indexes[file_role] %}
+					        $("#{{ file_role }}_table .{{ col }}").on("click", function() {
+					        	update_color_and_label("{{ col }}", "{{ file_role }}")
+					        });
+					        $("#{{ file_role }}_table .ALL_XYZ").on("click", function() {
+					        	update_color_and_label("{{ col }}", "{{ file_role }}")
+					        });
+				        {% endfor %}
+			    	});
+			    {% endfor %}
+
+				// Submit forms and go to following page
+				$("#submitBtn").on("click", function() {
+
+					// Add certain matches if existant
+					switch ($("input[type=checkbox]:checked").length) {
+			            case 1:
+			            	alert('You selected only one column for validation. Either select one in both the source and the referential or select none at all')
+			            	return false
+			            case 2: 
+			             	json_to_send = {
+			             		'source': $("input.source[type=checkbox]:checked").val(),
+			             		'ref': $("input.ref[type=checkbox]:checked").val()
+			             	}
+				    		$.ajax({
+				            type: 'post',
+					            url: "{{ add_column_certain_matches_api_url }}",
+					            data: JSON.stringify(json_to_send),
+					            contentType: "application/json; charset=utf-8",
+					            traditional: true,
+					            async: false,
+					            success: function (data) {
+					            	alert('Sent pair:' + JSON.stringify(json_to_send))
+					            },
+					            error: function(error_msg) {
+					            	alert(JSON.stringify(error_msg))
+					            	return false
+					            }
+				        	});
+					}
+
+					// Add columns to return
+					{% for file_role in ['source', 'ref'] %}
+			        	json_to_send = []
+			        	for (var col in label["{{ file_role }}"]) {
+			        		if (label["{{ file_role }}"][col]) {
+			        			json_to_send.push(col)
+			        		}
+			        	}
+
+			        	// Send selected columns
+			    		$.ajax({
+			            type: 'post',
+				            url: "{{ select_return_api_urls[file_role] }}",
+				            data: JSON.stringify(json_to_send),
+				            contentType: "application/json; charset=utf-8",
+				            traditional: true,
+				            async: false,
+				            success: function (data) {
+				            	alert('Sent' + JSON.stringify(json_to_send))
+				            	if ("{{ file_role }}"=='ref'){
+					            	// Redirect
+					            	window.location = "{{ next_url }}";				            		
+				            	}
+				            	},
+				            error: function(error_msg) {
+				            	alert(JSON.stringify(error_msg))
+				            	return false
+				            }
+			        	});
+		        	{% endfor %}
+            	});
+
 			});
 
 
-			function update_color_and_label(col) {
-	        	label[col] = !label[col] 
+
+			function update_color_and_label(col, file_role) {
+	        	label[file_role][col] = !label[file_role][col] 
 		        // Change color
-	        	if (label[col]){
-	        		$("#ref_table .".concat(col)).css('background-color', color_selected)
+	        	if (label[file_role][col]){
+	        		$("#" + file_role + "_table .".concat(col)).css('background-color', color_selected)
 	        	} else {
-	        		$("#ref_table .".concat(col)).css('background-color', orig_color)
+	        		$("#" + file_role + "_table .".concat(col)).css('background-color', orig_color)
 	        	}				
 			}
 
 
-			$("#ref_table").ready(function() {
-				{% for col in ref_index %}
-			        $("#ref_table .{{ col }}").on("click", function() {
-			        	update_color_and_label("{{ col }}")
-			        });
-			        $("#ref_table .ALL_XYZ").on("click", function() {
-			        	update_color_and_label("{{ col }}")
-			        });
-		        {% endfor %}
-	    	});
 	        
-	        $(document).ready(function(){
 
-				$("#submitBtn").on("click", function() {
-					// http://blog.w3villa.com/websites/uploading-filesimage-with-ajax-jquery-without-submitting-a-form/
-					// Select source
-
-		        	json_to_send = []
-		        	for (var col in label) {
-		        		if (label[col]) {
-		        			json_to_send.push(col)
-		        		}
-		        	}
-
-		    		$.ajax({
-		            type: 'post',
-			            url: "{{ select_return_api_url }}",
-			            data: JSON.stringify(json_to_send),
-			            contentType: "application/json; charset=utf-8",
-			            traditional: true,
-			            success: function (data) {
-			            	alert(JSON.stringify(json_to_send))
-			            	window.location = "{{ next_url }}"
-			            }
-		        	});
-		        });
-			});
 
 
 
@@ -83,19 +153,39 @@
 
 
     <body>
-        <h1 id='title'>Select columns from referential to return: {{ project_id }}</h1>
+        <h1 id='title'>Select columns to return: {{ project_id }}</h1>
 
 		<div style="width: 100%;">
-			 <!-- SELECT REF -->
-			 <div style="float:left;">
+			 <!-- SELECT SOURCE -->
+			 <div style="float:left; width: 50%">
+
+			 	<h2 id='title'>Source</h2>
+
+				<table id="source_table" style="font-size: 75%;">
+					{% for col in indexes["source"] %}
+						<tr>
+							<td> <input type="checkbox" class="source" name="{{ col }}" value="{{ col }}"> </td>
+							<th class="{{ col }}">{{ col }}</th>
+							{% for row in samples['source'] %}
+								<td class="{{ col }}">{{ row[col] }}</td>
+							{% endfor %}
+						</tr>
+					{% endfor %}
+					<tr>
+						<th class="ALL_XYZ">ALL</th>
+					</tr>
+				 </table>
+			</div>
+
+			<div style="float:right; width: 50%">
 			 	<h2 id='title'>Referential</h2>
 
 				<table id="ref_table" style="font-size: 75%;">
-					{% for col in ref_index %}
+					{% for col in indexes["ref"] %}
 						<tr>
-							<td> <input type="checkbox" name="{{ col }}" value="{{ col }}"> </td>
+							<td> <input type="checkbox" class="ref" name="{{ col }}" value="{{ col }}"> </td>
 							<th class="{{ col }}">{{ col }}</th>
-							{% for row in ref_sample %}
+							{% for row in samples['ref'] %}
 								<td class="{{ col }}">{{ row[col] }}</td>
 							{% endfor %}
 						</tr>

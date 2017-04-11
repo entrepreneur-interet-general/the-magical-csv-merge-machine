@@ -549,45 +549,59 @@ def web_dedupe(project_id):
                            **dummy_labeller.to_emit(''))
     #return render_template('dedupe_training.html', **DUMMY_EMIT)
 
-@app.route('/web/user/select_return/<project_id>/<file_role>', methods=['GET'])
+@app.route('/web/user/select_return/<project_id>', methods=['GET'])
 @cross_origin()
-def web_select_return(project_id, file_role):
-    '''Configurate file to return'''
+def web_select_return(project_id):
+    '''
+    Configurate file to return for ref and source in same page as well as columns
+    that are supposed to match to test results (ex: Siren, SIRENE)
+    '''
     # TODO: default to matching columns
     
     ROWS_TO_DISPLAY = range(3)
     
     proj = init_project('user', project_id)
     
-    if file_role != 'ref':
-        raise Exception('Only "ref" is managed for column selection for now')
+    samples = dict()
+    selected_columns_to_return = dict()
 
-    # Load sample
-    data = proj.metadata['current'][file_role]
-    if not data['internal']:
-        (_, module_name, _) = proj.get_last_written(file_role, None, 
-                                data['file_name'], before_module='dedupe_linker')
-        sample = proj.get_sample(file_role, module_name, data['file_name'], 
-                                     row_idxs=ROWS_TO_DISPLAY)
-    else:
-        proj_ref = Referential(proj.metadata['current'][file_role]['project_id'])
-        (_, module_name, _) = proj_ref.get_last_written(file_role, None, 
-                                data['file_name'], before_module='dedupe_linker')
-        sample = proj_ref.get_sample(file_role, module_name, data['file_name'], 
-                                     row_idxs=ROWS_TO_DISPLAY)   
+    for file_role in ['source', 'ref']:
+        # Load sample
+        data = proj.metadata['current'][file_role]
+        if not data['internal']:
+            (_, module_name, _) = proj.get_last_written(file_role, None, 
+                                    data['file_name'], before_module='dedupe_linker')
+            samples[file_role] = proj.get_sample(file_role, module_name,
+                              data['file_name'], row_idxs=ROWS_TO_DISPLAY)
+        else:
+            proj_ref = Referential(proj.metadata['current'][file_role]['project_id'])
+            (_, module_name, _) = proj_ref.get_last_written(file_role, None, 
+                                    data['file_name'], before_module='dedupe_linker')
+            samples[file_role] = proj_ref.get_sample(file_role, module_name, 
+                              data['file_name'], row_idxs=ROWS_TO_DISPLAY)   
     
-    selected_columns_to_return = proj.read_cols_to_return(file_role) 
+        selected_columns_to_return[file_role] = proj.read_cols_to_return(file_role) 
+    
+    indexes = dict()
+    indexes['source'] = list(samples['source'][0].keys())
+    indexes['ref'] = list(samples['ref'][0].keys())
+    
+    select_return_api_urls = dict()
+    select_return_api_urls['source'] = select_return_api_url_source=url_for(\
+                 'add_columns_to_return', project_id=project_id, file_role='source')
+    select_return_api_urls['ref'] = select_return_api_url_source=url_for(\
+                 'add_columns_to_return', project_id=project_id, file_role='ref')
     
     next_url = url_for('web_download', project_id=project_id)
     return render_template('select_return.html', 
-                           ref_index=list(sample[0].keys()),
-                           ref_sample=sample,
-                           # TODO: add certain column matches API call in select_return
+                           indexes=indexes,                           
+                           samples=samples,
+                           selected_columns_to_return=selected_columns_to_return,    
+                                                              
                            add_column_certain_matches_api_url=url_for(\
-                                'add_column_certain_matches', project_id=project_id),
-                           selected_columns_to_return=selected_columns_to_return,
-                           select_return_api_url=url_for('add_columns_to_return', 
-                                        project_id=project_id, file_role=file_role),
+                                        'add_column_certain_matches', project_id=project_id),                          
+
+                           select_return_api_urls=select_return_api_urls,
                            next_url=next_url)
     
 

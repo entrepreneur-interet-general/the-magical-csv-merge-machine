@@ -30,21 +30,25 @@ def results_analysis(tab, params={}):
 
     # Compute metrics
     metrics['perc_match'] = tab.__CONFIDENCE.notnull().mean() * 100
-    metrics['num_match'] = tab.__CONFIDENCE.notnull().sum()
+    metrics['num_match'] = int(tab.__CONFIDENCE.notnull().sum())
     
+    metrics['num_verif_samples'] = 0
     if col_matches:
         sel = tab[col_matches['source']].notnull() \
                 & tab[col_matches['ref']].notnull() \
                 & tab.__CONFIDENCE.notnull()
                 
-        metrics['num_verif_samples'] = sel.sum()
+        metrics['num_verif_samples'] = int(sel.sum())
         if sel.any():
             if params.get('lower', False):
-                metrics['precision'] = tab.loc[sel, col_matches['source']] \
-                                        == tab.loc[sel, col_matches['ref']]
+                metrics['precision'] = (tab.loc[sel, col_matches['source']] \
+                       == tab.loc[sel, col_matches['ref']]).mean()
             else:
-                metrics['precision'] = tab.loc[sel, col_matches['source']].str.lower() \
-                                        == tab.loc[sel, col_matches['ref']].str.lower()
+                metrics['precision'] = (tab.loc[sel, col_matches['source']].str.lower() \
+                       == tab.loc[sel, col_matches['ref']].str.lower()).mean()
+            metrics['perc_precision'] = metrics['precision'] * 100.
+    else:
+        metrics['num_verif_samples'] = 0
         
     return metrics
             
