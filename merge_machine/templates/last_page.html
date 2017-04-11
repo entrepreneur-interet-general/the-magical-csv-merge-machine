@@ -14,15 +14,15 @@
 
 
 		<style type="text/css">
-			#match_table{
+			table.match_table{
 				border-collapse:collapse; 
 			}
 			/*  Define the background color for all the ODD table columns  */
-			#match_table tr td:nth-child(odd){ 
+			table.match_table tr td:nth-child(odd){ 
 				background: #d4d3e5;
 			}
 			/*  Define the background color for all the EVEN table columns  */
-			#match_table tr td:nth-child(even){
+			table.match_table tr td:nth-child(even){
 				background: #e7e5ff;
 			}
 
@@ -34,8 +34,6 @@
 				background: #e7e5ff;
 			}
 		</style>
-
-
 
     </head>
     <body>
@@ -49,7 +47,7 @@
 
         <!-- Display results -->
         <div style="overflow: auto; max-height: 400px;">
-			<table id="match_table" style="font-size: 75%; ">
+			<table class="match_table" style="font-size: 75%; ">
 				<tr>
 				    {% for col in match_index %}
 				        <th class="{{ col }}">{{ col }}</th>
@@ -65,6 +63,27 @@
 				{% endfor %}
 			 </table>
 		</div>
+
+		<h3> Errors in matches found (using validation subset) </h3>
+        <!-- Display results -->
+        <div style="overflow: auto; max-height: 400px;">
+			<table class="match_table" style="font-size: 75%; ">
+				<tr>
+				    {% for col in match_index %}
+				        <th class="{{ col }}">{{ col }}</th>
+				    {% endfor %}
+				</tr>
+
+				{% for row in match_error_samples %}
+				    <tr>
+				    {% for col in match_index %}
+				        <td class="{{ col }}">{{ row[col] }}</td>
+				    {% endfor %}
+				    </tr>
+				{% endfor %}
+			 </table>
+		</div>
+
 
 		<!--
 

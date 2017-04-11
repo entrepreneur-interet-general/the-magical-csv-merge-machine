@@ -76,6 +76,8 @@ DEV GUIDELINES:
 
     - All methods to load specific configs should raise an error if the config is not coherent
     - For each module, store user input
+    
+    - Load all configurations to project variables
 
 NOTES:
     - Pay for persistant storage?
@@ -243,7 +245,7 @@ def gen_dedupe_variable_definition(col_matches):
     for match in col_matches:
         if (len(match['source']) != 1) or (len(match['ref']) != 1):
             raise Exception('Not dealing with multiple columns (1 source, 1 ref only)')
-        my_variable_definition.append({"crf": False, "missing_values": True, "field": 
+        my_variable_definition.append({"crf": True, "missing_values": True, "field": 
             {"ref": match['ref'][0], "source": match['source'][0]}, "type": "String"})
     return my_variable_definition
 
@@ -266,6 +268,7 @@ def web_index(project_type='user'):
         list_of_projects = admin.list_referentials()
     return render_template('index.html', 
                        project_type=project_type,
+                       delete_project_api_url=url_for('delete_project', project_type=project_type, project_id=''),
                        list_of_projects=list_of_projects,
                        new_project_api_url=url_for('new_project', project_type=project_type),
                        next_url=url_for('web_select_files', project_type=project_type))
@@ -621,7 +624,7 @@ def web_download(project_id):
                              res_file_name
                              )    
     
-    if (not os.path.isfile(file_path)):        
+    if False or (not os.path.isfile(file_path)):        
         paths = proj.gen_paths_dedupe()
         
         col_matches = proj.read_col_matches()
@@ -653,7 +656,8 @@ def web_download(project_id):
     proj.load_data('link', 'dedupe_linker', res_file_name)  
 
     certain_col_matches = proj.read_col_certain_matches()
-    metrics = proj.infer('results_analysis', {'col_matches': certain_col_matches, 'lower':True})
+    use_lower = True
+    metrics = proj.infer('results_analysis', {'col_matches': certain_col_matches, 'lower':use_lower})
 
     # Choose the columns to display # TODO: Absolutely move this
     col_matches = proj.read_col_matches() # TODO: API this
@@ -674,6 +678,8 @@ def web_download(project_id):
             cols_to_display_match.append(col + suffixes[1])
         else:
             cols_to_display_match.append(col)
+            
+    cols_to_display_match.append('__CONFIDENCE')
     print(cols_to_display_match)
         
 
@@ -700,10 +706,27 @@ def web_download(project_id):
     NUM_ROWS_TO_DISPLAY = 1000
     rows_to_display = [0] + list(proj.mem_data.index[proj.mem_data.__CONFIDENCE.notnull()] + 1)
     rows_to_display = rows_to_display[:NUM_ROWS_TO_DISPLAY + 1]
-
+    
     # Generate display sample
     match_sample = proj.get_sample('link', 'dedupe_linker', res_file_name,
                                 row_idxs=rows_to_display, columns=cols_to_display_match)
+
+    
+    if certain_col_matches:
+        sel = proj.mem_data.__CONFIDENCE.notnull()
+        if use_lower:
+            sel = sel & (proj.mem_data[certain_col_matches['source']].str.lower() \
+                         != proj.mem_data[certain_col_matches['ref']].str.lower())
+        else:
+            sel = sel & (proj.mem_data[certain_col_matches['source']] \
+                         != proj.mem_data[certain_col_matches['ref']])
+        rows_to_display_error = [0] + list(proj.mem_data.index[sel] + 1)
+        rows_to_display_error = rows_to_display_error[:NUM_ROWS_TO_DISPLAY + 1]
+        
+        match_error_samples = proj.get_sample('link', 'dedupe_linker', res_file_name,
+                                    row_idxs=rows_to_display_error, columns=cols_to_display_match)
+    else:
+        match_error_samples = []
     
     source_sample = proj.get_sample('source', 'INIT', proj.metadata['current']['source']['file_name'],
                                 row_idxs=rows_to_display, columns=cols_to_display_source)
@@ -715,6 +738,8 @@ def web_download(project_id):
                            
                            match_index=cols_to_display_match,
                            match_sample=match_sample,
+                           match_error_samples=match_error_samples,                           
+                           
                            source_index=cols_to_display_source,
                            source_sample=source_sample,
                            ref_index=cols_to_display_ref,
@@ -749,6 +774,13 @@ def new_project(project_type):
     return jsonify(error=False, 
                    project_id=proj.project_id)
 
+@app.route('/api/<project_type>/delete/<project_id>', methods=['GET'])
+def delete_project(project_type, project_id):
+    check_project_type(project_type)
+    proj = init_project(project_type, project_id=project_id, create_new=False)
+    proj.delete_project()
+    return jsonify(error=False)
+    
 
 @app.route('/api/<project_type>/metadata/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
