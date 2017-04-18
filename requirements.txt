@@ -7,3 +7,8 @@ flask-cors
 flask-session
 flask-socketio
 
+python-Levenshtein
+phonenumbers
+dateparser
+postal
+persistent
