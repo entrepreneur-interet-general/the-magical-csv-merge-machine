@@ -346,6 +346,12 @@ F_ETAB_ENSSUP = u'Etablissement d\'Enseignement Supérieur'
 F_APB_MENTION = u'Mention APB'
 F_RD_DOMAIN = u'Domaine de Recherche'
 
+# A very high-level institution, comprising
+# 1. (higher) education entities
+# 2. R&D organizations
+# 3. entreprises/corporations 
+F_INSTITUTION = u'Institution'
+
 F_CLINICALTRIAL_NAME = u'Nom d\'essai clinique'
 F_MEDICAL_SPEC = u'Spécialité médicale'
 F_BIOMEDICAL = u'Entité biomédicale'
@@ -1195,29 +1201,11 @@ class AcronymMatcher(TypeMatcher):
 				tl = tokens[i1 : i2]
 				yield ''.join([t[0] for t in tl]).upper()
 
-class VariantExpander(TokenizedMatcher):
-	def __init__(self, variantsMap, domainType, targetType = None):
-		''' Parameters:
-			variantsMap an inverted index from variant to main phrase
-			domainType only entities of this type will be subjected to variant expansion 
-				(i.e. it represents the domain of semantic validity for those synonym relationships)
-			targetType the type into which matching entities (i.e. containing either a main or secondary variant) will be cast 
-				(i.e. what kind of hit is produced) '''
-		super(VariantExpander, self).__init__(domainType, variantsMap.keys())
-		self.t0 = domainType if targetType is None else targetType
-		self.variantsMap = variantsMap
-	def matchFound(self, c, score, matchRefPhrase, span):
-		super(VariantExpander, self).matchFound(c, score, matchRefPhrase, span)
-		if matchRefPhrase not in self.variantsMap:
-			logging.warning('%s could not find variant %s in original %s', self, matchRefPhrase, c.value)
-		else:
-			mv = self.variantsMap[matchRefPhrase]
-			self.registerPartialMatch(c, '{} - {}'.format(F_VARIANTS, self.t0), score, mv, span)
-
-class VariantExpander2(TypeMatcher):
-	def __init__(self, variantsMap, domainType, targetType = None, scorer = tokenScorer):
-		super(VariantExpander2, self).__init__(domainType if targetType is None else targetType)
+class VariantExpander(TypeMatcher):
+	def __init__(self, variantsMap, domainType, keepContext, targetType = None, scorer = tokenScorer):
+		super(VariantExpander, self).__init__(domainType if targetType is None else targetType)
 		self.domainType = domainType
+		self.keepContext = keepContext # if true, then the main variant will be surrounded by original context in the normalized value
 		self.variantsMap = variantsMap # map from original alternative variant to original main variant
 		self.scorer = scorer
 		self.tokenIdx = defaultdict(set) # map from alternative variant as joined-normalized-token-list to original alternative variant
@@ -1258,7 +1246,8 @@ class VariantExpander2(TypeMatcher):
 						self.registerPartialMatch(c, self.t, score, altVariant, span)
 						mainVariant = self.variantsMap[altVariant]
 						logging.debug('%s matched on %s: %s expanded to main variant %s', self, matchRefPhrase, altVariant, mainVariant)
-						self.registerPartialMatch(c, '{} - {}'.format(F_VARIANTS, self.t), score, mainVariant, span)
+						normedValue = ''.join([v[:i1], mainVariant, v[i2:]]) if keepContext else mainVariant
+						self.registerPartialMatch(c, '{} - {}'.format(F_VARIANTS, self.t), score, normedValue, span)
 
 # Misc utilities related to value normalization
 
@@ -1432,6 +1421,9 @@ def valueMatchers():
 	yield SubtypeMatcher(F_PERSON_ID, [F_PERSON, F_EMAIL, F_PHONE, F_NIR])
 	yield SubtypeMatcher(F_ID, [F_ORG_ID, F_PERSON_ID, F_PUBLI_ID])
 
+	# The top-level data type for organizations
+	yield SubtypeMatcher(F_INSTITUTION, [F_RD_STRUCT, F_ETAB, F_ENTREPRISE])
+
 	yield VocabMatcher(F_ENTREPRISE, fileToSet('resource/org_entreprise.vocab'), ignoreCase = True, partial = False)
 	yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('resource/org_enseignement.vocab'), ignoreCase = True, partial = False)
 
@@ -1439,10 +1431,14 @@ def valueMatchers():
 	yield AcronymMatcher()
 
 	# Normalize by expanding alternative variants (such as acronyms, abbreviations and synonyms) to their main variant
-	yield VariantExpander2(fileToVariantMap('resource/org_entreprise.syn'), F_ENTREPRISE)
-	yield VariantExpander2(fileToVariantMap('resource/org_rnsr.syn'), F_RD_DOMAIN, targetType = F_RD_STRUCT)
-	yield VariantExpander2(fileToVariantMap('resource/org_hal.syn'), F_RD_DOMAIN, targetType = F_RD_STRUCT)
-	yield VariantExpander2(fileToVariantMap('resource/etab_enssup.syn'), F_ETAB_ENSSUP)
+
+	# Those for which we keep surrounding context, because their variants correspond to generic terms (denominations and the like)
+	yield VariantExpander(fileToVariantMap('resource/org_societe.syn'), F_ENTREPRISE, True)
+	yield VariantExpander(fileToVariantMap('resource/org_entreprise.syn'), F_ENTREPRISE, True)
+	# Those for which we only keep the main variant associated to the extracted alt variant, because said variants correspond to specific entities
+	yield VariantExpander(fileToVariantMap('resource/org_rnsr.syn'), F_RD_DOMAIN, targetType = F_RD_STRUCT)
+	yield VariantExpander(fileToVariantMap('resource/org_hal.syn'), F_RD_DOMAIN, targetType = F_RD_STRUCT)
+	yield VariantExpander(fileToVariantMap('resource/etab_enssup.syn'), F_MESR, targetType = F_ETAB_ENSSUP)
 	
 # Main functionality
 
