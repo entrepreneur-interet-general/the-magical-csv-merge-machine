@@ -45,10 +45,10 @@ def pre_process(val):
     """
     val = re.sub('  +', ' ', val)
     val = re.sub('\n', ' ', val)
-    val = val.strip().strip('"').strip("'").lower().strip()
+    val = val.strip().strip('"').strip("'").strip().lower()
+    val = unidecode.unidecode(val)
     if val == '' :
         val = None
-    val = unidecode.unidecode(val)
     return val
 
 def exact_matches(data_1, data_2, match_fields):
@@ -150,7 +150,7 @@ def format_for_dedupe(tab, my_variable_definition, file_role):
 
 def load_deduper(data_ref, data_source, my_variable_definition):
     '''Load the dedupe object'''
-    sample_size = 50000
+    SAMPLE_SIZE = 5000
     
     # Get columns for match and change to standard dedupe variable definition
     cols_for_match = get_cols_for_match(my_variable_definition)
@@ -166,7 +166,7 @@ def load_deduper(data_ref, data_source, my_variable_definition):
     gazetteer = dedupe.Gazetteer(variable_definition=variable_definition, 
                                  num_cores=num_cores)
     
-    gazetteer.sample(data_1=nonexact_1, data_2=nonexact_2, sample_size=sample_size)
+    gazetteer.sample(data_1=nonexact_1, data_2=nonexact_2, sample_size=SAMPLE_SIZE)
     
     return gazetteer
 
