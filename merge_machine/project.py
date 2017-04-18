@@ -43,7 +43,21 @@ import pandas as pd
 from dedupe_linker import dedupe_linker
 from infer_nan import infer_mvs, replace_mvs
 from performance import results_analysis
+from preprocess_fields_v3 import inferTypes, normalizeValues
 
+MODULES = {
+    'infer': {
+        'infer_mvs': infer_mvs,
+        'inferTypes': inferTypes
+    },
+    'transform': {
+        'replace_mvs': replace_mvs,
+        'normalize': normalizeValues
+    },
+    'link': {
+        'dedupe_linker': dedupe_linker
+    }
+}
 
 MODULES = {
         'transform':{
@@ -53,13 +67,22 @@ MODULES = {
                     'replace_mvs': {
                                     'func': replace_mvs,
                                     'desc': 'Replace strings that represent missing values'
-                                    }
+                                    },
+                    'normalize': {
+                                'func':  normalizeValues,
+                                'desc': 'Normalizes and cleans up values, creating one or more new columns for each original one'
+                                }
                     },
         'infer':{
                 'infer_mvs': {
                             'func': infer_mvs,
                             'write_to': 'replace_mvs',
                             'desc': 'Infer values that represent missing values'
+                            },
+               'inferTypes': {
+                            'func': inferTypes,
+                            'write_to': 'normalize',
+                            'desc': 'Try to infer a data type for each column'
                             },
                 'results_analysis': {
                             'func': results_analysis,

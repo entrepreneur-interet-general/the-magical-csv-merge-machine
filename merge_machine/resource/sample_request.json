@@ -1,0 +1,14 @@
+{
+"data":{
+      "project_id":"347a7ba113a8cb3863b0c40246ec9098", 
+      "source":{"file_name": "test_merge.csv", "module":null}, 
+      "ref":{"file_name": "sirene", "internal":true}	
+      },
+"modules":
+    {
+    "source":
+        [
+        {"module_name": "replace_mvs", "infer": false, "params":{"mvs_dict": {"all": [], "columns": {}}}}
+        ]
+    }                
+}
