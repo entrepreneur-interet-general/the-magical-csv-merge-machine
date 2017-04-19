@@ -15,12 +15,15 @@ TODO: Categorial extraction
 """
 import os
 import time
+import logging
 
 from project import MODULES, Project
 from referential import Referential
 
 from CONFIG import DATA_PATH
 
+SOURCE = 'adresse_structure_hal.col' # 'SIREN_FUI.col' # 'abes.csv'
+REF = 'adresse.col' # 'asrc.csv'
 class UserProject(Project):
     """
     This class provides tools to manage user projects
@@ -199,39 +202,43 @@ class UserProject(Project):
 
 if __name__ == '__main__':
     import json
+
+    logging.basicConfig(filename = 'log/preprocess_fields.log', level = logging.DEBUG)
     
     # Create/Load a project
     project_id = "4e8286f034eef40e89dd99ebe6d87f21"
     proj = UserProject(None, create_new=True)
     
     # Upload source to project
-    file_names = ['source.csv']
+    file_names = [SOURCE]
     for file_name in file_names:
         file_path = os.path.join('local_test_data', file_name)
         with open(file_path) as f:
             proj.upload_init_data(f, 'source', file_name)
 
     # Upload ref to project
-    file_path = 'local_test_data/ref.csv'
+    file_path = 'local_test_data/' + REF
     with open(file_path) as f:
         proj.upload_init_data(f, 'ref', file_name)
 
     # Load source data to memory
-    proj.load_data(file_role='source', module_name='INIT' , file_name='source.csv')
+    proj.load_data(file_role='source', module_name='INIT' , file_name=SOURCE)
     
     
-    infered_params = proj.infer('infer_mvs', params=None)
+    inferredTypes = proj.infer('inferTypes', params = None)
     
+    print('Inferred data types:', inferredTypes)
+
     # Try transformation
-    params = {
-                'mvs_dict': {'all': [],
-                           'columns': {'uai': 
-                               [{'origin': ['len_ratio'], 'score': 0.2,'val': u'NR'}]
-                                    },
-                            },
-                'thresh': 0.6
-            }
-    proj.transform('replace_mvs', params)
+    params = { 'dataTypes': {
+    'TEL': 'Téléphone',
+    'EMAIL': 'Email',
+    'WEB': 'URL',
+    'ADPHYSIQUE': 'Voie',
+    'VILLE': 'Commune',
+    'CDPOSTAL': 'Code Postal',
+    'PAYS': 'Pays' } }
+    proj.transform('normalize', params)
     
     # Write transformed file
     proj.write_data()
@@ -239,6 +246,8 @@ if __name__ == '__main__':
     
     # Remove previously uploaded file
     # proj.remove_data('source', 'INIT', 'source.csv')    
+
+    sys.exit()
 
     # Try deduping
     paths = dict()

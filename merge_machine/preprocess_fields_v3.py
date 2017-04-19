@@ -160,11 +160,7 @@ def lowerOrNot(token, keepAcronyms, keepInitialized = False):
 			return toKeep + lowerOrNot(token[len(toKeep):], keepAcronyms, keepInitialized)
 	return token.lower()
 
-def toASCII(phrase):
-	# uni = phrase if isinstance(phrase, unicode) else unicode(phrase, 'utf-8')
-	# normed = unicodedata.normalize('NFKD', uni)
-	# return normed.encode('ASCII', 'ignore')
-	return unicodedata.normalize('NFKD', phrase)
+def toASCII(phrase): return unicodedata.normalize('NFKD', phrase)
 
 def caseToken(t, keepAcronyms): return toASCII(lowerOrNot(t.strip(), keepAcronyms))
 

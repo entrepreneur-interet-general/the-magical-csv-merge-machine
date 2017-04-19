@@ -368,6 +368,8 @@ class Project():
             raise Exception('Separator and/or Encoding not detected. Try uploading \
                             a csv with "," as separator with utf-8 encoding')
 
+        # TODO: add error if same column names
+
         # Complete log
         log = self.end_log(log, error=False)
                           

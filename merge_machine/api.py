@@ -322,10 +322,9 @@ def web_missing_values(project_type, project_id, file_role):
     # TODO: add click on missing values
     
     proj = init_project(project_type=project_type, project_id=project_id)
-    (file_role, module_name, file_name) = proj.get_last_written(file_role, 'INIT', None) # TODO: replace INIT with before_module
+    (file_role, module_name, file_name) = proj.get_last_written(file_role, 'INIT', None, before_module=None) # TODO: replace INIT with before_module
     print(file_role, module_name, file_name)
     proj.load_data(file_role, module_name, file_name)
-    
     
     mvs_config = proj.read_config_data(file_role, 'replace_mvs', 'config.json')
     if not mvs_config:
