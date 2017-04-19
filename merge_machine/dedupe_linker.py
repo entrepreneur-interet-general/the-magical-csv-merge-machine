@@ -23,6 +23,7 @@ import dedupe
 import gc
 import os
 import re
+from string import punctuation
 
 import pandas as pd
 import unidecode
@@ -36,7 +37,7 @@ NO_TRAINING_MESSAGE = 'No training file could be found. Use the interface (XXX)'
                       ', specify a matching ID to generate train (YYY), or ' \
                       'upload a training file using (ZZZ)'
 
-def pre_process(val):
+def pre_process(val, remove_punctuation=False):
     """
     Do a little bit of data cleaning. Things like casing, extra spaces, 
     quotes and new lines can be ignored.
@@ -45,6 +46,9 @@ def pre_process(val):
     """
     val = re.sub('  +', ' ', val)
     val = re.sub('\n', ' ', val)
+    if remove_punctuation:
+        for punc in punctuation:
+            val = re.sub(re.escape(punc), ' ', val)
     val = val.strip().strip('"').strip("'").strip().lower()
     val = unidecode.unidecode(val)
     if val == '' :
@@ -81,7 +85,7 @@ def exact_matches(data_1, data_2, match_fields):
     return nonexact_1, nonexact_2, exact_pairs
 
 
-def merge_results(ref, source, matched_records, selected_columns_from_ref):
+def merge_results(ref, source, matched_records):
     '''
     Takes the output of of matched records and merges the ref and source files.
     The output is of the same shape as the input source.
@@ -242,7 +246,6 @@ def dedupe_linker(paths, params):
     train_path = paths['train']   
     learned_settings_path = paths['learned_settings']
     my_variable_definition = params['variable_definition']
-    selected_columns_from_ref = params['selected_columns_from_ref']
     
     # Put to dedupe input format
     ref = pd.read_csv(ref_path, encoding='utf-8', dtype=str)
@@ -266,7 +269,7 @@ def dedupe_linker(paths, params):
     source = pd.read_csv(source_path, encoding='utf-8', dtype=str)
     
     # Generate out file
-    source = merge_results(ref, source, matched_records, selected_columns_from_ref)
+    source = merge_results(ref, source, matched_records)
     return source, threshold
 
 
