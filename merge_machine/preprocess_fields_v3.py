@@ -16,6 +16,17 @@ from dateparser import DateDataParser
 from postal.parser import parse_address
 import phonenumbers
 
+TIMES = Counter()
+def timed(original_func):
+    def wrapper(*args, **kwargs):
+        start = time.clock()
+        result = original_func(*args, **kwargs)
+        end = time.clock()
+        key = str(args[0]) + '.' + original_func.__name__
+        TIMES[key] += (end - start)
+        return result
+    return wrapper
+
 def chngrams(string="", n=3, top=None, threshold=0, exclude=[], **kwargs):
     """ Returns a dictionary of (character n-gram, count)-items.
         N-grams in the exclude list are not counted.
@@ -213,20 +224,22 @@ def validatedLexiconMap(lexicon, tokenize = False):
 
 # Loading CSV and raw (one entry per line) text files
 
-def fileRowIterator(fileName, sep = '\t'):
+def fileRowIterator(fileName, sep):
 	with open(fileName, mode = 'r') as csvfile:
 		reader = csv.reader(csvfile, delimiter = sep, quotechar='"')
 		for row in reader: yield list(map(stripped, row))
-
-def fileToRows(fileName, sep = '\t'): return fileRowIterator(fileName, sep)
 
 def fileColumnToList(fileName, c, sep = '\t', includeInvalid = True): 
 	return [r[c] for r in fileRowIterator(fileName, sep) if len(r) > c and (includeInvalid or isValidValue(r[c]))]
 
 def fileToVariantMap(fileName, sep = '|', includeSelf = False): 
 	''' The input format is pipe-separated, column 1 is the main variant, column 2 an alternative variant. 
+
 		Returns a reverse index, namely a map from original alternative variant to original main variant
-		If includeSelf is True, the main variant will be included in the list of alternative variants (so as to enable partial matching simultaneously).
+
+		Parameters:
+		includeSelf if True, then the main variant will be included in the list of alternative variants 
+			(so as to enable partial matching simultaneously).
 	'''
 	otherToMain = defaultdict(list)
 	mainToOther = defaultdict(list)
@@ -389,6 +402,7 @@ class RegexMatcher(TypeMatcher):
 		self.neg = neg
 		self.wordBoundary = wordBoundary
 		logging.info('SET UP regex matcher for <%s>: %s', self.t, self.p)
+	@timed
 	def match(self, c):
 		if self.validator is not None and not self.validator(c.value): return
 		if self.partial:
@@ -457,6 +471,7 @@ class TokenizedMatcher(TypeMatcher):
 		self.maxTokens = currentMax
 		logging.info('SET UP %d-token matcher (%s-defined length) for <%s> with lexicon of size %d, total variants %d', 
 			self.maxTokens, 'user' if maxTokens > 0 else 'data', self.t, len(self.phrases), len(self.tokenIdx))
+	@timed
 	def match(self, c):
 		tokens = normalizeAndValidateTokens(c.value)
 		if tokens is not None:
@@ -513,6 +528,7 @@ class LabelMatcher(TypeMatcher):
 		elif mm == MATCH_MODE_CLOSE: 
 			self.fss = buildFSS(labelsMap.keys())
 			logging.info('SET UP close label matcher for <%s>: lexicon of size %d', self.t, len(labelsMap))
+	@timed
 	def match(self, c):
 		v = normalizeAndValidatePhrase(c.value)
 		if not v: return
@@ -538,6 +554,7 @@ class SubtypeMatcher(TypeMatcher):
 		if len(subtypes) < 1: raise Error('Invalid subtype matcher setup')
 		logging.info('SET UP subtype matcher for <%s> with subtypes: %s', self.t, ', '.join(subtypes))
 		PARENT_CHILD_RELS[t] |= set(subtypes)
+	@timed
 	def match(self, c):
 		sts = list(self.subtypes & c.notExcludedTypes())
 		if len(sts) < 1: return None
@@ -565,6 +582,7 @@ class CompositeMatcher(TypeMatcher):
 		if len(compTypes) < 1: raise RuntimeError('Invalid composite matcher setup')
 		logging.info('SET UP composite matcher for <%s> with %d types', self.t, len(compTypes))
 		PARENT_CHILD_RELS[t] |= set(compTypes)
+	@timed
 	def match(self, c):
 		sts = list(set(self.compTypes) & c.notExcludedTypes())
 		if len(sts) < 1: return None
@@ -598,6 +616,7 @@ class CompositeRegexMatcher(TypeMatcher):
 		self.flags = re.I if ignoreCase else 0
 		self.partial = partial
 		self.validator = validator
+	@timed
 	def match(self, c):
 		if self.validator is not None and not self.validator(c.value): return
 		if self.partial:
@@ -634,7 +653,7 @@ PARENT_CHILD_RATIO = 2
 
 def parseFieldsFromCSV(fileName, delimiter):
 	''' Takes a CSV filepath and a delimiter as input, returns an instance of the Fields class. '''
-	a = list(fileToRows(fileName, sep = delimiter))
+	a = list(fileRowIterator(fileName, delimiter))
 	return Fields({ Cell(h, h): Field([Cell(a[i][k], h) for i in range(1, len(a)) if len(a[i]) > k]) for (k, h) in enumerate(a[0]) }, 
 		len(a) - 1)
 
@@ -711,8 +730,18 @@ class Fields(object):
 						if of not in nc: continue
 						ncs = nc[of] if isinstance(nc[of], list) else [nc[of]]
 						b[i][j] = ncs if b[i][j] is None else b[i][j] + ncs
-		# Print headers
 		if outputFormat == 'md': 
+			# Print timing info
+			print('## Temps de traitement')
+			print('')
+			print('|Classe et méthode|Temps total (ms)|')
+			print('|-|-|')
+			if len(TIMES) > 0:
+				for k, v in TIMES.most_common(20):
+					print('|{}|{}|'.format(k, str(v)))
+			# Print headers
+			print('## Résultats de normalisation')
+			print('')
 			print('|{}|'.format('|'.join(ofs)))
 			print('|{}|'.format('|'.join('-' * len(ofs))))
 		else:
@@ -924,6 +953,7 @@ DDP = DateDataParser(languages = ['fr', 'en'], settings = { 'PREFER_LANGUAGE_DAT
 class CustomDateMatcher(TypeMatcher):
 	def __init__(self):
 		super(CustomDateMatcher, self).__init__(F_DATE)
+	@timed
 	def match(self, c):
 		# TODO check prioritization of ambiguous dates: the most complex case would be first encountering some FR date(s), 
 		# then an ambiguous date implicitly using US (not UK or AUS) locale (e.g. 03/04/2014 which should resolve to 
@@ -955,6 +985,7 @@ class CustomTelephoneMatcher(TypeMatcher):
 	def __init__(self, partial = False):
 		super(CustomTelephoneMatcher, self).__init__(F_PHONE)
 		self.partial = partial
+	@timed
 	def match(self, c):
 		if partial:
 			try:
@@ -1054,6 +1085,7 @@ def parsePersonNames(s):
 class CustomPersonNameMatcher(TypeMatcher):
 	def __init__(self):
 		super(CustomPersonNameMatcher, self).__init__(F_PERSON)
+	@timed
 	def match(self, c):
 		parsedList = parsePersonNames(c.value)
 		if not parsedList: return
@@ -1091,6 +1123,7 @@ def rejoin(v): return toASCII(v)
 class CustomAddressMatcher(TypeMatcher):
 	def __init__(self):
 		super(CustomAddressMatcher, self).__init__(F_ADDRESS)
+	@timed
 	def match(self, c):
 		if c.value.isdigit():
 			logging.debug('Bailing out of %s for numeric value: %s', self, c)
@@ -1125,6 +1158,7 @@ COMMUNE_LEXICON = fileToSet('resource/commune')
 class FrenchAddressMatcher(LabelMatcher):
 	def __init__(self):
 		super(FrenchAddressMatcher, self).__init__(F_ADDRESS, COMMUNE_LEXICON, MATCH_MODE_CLOSE)
+	@timed
 	def match(self, c):
 		response = urllib.urlopen("http://api-adresse.data.gouv.fr/search/?q=%s" % c.value)
 		try:
@@ -1183,6 +1217,7 @@ class AcronymMatcher(TypeMatcher):
 		super(AcronymMatcher, self).__init__(F_ACRONYMS)
 		self.minAcroSize = minAcroSize
 		self.maxAcroSize = maxAcroSize
+	@timed
 	def match(self, c):
 		for (acro, i) in self.acronymsInPhrase(c.value):
 			self.registerPartialMatch(c, '{} - {}'.format(F_ACRONYMS, c.f), 100, acro, (i, i + len(acro)))
@@ -1224,6 +1259,7 @@ class VariantExpander(TypeMatcher):
 				self.tokenIdx[matchedVariantPhrase].add(altVariant)
 				if altVariant not in variantsMap: 
 					raise RuntimeError('Alternative variant {} not found in variants map'.format(altVariant))
+	@timed
 	def match(self, c):
 		if self.domainType not in c.notExcludedTypes(): return
 		tokens = normalizeAndValidateTokens(c.value)
@@ -1246,7 +1282,7 @@ class VariantExpander(TypeMatcher):
 						self.registerPartialMatch(c, self.t, score, altVariant, span)
 						mainVariant = self.variantsMap[altVariant]
 						logging.debug('%s matched on %s: %s expanded to main variant %s', self, matchRefPhrase, altVariant, mainVariant)
-						normedValue = ''.join([v[:i1], mainVariant, v[i2:]]) if keepContext else mainVariant
+						normedValue = ''.join([v[:i1], mainVariant, v[i2:]]) if self.keepContext else mainVariant
 						self.registerPartialMatch(c, '{} - {}'.format(F_VARIANTS, self.t), score, normedValue, span)
 
 # Misc utilities related to value normalization
@@ -1284,7 +1320,7 @@ def headerMatchers():
 	''' Generates type matcher objects that can be applied to each column header in order to infer 
 		whether that column's type is the matcher's type (or alternatively a parent type or a child type).'''
 	headerSims = defaultdict(set)
-	for row in fileToRows('resource/header_names', sep = '|'):
+	for row in fileRowIterator('resource/header_names', '|'):
 		r = list(map(lambda s: s.strip(), row))
 		if len(r) < 1: continue
 		yield HeaderMatcher(r[0], set(r))
@@ -1436,9 +1472,9 @@ def valueMatchers():
 	yield VariantExpander(fileToVariantMap('resource/org_societe.syn'), F_ENTREPRISE, True)
 	yield VariantExpander(fileToVariantMap('resource/org_entreprise.syn'), F_ENTREPRISE, True)
 	# Those for which we only keep the main variant associated to the extracted alt variant, because said variants correspond to specific entities
-	yield VariantExpander(fileToVariantMap('resource/org_rnsr.syn'), F_RD_DOMAIN, targetType = F_RD_STRUCT)
-	yield VariantExpander(fileToVariantMap('resource/org_hal.syn'), F_RD_DOMAIN, targetType = F_RD_STRUCT)
-	yield VariantExpander(fileToVariantMap('resource/etab_enssup.syn'), F_MESR, targetType = F_ETAB_ENSSUP)
+	yield VariantExpander(fileToVariantMap('resource/org_rnsr.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT)
+	yield VariantExpander(fileToVariantMap('resource/org_hal.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT)
+	yield VariantExpander(fileToVariantMap('resource/etab_enssup.syn'), F_MESR, False, targetType = F_ETAB_ENSSUP)
 	
 # Main functionality
 
@@ -1501,11 +1537,11 @@ if __name__ == '__main__':
 					  help = "Output format (md / csv)")
 	(options, args) = parser.parse_args()
 	separator = options.delimiter if options.delimiter else '|'
-	of = options.of if options.of else separator
+	outputFormat = options.of if options.of else separator
 	fields = parseFieldsFromCSV(options.srcFileName, delimiter = separator)
 
 	# Single-pass method
-	#fields.processValues(outputFormat = of)
+	#fields.processValues(outputFormat = outputFormat)
 
 	# Two-pass method
 	res = list()
