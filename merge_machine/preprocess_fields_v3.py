@@ -345,6 +345,12 @@ F_ETAB_ENSSUP = u'Etablissement d\'Enseignement Supérieur'
 F_APB_MENTION = u'Mention APB'
 F_RD_DOMAIN = u'Domaine de Recherche'
 
+# A very high-level institution, comprising
+# 1. (higher) education entities
+# 2. R&D organizations
+# 3. entreprises/corporations 
+F_INSTITUTION = u'Institution'
+
 F_CLINICALTRIAL_NAME = u'Nom d\'essai clinique'
 F_MEDICAL_SPEC = u'Spécialité médicale'
 F_BIOMEDICAL = u'Entité biomédicale'
@@ -1197,70 +1203,53 @@ class AcronymMatcher(TypeMatcher):
                 tl = tokens[i1 : i2]
                 yield ''.join([t[0] for t in tl]).upper()
 
-class VariantExpander(TokenizedMatcher):
-    def __init__(self, variantsMap, domainType, targetType = None):
-        ''' Parameters:
-            variantsMap an inverted index from variant to main phrase
-            domainType only entities of this type will be subjected to variant expansion
-                (i.e. it represents the domain of semantic validity for those synonym relationships)
-            targetType the type into which matching entities (i.e. containing either a main or secondary variant) will be cast
-                (i.e. what kind of hit is produced) '''
-        super(VariantExpander, self).__init__(domainType, variantsMap.keys())
-        self.t0 = domainType if targetType is None else targetType
-        self.variantsMap = variantsMap
-    def matchFound(self, c, score, matchRefPhrase, span):
-        super(VariantExpander, self).matchFound(c, score, matchRefPhrase, span)
-        if matchRefPhrase not in self.variantsMap:
-            logging.warning('%s could not find variant %s in original %s', self, matchRefPhrase, c.value)
-        else:
-            mv = self.variantsMap[matchRefPhrase]
-            self.registerPartialMatch(c, '{} - {}'.format(F_VARIANTS, self.t0), score, mv, span)
-
-class VariantExpander2(TypeMatcher):
-    def __init__(self, variantsMap, domainType, targetType = None, scorer = tokenScorer):
-        super(VariantExpander2, self).__init__(domainType if targetType is None else targetType)
-        self.domainType = domainType
-        self.variantsMap = variantsMap # map from original alternative variant to original main variant
-        self.scorer = scorer
-        self.tokenIdx = defaultdict(set) # map from alternative variant as joined-normalized-token-list to original alternative variant
-        self.minTokens = 3
-        self.maxTokens = DTC
-        # map of alternative variants (including main or not!), from normalized string to list of original strings:
-        phrasesMap = validatedLexiconMap(variantsMap.keys(), tokenize = True)
-        for (phrase, altVariants) in phrasesMap.items():
-            tokens = phrase.split()
-            l = len(tokens)
-            if l < 1 or l > DTC: continue
-            self.minTokens = min(self.minTokens, l)
-            self.maxTokens = max(self.maxTokens, l)
-            matchedVariantPhrase = ' '.join(tokens[:self.maxTokens])
-            for altVariant in altVariants:
-                self.tokenIdx[matchedVariantPhrase].add(altVariant)
-                if altVariant not in variantsMap:
-                    raise RuntimeError('Alternative variant {} not found in variants map'.format(altVariant))
-    def match(self, c):
-        if self.domainType not in c.notExcludedTypes(): return
-        tokens = normalizeAndValidateTokens(c.value)
-        if tokens is not None:
-            for k2 in range(self.maxTokens, 0, -1):
-                for k1 in range(0, len(tokens) + 1 - k2):
-                    matchSrcTokens = tokens[k1:k1 + k2]
-                    matchRefPhrase = ' '.join(matchSrcTokens)
-                    if matchRefPhrase not in self.tokenIdx: continue
-                    for altVariant in self.tokenIdx[matchRefPhrase]:
-                        score = self.scorer(matchSrcTokens, tokens, matchRefPhrase, altVariant)
-                        v = justCase(c.value)
-                        i1 = v.find(tokens[k1])
-                        if i1 >= 0: i2 = v.find(tokens[k1 + k2 - 1], i1) if k2 > 1 else i1
-                        if i1 < 0 or i2 < 0:
-                            logging.warning('%s could not find tokens "%s ... %s" in original "%s"', self, tokens[k1], tokens[k1 + k2 - 1], v)
-                            span = (0, len(c.value))
-                        else:
-                            span = (i1, i2 + len(tokens[k1 + k2 - 1]))
-                        self.registerPartialMatch(c, self.t, score, altVariant, span)
-                        mainVariant = self.variantsMap[altVariant]
-                        logging.debug('%s matched on %s: %s expanded to main variant %s', self, matchRefPhrase, altVariant, mainVariant)
-                        self.registerPartialMatch(c, '{} - {}'.format(F_VARIANTS, self.t), score, mainVariant, span)
+class VariantExpander(TypeMatcher):
+	def __init__(self, variantsMap, domainType, keepContext, targetType = None, scorer = tokenScorer):
+		super(VariantExpander, self).__init__(domainType if targetType is None else targetType)
+		self.domainType = domainType
+		self.keepContext = keepContext # if true, then the main variant will be surrounded by original context in the normalized value
+		self.variantsMap = variantsMap # map from original alternative variant to original main variant
+		self.scorer = scorer
+		self.tokenIdx = defaultdict(set) # map from alternative variant as joined-normalized-token-list to original alternative variant
+		self.minTokens = 3
+		self.maxTokens = DTC
+		# map of alternative variants (including main or not!), from normalized string to list of original strings:
+		phrasesMap = validatedLexiconMap(variantsMap.keys(), tokenize = True)
+		for (phrase, altVariants) in phrasesMap.items():
+			tokens = phrase.split()
+			l = len(tokens)
+			if l < 1 or l > DTC: continue
+			self.minTokens = min(self.minTokens, l)
+			self.maxTokens = max(self.maxTokens, l)
+			matchedVariantPhrase = ' '.join(tokens[:self.maxTokens])
+			for altVariant in altVariants:
+				self.tokenIdx[matchedVariantPhrase].add(altVariant)
+				if altVariant not in variantsMap: 
+					raise RuntimeError('Alternative variant {} not found in variants map'.format(altVariant))
+	def match(self, c):
+		if self.domainType not in c.notExcludedTypes(): return
+		tokens = normalizeAndValidateTokens(c.value)
+		if tokens is not None:
+			for k2 in range(self.maxTokens, 0, -1):
+				for k1 in range(0, len(tokens) + 1 - k2):
+					matchSrcTokens = tokens[k1:k1 + k2]
+					matchRefPhrase = ' '.join(matchSrcTokens)
+					if matchRefPhrase not in self.tokenIdx: continue
+					for altVariant in self.tokenIdx[matchRefPhrase]:
+						score = self.scorer(matchSrcTokens, tokens, matchRefPhrase, altVariant)
+						v = justCase(c.value)
+						i1 = v.find(tokens[k1])
+						if i1 >= 0: i2 = v.find(tokens[k1 + k2 - 1], i1) if k2 > 1 else i1
+						if i1 < 0 or i2 < 0:
+							logging.warning('%s could not find tokens "%s ... %s" in original "%s"', self, tokens[k1], tokens[k1 + k2 - 1], v)
+							span = (0, len(c.value))
+						else:
+							span = (i1, i2 + len(tokens[k1 + k2 - 1]))
+						self.registerPartialMatch(c, self.t, score, altVariant, span)
+						mainVariant = self.variantsMap[altVariant]
+						logging.debug('%s matched on %s: %s expanded to main variant %s', self, matchRefPhrase, altVariant, mainVariant)
+						normedValue = ''.join([v[:i1], mainVariant, v[i2:]]) if keepContext else mainVariant
+						self.registerPartialMatch(c, '{} - {}'.format(F_VARIANTS, self.t), score, normedValue, span)
 
 # Misc utilities related to value normalization
 
@@ -1306,145 +1295,152 @@ def headerMatchers():
 EMAIL_PATTERN = "[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
 
 def valueMatchers():
-    ''' Generates type matcher objects that can be applied to each value cell in a column in order to infer
-        whether that column's type is the matcher's type (or alternatively a parent type or a child type).'''
+	''' Generates type matcher objects that can be applied to each value cell in a column in order to infer 
+		whether that column's type is the matcher's type (or alternatively a parent type or a child type).'''
 
-    # Identifiers (typically but not necessarily unique)
-    # yield TemplateMatcher('Identifiant', 90) # TODO distinguish unique vs. non-unique
+	# Identifiers (typically but not necessarily unique)
+	# yield TemplateMatcher('Identifiant', 90) # TODO distinguish unique vs. non-unique
 
-    # Person names
-    # yield CustomPersonNameMatcher()
-    yield LabelMatcher(F_FIRST, PRENOM_LEXICON, MATCH_MODE_EXACT)
-    yield TokenizedMatcher(F_FIRST,
-        PRENOM_LEXICON,
-        maxTokens = 2, scorer = partial(tokenScorer, minSrcTokenRatio = 20, minSrcCharRatio = 10)) # maxTokens = 2 for composite first names!
-    titleLexicon = fileToSet('resource/titre_appel') | fileToSet('resource/titre_academique')
-    yield TokenizedMatcher(F_TITLE, titleLexicon,
-        maxTokens = 1)
-    yield CompositeRegexMatcher(F_PERSON, PAT_FIRST_NAME, { F_FIRST: 1}, ignoreCase = True)
-    yield CompositeRegexMatcher(F_PERSON, PAT_FIRST_LAST_NAME, { F_FIRST: 1, F_LAST: 2 }, ignoreCase = True)
-    yield CompositeRegexMatcher(F_PERSON, PAT_LAST_FIRST_NAME, { F_FIRST: 2, F_LAST: 1 }, ignoreCase = True)
-    yield CompositeRegexMatcher(F_PERSON, PAT_FIRSTINITIAL_LAST_NAME, { F_FIRST: 1, F_LAST: 2 }, ignoreCase = False)
-    yield CompositeRegexMatcher(F_PERSON, PAT_LAST_FIRSTINITIAL_NAME, { F_FIRST: 2, F_LAST: 1 }, ignoreCase = False)
-    yield CompositeMatcher(F_PERSON, [F_TITLE, F_FIRST])
-    # Negate person name matches when it's a street name
-    yield RegexMatcher(F_PERSON, "(rue|avenue|av|boulevard|bvd|bd|chemin|route|place|allee) .{0,10} (%s)" % PAT_FIRST_NAME,
-        g = 1, ignoreCase = True, partial = True, neg = True)
+	# Person names
+	# yield CustomPersonNameMatcher()
+	yield LabelMatcher(F_FIRST, PRENOM_LEXICON, MATCH_MODE_EXACT)
+	yield TokenizedMatcher(F_FIRST, 
+		PRENOM_LEXICON, 
+		maxTokens = 2, scorer = partial(tokenScorer, minSrcTokenRatio = 20, minSrcCharRatio = 10)) # maxTokens = 2 for composite first names!
+	titleLexicon = fileToSet('resource/titre_appel') | fileToSet('resource/titre_academique') 
+	yield TokenizedMatcher(F_TITLE, titleLexicon, 
+		maxTokens = 1)
+	yield CompositeRegexMatcher(F_PERSON, PAT_FIRST_NAME, { F_FIRST: 1}, ignoreCase = True)
+	yield CompositeRegexMatcher(F_PERSON, PAT_FIRST_LAST_NAME, { F_FIRST: 1, F_LAST: 2 }, ignoreCase = True)
+	yield CompositeRegexMatcher(F_PERSON, PAT_LAST_FIRST_NAME, { F_FIRST: 2, F_LAST: 1 }, ignoreCase = True)
+	yield CompositeRegexMatcher(F_PERSON, PAT_FIRSTINITIAL_LAST_NAME, { F_FIRST: 1, F_LAST: 2 }, ignoreCase = False)
+	yield CompositeRegexMatcher(F_PERSON, PAT_LAST_FIRSTINITIAL_NAME, { F_FIRST: 2, F_LAST: 1 }, ignoreCase = False)
+	yield CompositeMatcher(F_PERSON, [F_TITLE, F_FIRST])
+	# Negate person name matches when it's a street name
+	yield RegexMatcher(F_PERSON, "(rue|avenue|av|boulevard|bvd|bd|chemin|route|place|allee) .{0,10} (%s)" % PAT_FIRST_NAME, 
+		g = 1, ignoreCase = True, partial = True, neg = True)
 
-    # Web stuff: Email, URL
+	# Web stuff: Email, URL
 
-    yield RegexMatcher(F_EMAIL, EMAIL_PATTERN)
-    yield RegexMatcher(F_URL, "@^(https?|ftp)://[^\s/$.?#].[^\s]*$@iS")
+	yield RegexMatcher(F_EMAIL, EMAIL_PATTERN)
+	yield RegexMatcher(F_URL, "@^(https?|ftp)://[^\s/$.?#].[^\s]*$@iS")
 
-    # Phone number
-    yield CustomTelephoneMatcher()
-    yield CustomTelephoneMatcher(partial = True)
+	# Phone number
+	yield CustomTelephoneMatcher()
+	yield CustomTelephoneMatcher(partial = True)
 
-    # Other individual IDs
-    # yield RegexMatcher(F_INSEE, "(2[AB]|[0-9]{2})[0-9]{3}") # a.k.a. "numéro d'inscription au répertoire" or "numéro de sécurité sociale"
-    yield RegexMatcher(F_NIR, "[0-9]15") # from https://fr.wikipedia.org/wiki/Code_Insee#Identification_des_individus
+	# Other individual IDs
+	# yield RegexMatcher(F_INSEE, "(2[AB]|[0-9]{2})[0-9]{3}") # a.k.a. "numéro d'inscription au répertoire" or "numéro de sécurité sociale"
+	yield RegexMatcher(F_NIR, "[0-9]15") # from https://fr.wikipedia.org/wiki/Code_Insee#Identification_des_individus
 
-    # Date-time
-    yield RegexMatcher(F_YEAR, "19[0-9]{2}")
-    yield RegexMatcher(F_YEAR, "20[0-9]{2}")
-    # yield RegexMatcher(F_DATE, "[0-9]{1,2}[\-/][01]?[0-9][\-/](19|20)[0-9]{2}", partial = True)
-    yield CustomDateMatcher()
-    yield SubtypeMatcher(F_DATE, [F_YEAR])
-    yield SubtypeMatcher(F_STRUCTURED_TYPE, [F_DATE, F_URL, F_EMAIL, F_PHONE])
+	# Date-time
+	yield RegexMatcher(F_YEAR, "19[0-9]{2}")
+	yield RegexMatcher(F_YEAR, "20[0-9]{2}")
+	# yield RegexMatcher(F_DATE, "[0-9]{1,2}[\-/][01]?[0-9][\-/](19|20)[0-9]{2}", partial = True) 
+	yield CustomDateMatcher()
+	yield SubtypeMatcher(F_DATE, [F_YEAR])
+	yield SubtypeMatcher(F_STRUCTURED_TYPE, [F_DATE, F_URL, F_EMAIL, F_PHONE])
 
-    # MESR Domain
-    yield RegexMatcher(F_SIREN, "[0-9]{9}", validator = validateLuhn)
-    yield RegexMatcher(F_SIRET, "[0-9]{14}", validator = validateLuhn)
-    yield RegexMatcher(F_NNS, "[0-9]{9}[a-zA-Z]")
-    yield RegexMatcher(F_UAI, "[0-9]{7}[a-zA-Z]")
-    yield RegexMatcher(F_UMR, "UMR-?[ A-Z]{0,8}([0-9]{3,4})", g = 1, partial = True)
-    # yield TokenizedMatcher(F_RD_STRUCT, fileToSet('resource/structure_recherche_HAL.col'),
-    #     maxTokens = 6)
-    yield LabelMatcher(F_RD_STRUCT, fileToSet('resource/structure_recherche_short.col'), MATCH_MODE_EXACT)
-    yield TokenizedMatcher(F_RD_PARTNER,
-        fileToSet('resource/partenaire_recherche_ANR.col') | fileToSet('resource/partenaire_recherche_FUI.col') | fileToSet('resource/institution_H2020.col'),
-        maxTokens = 6)
-    yield TokenizedMatcher(F_CLINICALTRIAL_COLLAB, fileToSet('resource/clinical_trial_sponsor_collab.col'),
-        maxTokens = 4)
-    yield SubtypeMatcher(F_RD, [F_RD_STRUCT, F_RD_PARTNER, F_CLINICALTRIAL_COLLAB])
-    # SIES/APB
-    yield VocabMatcher(F_ETAB, fileToSet('resource/etablissement.vocab'), ignoreCase = True, partial = False)
-    # yield TokenizedMatcher(F_ETAB, fileToSet('resource/etablissement'),
-    #     maxTokens = 2)
-    yield LabelMatcher(F_ETAB_ENSSUP, fileToSet('resource/etab_enssup'), MATCH_MODE_EXACT)
-    yield SubtypeMatcher(F_ETAB, [F_ETAB_ENSSUP])
-    yield LabelMatcher(F_APB_MENTION, fileToSet('resource/mention_licence_sise'), MATCH_MODE_EXACT) # FIXME: MATCH_MODE_CLOSE too heavy!
-    yield TokenizedMatcher(F_APB_MENTION, fileToSet('resource/mention_licence_apb2017.col'),
-        maxTokens = 5)
-    yield TokenizedMatcher(F_RD_DOMAIN, fileToSet('resource/domaine_recherche.col'),
-        maxTokens = 4)
-    # yield CategoryMatcher(F_RD_DOMAIN, 'publi')
-    yield SubtypeMatcher(F_MESR, [F_RD, F_APB_MENTION, F_RD_DOMAIN])
+	# MESR Domain
+	yield RegexMatcher(F_SIREN, "[0-9]{9}", validator = validateLuhn)
+	yield RegexMatcher(F_SIRET, "[0-9]{14}", validator = validateLuhn)
+	yield RegexMatcher(F_NNS, "[0-9]{9}[a-zA-Z]")
+	yield RegexMatcher(F_UAI, "[0-9]{7}[a-zA-Z]")
+	yield RegexMatcher(F_UMR, "UMR-?[ A-Z]{0,8}([0-9]{3,4})", g = 1, partial = True)
+	# yield TokenizedMatcher(F_RD_STRUCT, fileToSet('resource/structure_recherche_HAL.col'), 
+	# 	maxTokens = 6)
+	yield LabelMatcher(F_RD_STRUCT, fileToSet('resource/structure_recherche_short.col'), MATCH_MODE_EXACT)
+	yield TokenizedMatcher(F_RD_PARTNER, 
+		fileToSet('resource/partenaire_recherche_ANR.col') | fileToSet('resource/partenaire_recherche_FUI.col') | fileToSet('resource/institution_H2020.col'), 
+		maxTokens = 6)
+	yield TokenizedMatcher(F_CLINICALTRIAL_COLLAB, fileToSet('resource/clinical_trial_sponsor_collab.col'), 
+		maxTokens = 4)
+	yield SubtypeMatcher(F_RD, [F_RD_STRUCT, F_RD_PARTNER, F_CLINICALTRIAL_COLLAB])
+	# SIES/APB 
+	yield VocabMatcher(F_ETAB, fileToSet('resource/etablissement.vocab'), ignoreCase = True, partial = False)
+	# yield TokenizedMatcher(F_ETAB, fileToSet('resource/etablissement'), 
+	# 	maxTokens = 2)
+	yield LabelMatcher(F_ETAB_ENSSUP, fileToSet('resource/etab_enssup'), MATCH_MODE_EXACT)
+	yield SubtypeMatcher(F_ETAB, [F_ETAB_ENSSUP])
+	yield LabelMatcher(F_APB_MENTION, fileToSet('resource/mention_licence_sise'), MATCH_MODE_EXACT) # FIXME: MATCH_MODE_CLOSE too heavy!
+	yield TokenizedMatcher(F_APB_MENTION, fileToSet('resource/mention_licence_apb2017.col'), 
+		maxTokens = 5)
+	yield TokenizedMatcher(F_RD_DOMAIN, fileToSet('resource/domaine_recherche.col'), 
+		maxTokens = 4)
+	# yield CategoryMatcher(F_RD_DOMAIN, 'publi')
+	yield SubtypeMatcher(F_MESR, [F_RD, F_APB_MENTION, F_RD_DOMAIN])
 
-    # Geo Domain
-    # yield FrenchAddressMatcher()
-    yield CustomAddressMatcher()
-    yield RegexMatcher(F_ZIP, "[0-9]{5}")
-    yield LabelMatcher(F_COUNTRY, fileToSet('resource/country'), MATCH_MODE_EXACT)
+	# Geo Domain
+	# yield FrenchAddressMatcher()
+	yield CustomAddressMatcher()
+	yield RegexMatcher(F_ZIP, "[0-9]{5}")
+	yield LabelMatcher(F_COUNTRY, fileToSet('resource/country'), MATCH_MODE_EXACT)
 
-    # yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT) # MATCH_MODE_CLOSE too imprecise
-    # yield TokenizedMatcher(F_CITY, COMMUNE_LEXICON, maxTokens = 3)
-    yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
+	# yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT) # MATCH_MODE_CLOSE too imprecise
+	# yield TokenizedMatcher(F_CITY, COMMUNE_LEXICON, maxTokens = 3)
+	yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
 
-    yield TokenizedMatcher(F_DPT, fileToSet('resource/departement')) # TODO use LabelMatcher instead?
-    yield TokenizedMatcher(F_REGION, fileToSet('resource/region')) # TODO use LabelMatcher instead?
-    yield TokenizedMatcher(F_STREET, fileToSet('resource/voie.col'), maxTokens = 2)
-    yield CompositeMatcher(F_ADDRESS, [F_STREET, F_ZIP, F_CITY, F_COUNTRY])
-    yield SubtypeMatcher(F_GEO, [F_ADDRESS, F_ZIP, F_CITY, F_DPT, F_REGION, F_COUNTRY])
+	yield TokenizedMatcher(F_DPT, fileToSet('resource/departement')) # TODO use LabelMatcher instead?
+	yield TokenizedMatcher(F_REGION, fileToSet('resource/region')) # TODO use LabelMatcher instead?
+	yield TokenizedMatcher(F_STREET, fileToSet('resource/voie.col'), maxTokens = 2)
+	yield CompositeMatcher(F_ADDRESS, [F_STREET, F_ZIP, F_CITY, F_COUNTRY])
+	yield SubtypeMatcher(F_GEO, [F_ADDRESS, F_ZIP, F_CITY, F_DPT, F_REGION, F_COUNTRY])
 
-    # Publications
-    # From http://stackoverflow.com/questions/27910/finding-a-doi-in-a-document-or-page
-    yield RegexMatcher(F_DOI, '\b(10[.][0-9]{4,}(?:[.][0-9]+)*/(?:(?!["&\'<>])\S)+)\b')
-    yield RegexMatcher(F_ISSN, '\d{4}-\d{3}[\dxX]$')
-    yield SubtypeMatcher(F_PUBLI_ID, [F_DOI, F_ISSN]) # + 'IdRef' ?
-    pubTitleLexicon = fileToSet('resource/titre_revue')
-    yield LabelMatcher(F_JOURNAL, pubTitleLexicon, MATCH_MODE_EXACT) # FIXME: MATCH_MODE_CLOSE too heavy!
-    yield TokenizedMatcher(F_JOURNAL, pubTitleLexicon,
-        maxTokens = 5, scorer = partial(tokenScorer, minSrcTokenRatio = 90))
-    articleLexicon = fileToSet('resource/article_fr') | fileToSet('resource/article_en')
-    yield TokenizedMatcher(F_ARTICLE, articleLexicon)
-    yield SubtypeMatcher(F_ARTICLE, [F_ABSTRACT, F_PUBLI_ID, F_ARTICLE_CONTENT])
-    # yield BiblioMatcher()
-    yield SubtypeMatcher(F_PUBLI, [F_JOURNAL, F_PUBLI_ID, F_ARTICLE, F_ABSTRACT])
+	# Publications
+	# From http://stackoverflow.com/questions/27910/finding-a-doi-in-a-document-or-page
+	yield RegexMatcher(F_DOI, '\b(10[.][0-9]{4,}(?:[.][0-9]+)*/(?:(?!["&\'<>])\S)+)\b') 
+	yield RegexMatcher(F_ISSN, '\d{4}-\d{3}[\dxX]$')
+	yield SubtypeMatcher(F_PUBLI_ID, [F_DOI, F_ISSN]) # + 'IdRef' ?
+	pubTitleLexicon = fileToSet('resource/titre_revue')
+	yield LabelMatcher(F_JOURNAL, pubTitleLexicon, MATCH_MODE_EXACT) # FIXME: MATCH_MODE_CLOSE too heavy!
+	yield TokenizedMatcher(F_JOURNAL, pubTitleLexicon, 
+		maxTokens = 5, scorer = partial(tokenScorer, minSrcTokenRatio = 90))
+	articleLexicon = fileToSet('resource/article_fr') | fileToSet('resource/article_en')
+	yield TokenizedMatcher(F_ARTICLE, articleLexicon)
+	yield SubtypeMatcher(F_ARTICLE, [F_ABSTRACT, F_PUBLI_ID, F_ARTICLE_CONTENT])
+	# yield BiblioMatcher()
+	yield SubtypeMatcher(F_PUBLI, [F_JOURNAL, F_PUBLI_ID, F_ARTICLE, F_ABSTRACT])
 
-    # Text fields
-    yield SubtypeMatcher(F_TEXT, [F_FRENCH, F_ENGLISH])
-    yield SubtypeMatcher(F_TEXT, [F_ARTICLE, F_ABSTRACT])
+	# Text fields
+	yield SubtypeMatcher(F_TEXT, [F_FRENCH, F_ENGLISH])
+	yield SubtypeMatcher(F_TEXT, [F_ARTICLE, F_ABSTRACT])
 
-    # Biomedical Domain
-    yield TokenizedMatcher(F_CLINICALTRIAL_NAME, fileToSet('resource/clinical_trial_acronym'))
-    yield TokenizedMatcher(F_MEDICAL_SPEC, fileToSet('resource/specialite_medicale_fr') | fileToSet('resource/specialite_medicale_en'))
-    yield SubtypeMatcher(F_BIOMEDICAL, [F_CLINICALTRIAL_NAME, F_MEDICAL_SPEC])
+	# Biomedical Domain
+	yield TokenizedMatcher(F_CLINICALTRIAL_NAME, fileToSet('resource/clinical_trial_acronym'))
+	yield TokenizedMatcher(F_MEDICAL_SPEC, fileToSet('resource/specialite_medicale_fr') | fileToSet('resource/specialite_medicale_en'))
+	yield SubtypeMatcher(F_BIOMEDICAL, [F_CLINICALTRIAL_NAME, F_MEDICAL_SPEC])
 
-    # Agro Domain
-    phytoLexicon = fileToSet('resource/phyto')
-    yield LabelMatcher(F_PHYTO, phytoLexicon, MATCH_MODE_EXACT)
-    yield TokenizedMatcher(F_PHYTO, phytoLexicon,
-        maxTokens = 4, scorer = partial(tokenScorer, minSrcTokenRatio = 30))
-    yield SubtypeMatcher(F_AGRO, [F_PHYTO])
+	# Agro Domain
+	phytoLexicon = fileToSet('resource/phyto')
+	yield LabelMatcher(F_PHYTO, phytoLexicon, MATCH_MODE_EXACT)
+	yield TokenizedMatcher(F_PHYTO, phytoLexicon,
+		maxTokens = 4, scorer = partial(tokenScorer, minSrcTokenRatio = 30))
+	yield SubtypeMatcher(F_AGRO, [F_PHYTO])
 
-    # A few subsumption relations
-    yield SubtypeMatcher(F_ORG_ID, [F_SIREN, F_SIRET, F_NNS, F_UAI, F_UMR])
-    yield SubtypeMatcher(F_PERSON_ID, [F_PERSON, F_EMAIL, F_PHONE, F_NIR])
-    yield SubtypeMatcher(F_ID, [F_ORG_ID, F_PERSON_ID, F_PUBLI_ID])
+	# A few subsumption relations
+	yield SubtypeMatcher(F_ORG_ID, [F_SIREN, F_SIRET, F_NNS, F_UAI, F_UMR])
+	yield SubtypeMatcher(F_PERSON_ID, [F_PERSON, F_EMAIL, F_PHONE, F_NIR])
+	yield SubtypeMatcher(F_ID, [F_ORG_ID, F_PERSON_ID, F_PUBLI_ID])
 
-    yield VocabMatcher(F_ENTREPRISE, fileToSet('resource/org_entreprise.vocab'), ignoreCase = True, partial = False)
-    yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('resource/org_enseignement.vocab'), ignoreCase = True, partial = False)
+	# The top-level data type for organizations
+	yield SubtypeMatcher(F_INSTITUTION, [F_RD_STRUCT, F_ETAB, F_ENTREPRISE])
 
-    # Spot acronyms on-the-fly
-    yield AcronymMatcher()
+	yield VocabMatcher(F_ENTREPRISE, fileToSet('resource/org_entreprise.vocab'), ignoreCase = True, partial = False)
+	yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('resource/org_enseignement.vocab'), ignoreCase = True, partial = False)
 
-    # Normalize by expanding alternative variants (such as acronyms, abbreviations and synonyms) to their main variant
-    yield VariantExpander2(fileToVariantMap('resource/org_entreprise.syn'), F_ENTREPRISE)
-    yield VariantExpander2(fileToVariantMap('resource/org_rnsr.syn'), F_RD_DOMAIN, targetType = F_RD_STRUCT)
-    yield VariantExpander2(fileToVariantMap('resource/org_hal.syn'), F_RD_DOMAIN, targetType = F_RD_STRUCT)
-    yield VariantExpander2(fileToVariantMap('resource/etab_enssup.syn'), F_ETAB_ENSSUP)
+	# Spot acronyms on-the-fly
+	yield AcronymMatcher()
 
+	# Normalize by expanding alternative variants (such as acronyms, abbreviations and synonyms) to their main variant
+
+	# Those for which we keep surrounding context, because their variants correspond to generic terms (denominations and the like)
+	yield VariantExpander(fileToVariantMap('resource/org_societe.syn'), F_ENTREPRISE, True)
+	yield VariantExpander(fileToVariantMap('resource/org_entreprise.syn'), F_ENTREPRISE, True)
+	# Those for which we only keep the main variant associated to the extracted alt variant, because said variants correspond to specific entities
+	yield VariantExpander(fileToVariantMap('resource/org_rnsr.syn'), F_RD_DOMAIN, targetType = F_RD_STRUCT)
+	yield VariantExpander(fileToVariantMap('resource/org_hal.syn'), F_RD_DOMAIN, targetType = F_RD_STRUCT)
+	yield VariantExpander(fileToVariantMap('resource/etab_enssup.syn'), F_MESR, targetType = F_ETAB_ENSSUP)
+	
 # Main functionality
 
 def preProcessHeaders(inferences, m):
