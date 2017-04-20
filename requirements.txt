@@ -1,12 +1,14 @@
-pandas==0.19.2
 dedupe
 unidecode
+pandas
 
 flask
 flask-cors
 flask-session
 flask-socketio
+python-memcached
 
+fuzzywuzzy
 python-Levenshtein
 phonenumbers
 dateparser
