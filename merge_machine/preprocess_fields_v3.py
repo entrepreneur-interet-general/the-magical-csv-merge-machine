@@ -2,7 +2,7 @@
 # coding=utf-8
 
 # Standard modules
-import csv, itertools, re, unicodedata, logging, optparse, time, sys
+import csv, itertools, re, unicodedata, logging, optparse, time, sys, math, os
 from functools import partial, reduce
 from collections import defaultdict, Counter, Iterable
 from operator import itemgetter, add
@@ -16,36 +16,51 @@ from dateparser import DateDataParser
 from postal.parser import parse_address
 import phonenumbers
 
-TIMES = Counter()
+from CONFIG import RESOURCE_PATH
+
+lastTime = 0
+timingInfo = Counter()
+MICROS_PER_SEC = 1000000
+
+def snapshotTiming(end):
+	global lastTime
+	if lastTime > 0 and lastTime + MICROS_PER_SEC > end: return
+	if lastTime > 0:
+		logging.debug('Timing info')
+		for k, v in timingInfo.most_common(50): logging.debug(k.rjust(50), str(v))
+		logging.debug('')
+	lastTime = end
+
 def timed(original_func):
-    def wrapper(*args, **kwargs):
-        start = time.clock()
-        result = original_func(*args, **kwargs)
-        end = time.clock()
-        key = str(args[0]) + '.' + original_func.__name__
-        TIMES[key] += (end - start)
-        return result
-    return wrapper
+	def wrapper(*args, **kwargs):
+		start = time.clock()
+		result = original_func(*args, **kwargs)
+		end = time.clock()
+		key = str(args[0]) + '.' + original_func.__name__
+		timingInfo[key] += int((end - start) * MICROS_PER_SEC)
+		snapshotTiming(end)
+		return result
+	return wrapper
 
 def chngrams(string="", n=3, top=None, threshold=0, exclude=[], **kwargs):
-    """ Returns a dictionary of (character n-gram, count)-items.
-        N-grams in the exclude list are not counted.
-        N-grams whose count falls below (or equals) the given threshold are excluded.
-        N-grams that are not in the given top most counted are excluded.
-    """
-    # An optional dict-parameter can be used to specify a subclass of dict, 
-    # e.g., count(words, dict=readonlydict) as used in Document.
-    count = defaultdict(int)
-    if n > 0:
-        for i in xrange(len(string)-n+1):
-            w = string[i:i+n]
-            if w not in exclude:
-                count[w] += 1
-    if threshold > 0:
-        count = dict((k, v) for k, v in count.items() if v > threshold)
-    if top is not None:
-        count = dict(heapq.nsmallest(top, count.items(), key=lambda kv: (-kv[1], kv[0])))
-    return kwargs.get("dict", dict)(count)
+	""" Returns a dictionary of (character n-gram, count)-items.
+		N-grams in the exclude list are not counted.
+		N-grams whose count falls below (or equals) the given threshold are excluded.
+		N-grams that are not in the given top most counted are excluded.
+	"""
+	# An optional dict-parameter can be used to specify a subclass of dict, 
+	# e.g., count(words, dict=readonlydict) as used in Document.
+	count = defaultdict(int)
+	if n > 0:
+		for i in xrange(len(string)-n+1):
+			w = string[i:i+n]
+			if w not in exclude:
+				count[w] += 1
+	if threshold > 0:
+		count = dict((k, v) for k, v in count.items() if v > threshold)
+	if top is not None:
+		count = dict(heapq.nsmallest(top, count.items(), key=lambda kv: (-kv[1], kv[0])))
+	return kwargs.get("dict", dict)(count)
 
 class ApproximateLookup:
 	def __init__(self, maxHits = 10):
@@ -147,11 +162,15 @@ def isValidValue(v):
 	stripped = stripped(v)
 	return len(stripped) > 0 and stripped not in ['null', 'NA', 'N/A']
 
+def isAcroToken(token): 
+	return re.match("[A-Z][0-9]*$", token) or re.match("[A-Z0-9]+$", token)
+
 MIN_ACRO_SIZE = 3
 MAX_ACRO_SIZE = 6
-def lowerOrNot(token, keepAcronyms, keepInitialized = False):
+
+def lowerOrNot(token, keepAcronyms, keepInitialized = False): 
 	''' Set keepAcronyms to true in order to improve precision (e.g. a CAT scan will not be matched by a kitty). '''
-	if keepAcronyms and len(token) >= MIN_ACRO_SIZE and len(token) <= MAX_ACRO_SIZE and (re.match("[A-Z][0-9]*$", token) or re.match("[A-Z0-9]+$", token)): 
+	if keepAcronyms and len(token) >= MIN_ACRO_SIZE and len(token) <= MAX_ACRO_SIZE and isAcroToken(token): 
 		return token
 	if keepInitialized:
 		m = re.search("([A-Z][0-9]+)[^'a-zA-Z].*", token)
@@ -197,17 +216,22 @@ def validateTokens(phrase, keepAcronyms, tokenValidator, phraseValidator):
 		if phraseValidator(validTokens): return validTokens 
 	return []
 
-def normalizeAndValidateTokens(value, keepAcronyms = False, tokenValidator = isValidToken, phraseValidator = isValidPhrase):
-	''' Returns a list of normalized, valid tokens for the input phrase (an empty list if no valid tokens were found) '''
+def normalizeAndValidateTokens(value, 
+	keepAcronyms = False, tokenValidator = isValidToken, phraseValidator = isValidPhrase):
+	''' Returns a list of normalized, valid tokens for the input phrase (an empty list 
+		if no valid tokens were found) '''
 	return validateTokens(value, keepAcronyms, tokenValidator, phraseValidator)
 
-def normalizeAndValidatePhrase(value, keepAcronyms = False, tokenValidator = isValidToken, phraseValidator = isValidPhrase):
-	''' Returns a string that joins normalized, valid tokens for the input phrase (None if no valid tokens were found) '''
+def normalizeAndValidatePhrase(value, 
+	keepAcronyms = False, tokenValidator = isValidToken, phraseValidator = isValidPhrase):
+	''' Returns a string that joins normalized, valid tokens for the input phrase 
+		(None if no valid tokens were found) '''
 	tokens = normalizeAndValidateTokens(value, keepAcronyms, tokenValidator, phraseValidator)
 	return ' '.join(tokens) if len(tokens) > 0 else None
 
 def validatedLexicon(lexicon, tokenize = False): 
-	return set(filter(lambda v: v is not None, [(normalizeAndValidatePhrase(s) if tokenize else caseToken(s, False)) for s in lexicon]))
+	return set(filter(lambda v: v is not None, 
+		[(normalizeAndValidatePhrase(s) if tokenize else caseToken(s, False)) for s in lexicon]))
 
 def validatedLexiconMap(lexicon, tokenize = False): 
 	''' Returns a dictionary from normalized string to list of original strings. '''
@@ -220,8 +244,9 @@ def validatedLexiconMap(lexicon, tokenize = False):
 
 # Loading CSV and raw (one entry per line) text files
 
-def fileRowIterator(fileName, sep):
-	with open(fileName, mode = 'r') as csvfile:
+def fileRowIterator(fileName, sep, path = RESOURCE_PATH):
+	filePath = fileName if path is None else os.path.join(path, fileName)
+	with open(filePath, mode = 'r') as csvfile:
 		reader = csv.reader(csvfile, delimiter = sep, quotechar='"')
 		for row in reader: yield list(map(stripped, row))
 
@@ -248,10 +273,11 @@ def fileToVariantMap(fileName, sep = '|', includeSelf = False):
 	if includeSelf: l = list([(main, main) for main in mainToOther.keys()]) + l
 	return dict(l)
 
-FRENCH_LEXICON = fileColumnToList('resource/most_common_tokens_fr', 0, '|')
+FRENCH_LEXICON = fileColumnToList('most_common_tokens_fr', 0, '|')
 
-def fileToList(fileName): 
-	with open(fileName, mode = 'r') as f: 
+def fileToList(fileName, path = RESOURCE_PATH): 
+	filePath = fieldName if path is None else os.path.join(path, fileName)
+	with open(filePath, mode = 'r') as f: 
 		return [stripped(line) for line in f]
 
 # TODO improve following function :
@@ -375,12 +401,26 @@ PARENT_CHILD_RELS = defaultdict(set)
 class TypeMatcher(object):
 	def __init__(self, t):
 		self.t = t
+		self.diversion = set()
+	def diversity(self): 
+		''' Specifies the min number of distinct reference values to qualify a column-wide match	
+			(it is essential to carefully override this constraint when the labels in question represent  
+			singleton instances, i.e. specific entities, as opposed to a qualified and/or controlled 
+			vocabulary). '''
+		return 1
 	def __str__(self): 
 		return '{}<{}>'.format(self.__class__.__name__, self.t)
 	def registerFullMatch(self, c, t, ms, hit = None): 
 		c.registerFullMatch(t, self.t == t, ms, hit)
 	def registerPartialMatch(self, c, t, ms, hit, span): 
 		c.registerPartialMatch(t, self.t == t, ms, hit, span)
+	def checkDiversity(self, cells):
+		div = len(self.diversion)
+		self.diversion.clear()
+		if div < self.diversity():
+			logging.info('Not enough diversity matches of type {} produced by {} ({})'.format(self.t, self, div))
+		else:
+			for c in cells: c.positType(self.t)
 
 MATCH_MODE_EXACT = 0
 MATCH_MODE_CLOSE = 1
@@ -398,33 +438,38 @@ class RegexMatcher(TypeMatcher):
 		self.neg = neg
 		self.wordBoundary = wordBoundary
 		logging.info('SET UP regex matcher for <%s>: %s', self.t, self.p)
-	@timed
 	def match(self, c):
-		if self.validator is not None and not self.validator(c.value): return
 		if self.partial:
 			ms = re.findall(self.p, c.value, self.flags)
 			if ms:
-				for m in ms:
-					if not isinstance(m, str): 
-						if len(m) > self.g: m = m[self.g]
-						else: continue
-					i1 = c.value.find(m)
-					if i1 >= 0:
-						self.registerPartialMatch(c, self.t, 100, m, (i1, i1 + len(m)))
-					else:
-						logging.warning('%s could not find regex multi-match "%s" in original "%s"', self, m, c.value)
+				if self.neg:
+					c.negateType(self.t)
+				else:
+					for m in ms:
+						if not isinstance(m, str): 
+							if len(m) > self.g: m = m[self.g]
+							else: continue
+						i1 = c.value.find(m)
+						if i1 >= 0:
+							if self.validator is None or self.validator(m):
+								self.registerPartialMatch(c, self.t, 100, m, (i1, i1 + len(m)))
+						else:
+							logging.warning('%s could not find regex multi-match "%s" in original "%s"', self, m, c.value)
 		else:
 			m = re.match(self.p, c.value, self.flags)
 			if m:
-				try:
-					grp = m.group(self.g)
-					if len(grp) == len(c.value):
-						self.registerFullMatch(c, self.t, 100, m.group(self.g))
-					else:
-						self.registerPartialMatch(c, self.t, 100, grp, (0, len(grp)))
-				except IndexError:
-					logging.error('No group %d matched in regex "%s" for input "%s"', self.g, self.p, c)
-
+				if self.neg:
+					c.negateType(self.t)
+				else:
+					try:
+						grp = m.group(self.g)
+						if self.validator is None or self.validator(grp):
+							if len(grp) == len(c.value):
+								self.registerFullMatch(c, self.t, 100, grp)
+							else:
+								self.registerPartialMatch(c, self.t, 100, grp, (0, len(grp)))
+					except IndexError:
+						logging.error('No group %d matched in regex "%s" for input "%s"', self.g, self.p, c)
 
 def vocabRe(vocab, partial):
 	j = '|'.join(vocab)
@@ -437,7 +482,8 @@ class VocabMatcher(RegexMatcher):
 
 # Tokenization-based matcher-normalizer class
 
-def tokenScorer(matchedSrcTokens, srcTokens, matchedRefPhrase, refPhrase, minSrcTokenRatio = 80, minSrcCharRatio = 70, minRefCharRatio = 60):
+def tokenScorer(matchedSrcTokens, srcTokens, matchedRefPhrase, refPhrase, 
+	minSrcTokenRatio = 80, minSrcCharRatio = 70, minRefCharRatio = 60):
 	srcTokenRatio = 100 * len(matchedSrcTokens) / len(srcTokens)
 	if srcTokenRatio < minSrcTokenRatio: return 0
 	srcCharRatio = 100 * sum([len(t) for t in matchedSrcTokens]) / sum([len(t) for t in srcTokens])
@@ -448,12 +494,13 @@ def tokenScorer(matchedSrcTokens, srcTokens, matchedRefPhrase, refPhrase, minSrc
 
 DTC = 6 # Dangerous Token Count (becomes prohibitive to tokenize many source strings above this!)
 class TokenizedMatcher(TypeMatcher):
-	def __init__(self, t, lexicon, maxTokens = 0, scorer = tokenScorer):
+	def __init__(self, t, lexicon, maxTokens = 0, scorer = tokenScorer, distinctCount = 0):
 		super(TokenizedMatcher, self).__init__(t)
 		currentMax = maxTokens
 		self.scorer = scorer
 		self.phrases = validatedLexicon(lexicon)
 		self.tokenIdx = dict()
+		self.distinctCount = distinctCount
 		for phrase in self.phrases:
 			tokens = normalizeAndValidateTokens(phrase)
 			if len(tokens) < 1: continue
@@ -467,7 +514,8 @@ class TokenizedMatcher(TypeMatcher):
 		self.maxTokens = currentMax
 		logging.info('SET UP %d-token matcher (%s-defined length) for <%s> with lexicon of size %d, total variants %d', 
 			self.maxTokens, 'user' if maxTokens > 0 else 'data', self.t, len(self.phrases), len(self.tokenIdx))
-	@timed
+	def diversity(self): 
+		return self.distinctCount if self.distinctCount > 0 else math.log(len(self.phrases), 1.5)
 	def match(self, c):
 		tokens = normalizeAndValidateTokens(c.value)
 		if tokens is not None:
@@ -486,16 +534,6 @@ class TokenizedMatcher(TypeMatcher):
 							logging.warning('%s could not find tokens "%s" in original "%s"', self, matchRefPhrase, v)
 							span = (0, len(c.value))
 						self.registerPartialMatch(c, self.t, score, self.tokenIdx[matchRefPhrase], span)
-						# score = self.scorer(matchSrcTokens, tokens, matchRefPhrase, self.tokenIdx[matchRefPhrase])
-						# v = justCase(c.value)
-						# i1 = v.find(tokens[k1])
-						# if i1 >= 0: i2 = v.find(tokens[k1 + k2 - 1], i1) if k2 > 1 else i1
-						# if i1 < 0 or i2 < 0:
-						# 	logging.warning('%s could not find tokens %s ... %s in original %s', self, tokens[k1], tokens[k1 + k2 - 1], v)
-						# 	(i1, i2) = (0, len(c.value))
-						# else:
-						# 	span = (i1, i2 + len(tokens[k1 + k2 - 1]))
-						# self.registerPartialMatch(c, self.t, score, self.tokenIdx[matchRefPhrase], span)
 
 # Label-based matcher-normalizer class and its underlying FSS structure
 
@@ -515,6 +553,10 @@ def fssScore(r, l = 1024):
 
 class LabelMatcher(TypeMatcher):
 	def __init__(self, t, lexicon, mm):
+		''' Parameters:
+			diversity specifies the min number of distinct reference values to qualify a column-wide match	
+				(it is essential to have this constraint when the labels in question represent singleton instances, 
+				i.e. specific entities, as opposed to a qualified and/or controlled vocabulary. '''
 		super(LabelMatcher, self).__init__(t)
 		self.mm = mm
 		labelsMap = validatedLexiconMap(lexicon) # dictionary from normalized string to list of original strings
@@ -524,7 +566,8 @@ class LabelMatcher(TypeMatcher):
 		elif mm == MATCH_MODE_CLOSE: 
 			self.fss = buildFSS(labelsMap.keys())
 			logging.info('SET UP close label matcher for <%s>: lexicon of size %d', self.t, len(labelsMap))
-	@timed
+	def diversity(self): 
+		return math.log(len(self.labelsMap), 1.8)
 	def match(self, c):
 		v = normalizeAndValidatePhrase(c.value)
 		if not v: return
@@ -550,7 +593,6 @@ class SubtypeMatcher(TypeMatcher):
 		if len(subtypes) < 1: raise Error('Invalid subtype matcher setup')
 		logging.info('SET UP subtype matcher for <%s> with subtypes: %s', self.t, ', '.join(subtypes))
 		PARENT_CHILD_RELS[t] |= set(subtypes)
-	@timed
 	def match(self, c):
 		sts = list(self.subtypes & c.notExcludedTypes())
 		if len(sts) < 1: return None
@@ -578,7 +620,6 @@ class CompositeMatcher(TypeMatcher):
 		if len(compTypes) < 1: raise RuntimeError('Invalid composite matcher setup')
 		logging.info('SET UP composite matcher for <%s> with %d types', self.t, len(compTypes))
 		PARENT_CHILD_RELS[t] |= set(compTypes)
-	@timed
 	def match(self, c):
 		sts = list(set(self.compTypes) & c.notExcludedTypes())
 		if len(sts) < 1: return None
@@ -603,7 +644,7 @@ class CompositeRegexMatcher(TypeMatcher):
 
 		It assumes that all children types have been matched against, hence it
 		only registers matches on the composite type itself. '''
-	def __init__(self, t, p, tgs, ignoreCase = False, partial = False, validator = None):
+	def __init__(self, t, p, tgs, ignoreCase = False, partial = False, validators = { }):
 		''' Parameters:
 			tgs a dictionary { type: group } to capture multiple types '''
 		super(CompositeRegexMatcher, self).__init__(t)
@@ -611,17 +652,17 @@ class CompositeRegexMatcher(TypeMatcher):
 		self.p = patternWithWordBoundary(p)
 		self.flags = re.I if ignoreCase else 0
 		self.partial = partial
-		self.validator = validator
-	@timed
+		self.validators = validators
 	def match(self, c):
-		if self.validator is not None and not self.validator(c.value): return
 		if self.partial:
 			ms = re.findall(self.p, v, flags = self.flags)
 			if not ms: return
 			for m in ms:
 				for (t, g) in self.tgs.items():
 					try:
-						self.registerPartialMatch(c, t, 100, m.group(g), m.span(g))
+						grp = m.group(g)
+						if t not in self.validators or self.validators[t](grp):
+							self.registerPartialMatch(c, t, 100, grp, m.span(g))
 					except IndexError:
 						logging.error('No group %d matched in %s for input %s', g, self.p, c)
 		else:
@@ -630,10 +671,11 @@ class CompositeRegexMatcher(TypeMatcher):
 			for (t, g) in self.tgs.items(): 
 				try:
 					grp = m.group(g)
-					if len(grp) == len(c.value):
-						self.registerFullMatch(c, t, 100, m.group(g))
-					else:
-						self.registerPartialMatch(c, self.t, 100, grp, (0, len(grp)))
+					if t not in self.validators or self.validators[t](grp):
+						if len(grp) == len(c.value):
+							self.registerFullMatch(c, t, 100, grp)
+						else:
+							self.registerPartialMatch(c, t, 100, grp, (0, len(grp)))
 				except IndexError:
 					logging.error('No group %d matched in regex "%s" for input "%s"', g, self.p, c)
 
@@ -649,7 +691,7 @@ PARENT_CHILD_RATIO = 2
 
 def parseFieldsFromCSV(fileName, delimiter):
 	''' Takes a CSV filepath and a delimiter as input, returns an instance of the Fields class. '''
-	a = list(fileRowIterator(fileName, delimiter))
+	a = list(fileRowIterator(fileName, delimiter, path = None))
 	return Fields({ Cell(h, h): Field([Cell(a[i][k], h) for i in range(1, len(a)) if len(a[i]) > k]) for (k, h) in enumerate(a[0]) }, 
 		len(a) - 1)
 
@@ -676,6 +718,7 @@ class Fields(object):
 				logging.debug('RUNNING %s on %s values', vm, hc.value)
 				for vc in f.cells:
 					vm.match(vc)
+				vm.checkDiversity(f.cells)
 	def likeliestTypes(self, h, f, singleType = False):
 		''' Returns None rather than an empty list to signify that not a single type has been inferred. 
 
@@ -732,8 +775,8 @@ class Fields(object):
 			print('')
 			print('|Classe et méthode|Temps total (ms)|')
 			print('|-|-|')
-			if len(TIMES) > 0:
-				for k, v in TIMES.most_common(20):
+			if len(timingInfo) > 0:
+				for k, v in timingInfo.most_common(20):
 					print('|{}|{}|'.format(k, str(v)))
 			# Print headers
 			print('## Résultats de normalisation')
@@ -794,8 +837,6 @@ class Fields(object):
 				b = [None] * self.entries
 				for i, nc in enumerate(f.normalizedValues(h, lvt)):
 					if of not in nc: continue
-					# ncs = nc[of] if isinstance(nc[of], list) else [nc[of]]
-					# b[i] = ncs if b[i] is None else b[i] + ncs
 					if b[i] is None:
 						b[i] = nc[of]
 					elif isinstance(b[i], list):
@@ -806,18 +847,14 @@ class Fields(object):
 						else: b[i] = [b[i], nc[of]]
 				yield (of, b)
 
-# TODO Obsolete, or pretty useless, class: trash it!
-class Header():
-	def __init__(self, name):
-		self.name = name
-	def __str__(self): return self.name
-
 class Field(object):
 	def __init__(self, cells):
-		self.cells = cells # List of Cell objects
+		# List of Cell objects
+		self.cells = cells
 	def scoredTypes(self):
 		candidateTypes = reduce(set.union, [set(c.tis.keys()) for c in self.cells])
-		typeScores = { t: [0] * len(self.cells) for t in candidateTypes } # Map from type to a list of individual scores
+		# Map from type to a list of individual scores
+		typeScores = { t: [0] * len(self.cells) for t in candidateTypes }
 		for (i, c) in enumerate(self.cells):
 			for (t, tis) in c.tis.items():
 				s = max(ti.ms for ti in tis)
@@ -835,11 +872,13 @@ class Field(object):
 	def normalizedFields(self, h, t):
 		return reduce(set.union, [set(c.normalizedValues(t).keys()) for c in self.cells], set([h.value]))
 	def normalizedValues(self, h, t):
-		''' Casts this field with header h into type t and returns its values as a list of augmented (field name, field value) dictionaries 
-		(not including the original field with its header). '''
+		''' Casts this field with header h into type t and returns its values as a list of augmented 
+			(field name, field value) dictionaries (not including the original field with its header). '''
 		for c in self.cells:
-			nc = c.normalizedValues(t) # Normalized/augmented fields
-			nc[h.value] = c.value # Original field value
+			# Normalized/augmented fields
+			nc = c.normalizedValues(t)
+			# Original field value
+			nc[h.value] = c.value
 			yield nc
 
 PARTIAL_MATCH = 0
@@ -850,7 +889,7 @@ class TypeInference(object):
 		self.mm = mm # Match mode (partial or full, as an integer enum)
 		self.ms = ms # Match score (in [0, 100])
 		self.hit = hit # Matching string
-		self.span = (i1, i2) if (0 <= i1 and i1 < i2) else None # start and end index in the original string (used to compute coverage)
+		self.span = (i1, i2) if (0 <= i1 and i1 < i2) else None # Start and end index in the original string (used to compute coverage)
 	def __repr__(self): return 'TI<{}>: {} <-- {}'.format(self.t, self.ms, self.hit)
 	def __str__(self): return '<{}>'.format(self.t)
 
@@ -868,30 +907,46 @@ def checkSpan(hit, span):
 
 class Cell(object):
 	def __init__(self, value, fieldName):
-		self.value = value # Original value, of type string
+		# Original value, of type string
+		self.value = value
 		if self.value is np.nan:
 			logging.warning('Converting nan value to ""')
 			self.value = ''
 		self.f = fieldName
-		self.tis = defaultdict(list) # Map from type to a list of TypeInferences
-		self.nts = set() # Negated types
-		self.values = dict() # Mapping from normalized, augmented, or otherwise enriched field name to list of values for that field 
+		# Map from type to a list of TypeInferences
+		self.tis = defaultdict(list) 
+		# Negated types
+		self.nts = set()
+		# Posited (i.e. sufficiently diversified) types
+		self.pts = set()
+		# Mapping from normalized, augmented, or otherwise enriched field name to list of values for that field 
+		self.values = dict()
 	def __str__(self): return '{}: {}'.format(self.f, self.value)
 	def negateType(self, t):
+		logging.debug('Negated type {} for "{}"'.format(t, self.value))
 		self.nts.add(t)
+	def positType(self, t):
+		''' Does the opposite of negating this type: more precisely, it indicates that there is enough diversity
+			across the entire value set, so that *if* any matcher for the type has enough recall, the field-wide 
+			match will be accepted. '''
+		logging.debug('Posited type {} for "{}"'.format(t, self.value))
+		self.pts.add(t)
 	def notExcludedTypes(self): 
-		return set(self.tis.keys()) - self.nts
+		# return set(self.tis.keys()) - self.nts
+		return set(self.tis.keys()) & self.pts - self.nts
 	def matches(self, t, mm):
 		return [] if t not in self.notExcludedTypes() else filter(lambda ti: ti.mm == mm, self.tis[t])
 	def normedType(self, t, normedIfHeaderField):
 		return '++{}++'.format(t) if normedIfHeaderField else t
 	def registerFullMatch(self, t, normedIfHeaderField, ms, hit = None):
-		''' If normedIfHeaderField is True and the target type is the cell's parent type, then the output field should indicate that normalization 
-			has been done in order not to conflict with the original field. '''
+		''' If normedIfHeaderField is True and the target type is the cell's parent type, then the output 
+			field should indicate that normalization has been done in order not to conflict with the 
+			original field. '''
 		t0 = self.normedType(t, normedIfHeaderField)
 		logging.debug('FULL MATCH of type <%s> for %s (p=%d): %s', t, self, ms, self.value if hit is None else hit)
 		self.tis[t].append(TypeInference(t0, FULL_MATCH, ms, self.value if hit is None else hit, 0, len(self.value)))
-	def registerPartialMatch(self, t, normedIfHeaderField, ms, hit, span): # TODO accept span = None and fetch start/end indices on-the-fly
+	def registerPartialMatch(self, t, normedIfHeaderField, ms, hit, span): 
+		# TODO accept span = None and fetch start/end indices on-the-fly
 		checkSpan(hit, span)
 		t0 = self.normedType(t, normedIfHeaderField)
 		logging.debug('PARTIAL MATCH of type <%s> for %s (p=%d): %s', t, self, ms, hit)
@@ -941,15 +996,16 @@ def selectBestValue(vs): return None if len(vs) < 1 else sorted(vs, key = lambda
 def mergerByTokenList(v1): return ' '.join(v1)
 
 # TODO improve this custom date matcher if necessary by doing a first pass on all values at type inference time:
-# matcher 1 with languages = ['fr', 'en'], settings = { 'DATE_ORDER': 'MDY', 'PREFER_LANGUAGE_DATE_ORDER': False } (the more likely one)
-# matcher 2 with languages = ['fr', 'en'], settings = { 'DATE_ORDER': 'DMY', 'PREFER_LANGUAGE_DATE_ORDER': False }
-# then retain the majority matcher for the subsequent type inference pass (and the normalization step as well)
+# - matcher 1 with languages = ['fr', 'en'], 
+# 	settings = { 'DATE_ORDER': 'MDY', 'PREFER_LANGUAGE_DATE_ORDER': False } (the more likely one)
+# - matcher 2 with languages = ['fr', 'en'],
+#	settings = { 'DATE_ORDER': 'DMY', 'PREFER_LANGUAGE_DATE_ORDER': False }
+# - then retain the majority matcher for the subsequent type inference pass (and the normalization step as well)
 DDP = DateDataParser(languages = ['fr', 'en'], settings = { 'PREFER_LANGUAGE_DATE_ORDER': True }) 
 
 class CustomDateMatcher(TypeMatcher):
 	def __init__(self):
 		super(CustomDateMatcher, self).__init__(F_DATE)
-	@timed
 	def match(self, c):
 		# TODO check prioritization of ambiguous dates: the most complex case would be first encountering some FR date(s), 
 		# then an ambiguous date implicitly using US (not UK or AUS) locale (e.g. 03/04/2014 which should resolve to 
@@ -961,7 +1017,9 @@ class CustomDateMatcher(TypeMatcher):
 			dd = DDP.get_date_data(c.value)
 			do, dp = dd['date_obj'], dd['period']
 			if do is None: return
-			ds = str(do.year)
+			y = do.year
+			if y < 1870 or 2120 < y: return # Safety check for too-loose matching
+			ds = str(y)
 			if dp == 'year':
 				self.registerFullMatch(c, F_YEAR, 100, ds)
 				return
@@ -981,7 +1039,6 @@ class CustomTelephoneMatcher(TypeMatcher):
 	def __init__(self, partial = False):
 		super(CustomTelephoneMatcher, self).__init__(F_PHONE)
 		self.partial = partial
-	@timed
 	def match(self, c):
 		if partial:
 			try:
@@ -1000,7 +1057,8 @@ class CustomTelephoneMatcher(TypeMatcher):
 
 # Person-name matcher-normalizer code
 
-PRENOM_LEXICON = fileToSet('resource/prenom')
+PRENOM_LEXICON = fileToSet('prenom')
+PATRONYME_LEXICON = fileToSet('patronyme_fr')
 
 PAT_FIRST_NAME = '(%s)' % '|'.join([p for p in PRENOM_LEXICON])
 PAT_LAST_NAME = '([A-Z][A-Za-z]+\s?)+'
@@ -1028,6 +1086,10 @@ PERSON_NAME_EXTRACTION_PATS = [
 	(reCompiledWithWordBoundary('((%s)|(%s))\s+(%s)' % (PAT_LAST_NAME, PAT_LAST_NAME_ALLCAPS, PAT_INITIAL)), 2, 1) 
 ]
 
+def validateFirstName(fst): return len(fst) > 1
+
+def validateLastName(lst): return len(lst) > 2
+
 def validatePersonName(s): 
 	''' Validator for items of type: full person name '''
 	for i, (r, firstGp, lastGp) in enumerate(PERSON_NAME_EXTRACTION_PATS):
@@ -1036,7 +1098,7 @@ def validatePersonName(s):
 			logging.debug('Person name pattern #%d matched: %s', i + 1, '; '.join(m.groups()))
 			fst = m.group(firstGp).strip()
 			lst = (m.group(lastGp) if lastGp >= 0 else s.replace(m.group(firstGp), '')).strip()
-			if len(fst) > 0 and len(lst) > 1:
+			if validateFirstName(fst) and validateLastName(lst):
 				return { F_FIRST: fst, F_LAST: lst }
 	return None
 
@@ -1046,7 +1108,10 @@ def validatePersonNameMatch(t):
 
 def singletonList(s, itemValidator, stripChars): 
 	''' Parameters:
-		itemValidator takes an input string and returns a dictionary field name -> field value if the item is validated or else None. '''
+		itemValidator takes an input string and returns a dictionary 
+			{field name -> field value if the item is validated or else None}. 
+
+		Returns a list (of length one) whose element is a (field name, field value) dictionary. '''
 	if itemValidator is None: return [s]
 	try:
 		d = itemValidator(s)
@@ -1055,9 +1120,14 @@ def singletonList(s, itemValidator, stripChars):
 		return []
 
 DELIMITER_TOKENS_RE = re.compile(re.escape('et|and|&'), re.IGNORECASE)
+
 def parseList(s, itemValidator, i1 = 0, delimiters = ',;\t', stripChars = ' <>[](){}"\''):
 	''' Parameters:
-		itemValidator takes an input string and returns a list of mappings { field name: field value if the item is validated or else None }. '''
+		itemValidator takes an input string and returns a list of mappings 
+			{ field name: field value if the item is validated or else None }.
+
+		Returns a list of triples (item, startIndex, endIndex) 
+			where item is a (field name, field value) dictionary. '''
 	s0 = DELIMITER_TOKENS_RE.sub(delimiters[0], s)
 	for d in delimiters:
 		(s1, s2, s3) = s0.partition(d)
@@ -1066,10 +1136,77 @@ def parseList(s, itemValidator, i1 = 0, delimiters = ',;\t', stripChars = ' <>[]
 			+ parseList(s3, validatePersonNameMatch, i1 + len(s1) + len(s2), delimiters = delimiters)
 	return singletonList((s0, i1, i1 + len(s0)), validatePersonNameMatch, stripChars)
 
-def parsePersonNames(s):
-	''' Returns None if validation failed, or else a list of triples (personName, startIndex, endIndex)
+##### START OF: specific, tailor-made parsing of person name lists
 
-		Patterns gérés pour les noms de personnes:
+FR_FIRSTNAMES = map(str.lower, PRENOM_LEXICON)
+FR_SURNAMES = map(str.lower, PATRONYME_LEXICON)
+F_FIRSTORLAST = F_FIRST + '|' + F_LAST
+PN_STRIP_CHARS = ' <>[](){}"\''
+PN_DELIMITERS = ',;+/'
+PN_TITLE_VARIANTS = {
+	'M': ['mr', 'monsieur', 'mister', 'sir'], # Form "M." is handled separately
+	'Mme': ['mme', 'mrs', 'madame', 'madam', 'ms', 'miss'],
+	'Dr': ['dr', 'docteur', 'doctor'],
+	'Pr': ['pr', 'professeur', 'prof', 'professor']
+}
+def customParsePersonNames(l):
+	print( 'list ' + l)
+	s = DELIMITER_TOKENS_RE.sub(PN_DELIMITERS[0], l)
+	s0 = s.translate({ PN_STRIP_CHARS: None }) # re.sub(PN_STRIP_CHARS, '', s)
+	for d in PN_DELIMITERS:
+		(s1, s2, s3) = s0.partition(d)
+		if len(s2) == 1: return customParsePersonNames(s1) + customParsePersonNames(s3)
+	return personNameSingleton(s0)
+def personNameSingleton(s): 
+	print('singleton ' + s)
+	d = extractPersonName(s)
+	return [] if d is None else [d]
+def extractPersonName(s):
+	print('name  ' + s)
+	tokens = s.split()
+	d = defaultdict(set)
+	for token in tokens:
+		if token[-1] in '-.':
+			t = token.strip('-.')
+			if len(t) > 1 or not t.isalpha() or t.upper() != t: continue
+			if t == 'M': d[F_TITLE] = 'M'
+			d[F_FIRST].add(t)
+			continue
+		t0 = token.strip('-.')
+		if len(t0) < 2: continue
+		t = t0.lower()
+		title = None
+		for (main, variants) in PN_TITLE_VARIANTS.items():
+			if t0[1:].islower() and t in map(str.lower, variants): 
+				title = main
+				break
+		if title: 
+			d[F_TITLE].add(title)
+			continue
+		if t in FR_FIRSTNAMES:
+			d[F_FIRST].add(t)
+			d[F_FIRSTORLAST].add(t)
+		elif t in FR_SURNAMES:
+			d[F_LAST].add(t)
+			d[F_FIRSTORLAST].add(t)
+	if len(d[F_LAST]) < 1:
+		if len(d[F_FIRSTORLAST]) > 0:
+			d[F_LAST] = d[F_FIRSTORLAST] - d[F_FIRST]
+			d[F_FIRST] = d[F_FIRST] - d[F_LAST]
+			d[F_FIRSTORLAST] = d[F_LAST] - d[F_FIRST]
+	if len(d[F_LAST]) < 1: return None
+	if len(d[F_FIRST]) < 1:
+		d[F_FIRST] = d[F_FIRSTORLAST] - d[F_LAST]
+	del d[F_FIRSTORLAST]
+	return d
+
+##### END OF: specific, tailor-made parsing of person name lists
+
+def parsePersonNames(s):
+	''' Returns None if validation failed, or else a list of triples (personName, startIndex, endIndex) 
+		where personName is a key/value dictionary.
+
+		Patterns currently handled by this parser:
 		<Last>
 		<Last> <First>
 		<First> <Last>
@@ -1081,7 +1218,6 @@ def parsePersonNames(s):
 class CustomPersonNameMatcher(TypeMatcher):
 	def __init__(self):
 		super(CustomPersonNameMatcher, self).__init__(F_PERSON)
-	@timed
 	def match(self, c):
 		parsedList = parsePersonNames(c.value)
 		if not parsedList: return
@@ -1115,11 +1251,9 @@ BAN_MAPPING = [
 
 def rejoin(v): return toASCII(v)
 
-
 class CustomAddressMatcher(TypeMatcher):
 	def __init__(self):
 		super(CustomAddressMatcher, self).__init__(F_ADDRESS)
-	@timed
 	def match(self, c):
 		if c.value.isdigit():
 			logging.debug('Bailing out of %s for numeric value: %s', self, c)
@@ -1149,12 +1283,11 @@ class CustomAddressMatcher(TypeMatcher):
 		if len(comps) > 0:
 			self.registerFullMatch(c, self.t, 100, ' '.join(comps))
 
-COMMUNE_LEXICON = fileToSet('resource/commune')
+COMMUNE_LEXICON = fileToSet('commune')
 
 class FrenchAddressMatcher(LabelMatcher):
 	def __init__(self):
 		super(FrenchAddressMatcher, self).__init__(F_ADDRESS, COMMUNE_LEXICON, MATCH_MODE_CLOSE)
-	@timed
 	def match(self, c):
 		response = urllib.urlopen("http://api-adresse.data.gouv.fr/search/?q=%s" % c.value)
 		try:
@@ -1213,7 +1346,6 @@ class AcronymMatcher(TypeMatcher):
 		super(AcronymMatcher, self).__init__(F_ACRONYMS)
 		self.minAcroSize = minAcroSize
 		self.maxAcroSize = maxAcroSize
-	@timed
 	def match(self, c):
 		for (acro, i) in self.acronymsInPhrase(c.value):
 			self.registerPartialMatch(c, '{} - {}'.format(F_ACRONYMS, c.f), 100, acro, (i, i + len(acro)))
@@ -1255,7 +1387,6 @@ class VariantExpander(TypeMatcher):
 				self.tokenIdx[matchedVariantPhrase].add(altVariant)
 				if altVariant not in variantsMap: 
 					raise RuntimeError('Alternative variant {} not found in variants map'.format(altVariant))
-	@timed
 	def match(self, c):
 		if self.domainType not in c.notExcludedTypes(): return
 		tokens = normalizeAndValidateTokens(c.value)
@@ -1289,15 +1420,15 @@ def convertCodes(s):
 	# return s
 	return reduce(lambda r, c: r.replace(c[0], c[1]), ["-–", "’'"], s)
 def ncsub(superStr, subStr):
-    '''Checks if b is a non-consecutive subsequence of a, and returns the start and end indexes in a. '''
-    a, b = convertCodes(superStr), convertCodes(subStr)
-    pos = 0
-    res = -1
-    for i, ch in enumerate(a):
-        if pos < len(b) and ch == b[pos]: 
-        	if res < 0: res = i
-        	pos += 1
-    return (res, i) if pos == len(b) else None
+	'''Checks if b is a non-consecutive subsequence of a, and returns the start and end indexes in a. '''
+	a, b = convertCodes(superStr), convertCodes(subStr)
+	pos = 0
+	res = -1
+	for i, ch in enumerate(a):
+		if pos < len(b) and ch == b[pos]: 
+			if res < 0: res = i
+			pos += 1
+	return (res, i) if pos == len(b) else None
 
 def sumDigits(n): return sumDigits(n / 10) + n if n > 9 else n
 
@@ -1316,15 +1447,13 @@ def headerMatchers():
 	''' Generates type matcher objects that can be applied to each column header in order to infer 
 		whether that column's type is the matcher's type (or alternatively a parent type or a child type).'''
 	headerSims = defaultdict(set)
-	for row in fileRowIterator('resource/header_names', '|'):
+	for row in fileRowIterator('header_names', '|'):
 		r = list(map(lambda s: s.strip(), row))
 		if len(r) < 1: continue
 		yield HeaderMatcher(r[0], set(r))
 		logging.info('Registered matcher for <%s> header with %d variants', r[0], len(r))
 
-#EMAIL_PATTERN = "(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)"
-EMAIL_PATTERN = "[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
-
+MATCH_FULL_NAMES = False
 def valueMatchers():
 	''' Generates type matcher objects that can be applied to each value cell in a column in order to infer 
 		whether that column's type is the matcher's type (or alternatively a parent type or a child type).'''
@@ -1333,70 +1462,89 @@ def valueMatchers():
 	# yield TemplateMatcher('Identifiant', 90) # TODO distinguish unique vs. non-unique
 
 	# Person names
-	# yield CustomPersonNameMatcher()
 	yield LabelMatcher(F_FIRST, PRENOM_LEXICON, MATCH_MODE_EXACT)
-	yield TokenizedMatcher(F_FIRST, 
-		PRENOM_LEXICON, 
-		maxTokens = 2, scorer = partial(tokenScorer, minSrcTokenRatio = 20, minSrcCharRatio = 10)) # maxTokens = 2 for composite first names!
-	titleLexicon = fileToSet('resource/titre_appel') | fileToSet('resource/titre_academique') 
-	yield TokenizedMatcher(F_TITLE, titleLexicon, 
-		maxTokens = 1)
-	yield CompositeRegexMatcher(F_PERSON, PAT_FIRST_NAME, { F_FIRST: 1}, ignoreCase = True)
-	yield CompositeRegexMatcher(F_PERSON, PAT_FIRST_LAST_NAME, { F_FIRST: 1, F_LAST: 2 }, ignoreCase = True)
-	yield CompositeRegexMatcher(F_PERSON, PAT_LAST_FIRST_NAME, { F_FIRST: 2, F_LAST: 1 }, ignoreCase = True)
-	yield CompositeRegexMatcher(F_PERSON, PAT_FIRSTINITIAL_LAST_NAME, { F_FIRST: 1, F_LAST: 2 }, ignoreCase = False)
-	yield CompositeRegexMatcher(F_PERSON, PAT_LAST_FIRSTINITIAL_NAME, { F_FIRST: 2, F_LAST: 1 }, ignoreCase = False)
+	yield TokenizedMatcher(F_FIRST, PRENOM_LEXICON, 
+		# maxTokens set to 2 in order to deal with composite first names
+		maxTokens = 2, scorer = partial(tokenScorer, minSrcTokenRatio = 20, minSrcCharRatio = 10)) 
+	yield LabelMatcher(F_LAST, PATRONYME_LEXICON, MATCH_MODE_EXACT)
+	titleLexicon = fileToSet('titre_appel') | fileToSet('titre_academique') 
+	yield TokenizedMatcher(F_TITLE, titleLexicon, maxTokens = 1)
+	if MATCH_FULL_NAMES:
+		yield CustomPersonNameMatcher()
+		fullNameValidators = { F_FIRST: lambda v: len(stripped(v)) > 1, F_LAST: lambda v: len(stripped(v)) > 2 }
+		yield CompositeRegexMatcher(F_PERSON, PAT_FIRST_NAME, { F_FIRST: 1}, 
+			ignoreCase = True, validators = fullNameValidators)
+		yield CompositeRegexMatcher(F_PERSON, PAT_FIRST_LAST_NAME, { F_FIRST: 1, F_LAST: 2 }, 
+			ignoreCase = True, validators = fullNameValidators)
+		yield CompositeRegexMatcher(F_PERSON, PAT_LAST_FIRST_NAME, { F_FIRST: 2, F_LAST: 1 }, 
+			ignoreCase = True, validators = fullNameValidators)
+		yield CompositeRegexMatcher(F_PERSON, PAT_FIRSTINITIAL_LAST_NAME, { F_FIRST: 1, F_LAST: 2 }, 
+			ignoreCase = False, validators = fullNameValidators)
+		yield CompositeRegexMatcher(F_PERSON, PAT_LAST_FIRSTINITIAL_NAME, { F_FIRST: 2, F_LAST: 1 }, 
+			ignoreCase = False, validators = fullNameValidators)
 	yield CompositeMatcher(F_PERSON, [F_TITLE, F_FIRST])
 	# Negate person name matches when it's a street name
 	yield RegexMatcher(F_PERSON, "(rue|avenue|av|boulevard|bvd|bd|chemin|route|place|allee) .{0,10} (%s)" % PAT_FIRST_NAME, 
 		g = 1, ignoreCase = True, partial = True, neg = True)
 
 	# Web stuff: Email, URL
-
-	yield RegexMatcher(F_EMAIL, EMAIL_PATTERN)
-	yield RegexMatcher(F_URL, "@^(https?|ftp)://[^\s/$.?#].[^\s]*$@iS")
+	# PAT_EMAIL = "(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)"
+	PAT_EMAIL = "[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
+	yield RegexMatcher(F_EMAIL, PAT_EMAIL)
+	PAT_URL = "@^(https?|ftp)://[^\s/$.?#].[^\s]*$@iS"
+	yield RegexMatcher(F_URL, PAT_URL)
 
 	# Phone number
 	yield CustomTelephoneMatcher()
 	yield CustomTelephoneMatcher(partial = True)
 
 	# Other individual IDs
-	# yield RegexMatcher(F_INSEE, "(2[AB]|[0-9]{2})[0-9]{3}") # a.k.a. "numéro d'inscription au répertoire" or "numéro de sécurité sociale"
-	yield RegexMatcher(F_NIR, "[0-9]15") # from https://fr.wikipedia.org/wiki/Code_Insee#Identification_des_individus
+
+	# from https://fr.wikipedia.org/wiki/Code_Insee#Identification_des_individus
+	yield RegexMatcher(F_NIR, "[0-9]15") 
 
 	# Date-time
 	yield RegexMatcher(F_YEAR, "19[0-9]{2}")
 	yield RegexMatcher(F_YEAR, "20[0-9]{2}")
-	# yield RegexMatcher(F_DATE, "[0-9]{1,2}[\-/][01]?[0-9][\-/](19|20)[0-9]{2}", partial = True) 
 	yield CustomDateMatcher()
 	yield SubtypeMatcher(F_DATE, [F_YEAR])
 	yield SubtypeMatcher(F_STRUCTURED_TYPE, [F_DATE, F_URL, F_EMAIL, F_PHONE])
 
 	# MESR Domain
-	yield RegexMatcher(F_SIREN, "[0-9]{9}", validator = validateLuhn)
-	yield RegexMatcher(F_SIRET, "[0-9]{14}", validator = validateLuhn)
-	yield RegexMatcher(F_NNS, "[0-9]{9}[a-zA-Z]")
-	yield RegexMatcher(F_UAI, "[0-9]{7}[a-zA-Z]")
+	PAT_SIREN = "[0-9]{9}"
+	yield RegexMatcher(F_SIREN, PAT_SIREN, validator = validateLuhn)
+	PAT_SIRET = "[0-9]{14}"
+	yield RegexMatcher(F_SIRET, PAT_SIRET, validator = validateLuhn)
+	PAT_NNS = "[0-9]{9}[a-zA-Z]"
+	yield RegexMatcher(F_NNS, PAT_NNS)
+	PAT_UAI = "[0-9]{7}[a-zA-Z]"
+	yield RegexMatcher(F_UAI, PAT_UAI)
 	yield RegexMatcher(F_UMR, "UMR-?[ A-Z]{0,8}([0-9]{3,4})", g = 1, partial = True)
-	# yield TokenizedMatcher(F_RD_STRUCT, fileToSet('resource/structure_recherche_HAL.col'), 
-	# 	maxTokens = 6)
-	yield LabelMatcher(F_RD_STRUCT, fileToSet('resource/structure_recherche_short.col'), MATCH_MODE_EXACT)
+	# Negate dates for all thoses regex matches (which happen to match using our custom matcher, especially for UAI patterns)
+	yield RegexMatcher(F_DATE, PAT_SIREN, ignoreCase = True, neg = True)
+	yield RegexMatcher(F_DATE, PAT_SIRET, ignoreCase = True, neg = True)
+	yield RegexMatcher(F_DATE, PAT_NNS, ignoreCase = True, neg = True)
+	yield RegexMatcher(F_DATE, PAT_UAI, ignoreCase = True, neg = True)
+
+	yield LabelMatcher(F_RD_STRUCT, fileToSet('structure_recherche_short.col'), MATCH_MODE_EXACT)
 	yield TokenizedMatcher(F_RD_PARTNER, 
-		fileToSet('resource/partenaire_recherche_ANR.col') | fileToSet('resource/partenaire_recherche_FUI.col') | fileToSet('resource/institution_H2020.col'), 
+		fileToSet('partenaire_recherche_ANR.col') | 
+		fileToSet('partenaire_recherche_FUI.col') | 
+		fileToSet('institution_H2020.col'), 
 		maxTokens = 6)
-	yield TokenizedMatcher(F_CLINICALTRIAL_COLLAB, fileToSet('resource/clinical_trial_sponsor_collab.col'), 
+	yield TokenizedMatcher(F_CLINICALTRIAL_COLLAB, fileToSet('clinical_trial_sponsor_collab.col'), 
 		maxTokens = 4)
 	yield SubtypeMatcher(F_RD, [F_RD_STRUCT, F_RD_PARTNER, F_CLINICALTRIAL_COLLAB])
 	# SIES/APB 
-	yield VocabMatcher(F_ETAB, fileToSet('resource/etablissement.vocab'), ignoreCase = True, partial = False)
-	# yield TokenizedMatcher(F_ETAB, fileToSet('resource/etablissement'), 
+	yield VocabMatcher(F_ETAB, fileToSet('etablissement.vocab'), ignoreCase = True, partial = False)
+	# yield TokenizedMatcher(F_ETAB, fileToSet('etablissement'), 
 	# 	maxTokens = 2)
-	yield LabelMatcher(F_ETAB_ENSSUP, fileToSet('resource/etab_enssup'), MATCH_MODE_EXACT)
+	yield LabelMatcher(F_ETAB_ENSSUP, fileToSet('etab_enssup'), MATCH_MODE_EXACT)
 	yield SubtypeMatcher(F_ETAB, [F_ETAB_ENSSUP])
-	yield LabelMatcher(F_APB_MENTION, fileToSet('resource/mention_licence_sise'), MATCH_MODE_EXACT) # FIXME: MATCH_MODE_CLOSE too heavy!
-	yield TokenizedMatcher(F_APB_MENTION, fileToSet('resource/mention_licence_apb2017.col'), 
+	yield LabelMatcher(F_APB_MENTION, fileToSet('mention_licence_sise'), MATCH_MODE_EXACT)
+	yield TokenizedMatcher(F_APB_MENTION, fileToSet('mention_licence_apb2017.col'), 
 		maxTokens = 5)
-	yield TokenizedMatcher(F_RD_DOMAIN, fileToSet('resource/domaine_recherche.col'), 
+	yield TokenizedMatcher(F_RD_DOMAIN, fileToSet('domaine_recherche.col'), 
 		maxTokens = 4)
 	# yield CategoryMatcher(F_RD_DOMAIN, 'publi')
 	yield SubtypeMatcher(F_MESR, [F_RD, F_APB_MENTION, F_RD_DOMAIN])
@@ -1405,28 +1553,31 @@ def valueMatchers():
 	# yield FrenchAddressMatcher()
 	yield CustomAddressMatcher()
 	yield RegexMatcher(F_ZIP, "[0-9]{5}")
-	yield LabelMatcher(F_COUNTRY, fileToSet('resource/country'), MATCH_MODE_EXACT)
+	yield LabelMatcher(F_COUNTRY, fileToSet('country'), MATCH_MODE_EXACT)
 
 	# yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT) # MATCH_MODE_CLOSE too imprecise
 	# yield TokenizedMatcher(F_CITY, COMMUNE_LEXICON, maxTokens = 3)
 	yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
 
-	yield TokenizedMatcher(F_DPT, fileToSet('resource/departement')) # TODO use LabelMatcher instead?
-	yield TokenizedMatcher(F_REGION, fileToSet('resource/region')) # TODO use LabelMatcher instead?
-	yield TokenizedMatcher(F_STREET, fileToSet('resource/voie.col'), maxTokens = 2)
+	yield TokenizedMatcher(F_DPT, fileToSet('departement'), distinctCount = 7)
+	yield TokenizedMatcher(F_REGION, fileToSet('region'), distinctCount = 3)
+	yield TokenizedMatcher(F_STREET, fileToSet('voie.col'), maxTokens = 2)
 	yield CompositeMatcher(F_ADDRESS, [F_STREET, F_ZIP, F_CITY, F_COUNTRY])
 	yield SubtypeMatcher(F_GEO, [F_ADDRESS, F_ZIP, F_CITY, F_DPT, F_REGION, F_COUNTRY])
 
 	# Publications
 	# From http://stackoverflow.com/questions/27910/finding-a-doi-in-a-document-or-page
-	yield RegexMatcher(F_DOI, '\b(10[.][0-9]{4,}(?:[.][0-9]+)*/(?:(?!["&\'<>])\S)+)\b') 
-	yield RegexMatcher(F_ISSN, '\d{4}-\d{3}[\dxX]$')
-	yield SubtypeMatcher(F_PUBLI_ID, [F_DOI, F_ISSN]) # + 'IdRef' ?
-	pubTitleLexicon = fileToSet('resource/titre_revue')
-	yield LabelMatcher(F_JOURNAL, pubTitleLexicon, MATCH_MODE_EXACT) # FIXME: MATCH_MODE_CLOSE too heavy!
+	PAT_DOI = '\b(10[.][0-9]{4,}(?:[.][0-9]+)*/(?:(?!["&\'<>])\S)+)\b'
+	yield RegexMatcher(F_DOI, PAT_DOI) 
+	PAT_ISSN = '\d{4}-\d{3}[\dxX]$'
+	yield RegexMatcher(F_ISSN, PAT_ISSN)
+	 # TODO see if we should add IdRef
+	yield SubtypeMatcher(F_PUBLI_ID, [F_DOI, F_ISSN])
+	pubTitleLexicon = fileToSet('titre_revue')
+	yield LabelMatcher(F_JOURNAL, pubTitleLexicon, MATCH_MODE_EXACT)
 	yield TokenizedMatcher(F_JOURNAL, pubTitleLexicon, 
 		maxTokens = 5, scorer = partial(tokenScorer, minSrcTokenRatio = 90))
-	articleLexicon = fileToSet('resource/article_fr') | fileToSet('resource/article_en')
+	articleLexicon = fileToSet('article_fr') | fileToSet('article_en')
 	yield TokenizedMatcher(F_ARTICLE, articleLexicon)
 	yield SubtypeMatcher(F_ARTICLE, [F_ABSTRACT, F_PUBLI_ID, F_ARTICLE_CONTENT])
 	# yield BiblioMatcher()
@@ -1437,12 +1588,14 @@ def valueMatchers():
 	yield SubtypeMatcher(F_TEXT, [F_ARTICLE, F_ABSTRACT])
 
 	# Biomedical Domain
-	yield TokenizedMatcher(F_CLINICALTRIAL_NAME, fileToSet('resource/clinical_trial_acronym'))
-	yield TokenizedMatcher(F_MEDICAL_SPEC, fileToSet('resource/specialite_medicale_fr') | fileToSet('resource/specialite_medicale_en'))
+	yield TokenizedMatcher(F_CLINICALTRIAL_NAME, fileToSet('clinical_trial_acronym'))
+	yield TokenizedMatcher(F_MEDICAL_SPEC, 
+		fileToSet('specialite_medicale_fr') | 
+		fileToSet('specialite_medicale_en'))
 	yield SubtypeMatcher(F_BIOMEDICAL, [F_CLINICALTRIAL_NAME, F_MEDICAL_SPEC])
 
 	# Agro Domain
-	phytoLexicon = fileToSet('resource/phyto')
+	phytoLexicon = fileToSet('phyto')
 	yield LabelMatcher(F_PHYTO, phytoLexicon, MATCH_MODE_EXACT)
 	yield TokenizedMatcher(F_PHYTO, phytoLexicon,
 		maxTokens = 4, scorer = partial(tokenScorer, minSrcTokenRatio = 30))
@@ -1456,21 +1609,23 @@ def valueMatchers():
 	# The top-level data type for organizations
 	yield SubtypeMatcher(F_INSTITUTION, [F_RD_STRUCT, F_ETAB, F_ENTREPRISE])
 
-	yield VocabMatcher(F_ENTREPRISE, fileToSet('resource/org_entreprise.vocab'), ignoreCase = True, partial = False)
-	yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('resource/org_enseignement.vocab'), ignoreCase = True, partial = False)
+	yield VocabMatcher(F_ENTREPRISE, fileToSet('org_entreprise.vocab'), ignoreCase = True, partial = False)
+	yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('org_enseignement.vocab'), ignoreCase = True, partial = False)
 
 	# Spot acronyms on-the-fly
 	yield AcronymMatcher()
 
 	# Normalize by expanding alternative variants (such as acronyms, abbreviations and synonyms) to their main variant
 
-	# Those for which we keep surrounding context, because their variants correspond to generic terms (denominations and the like)
-	yield VariantExpander(fileToVariantMap('resource/org_societe.syn'), F_ENTREPRISE, True)
-	yield VariantExpander(fileToVariantMap('resource/org_entreprise.syn'), F_ENTREPRISE, True)
-	# Those for which we only keep the main variant associated to the extracted alt variant, because said variants correspond to specific entities
-	yield VariantExpander(fileToVariantMap('resource/org_rnsr.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT)
-	yield VariantExpander(fileToVariantMap('resource/org_hal.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT)
-	yield VariantExpander(fileToVariantMap('resource/etab_enssup.syn'), F_MESR, False, targetType = F_ETAB_ENSSUP)
+	# Those for which we keep surrounding context, because their variants correspond to generic 
+	# terms (denominations and the like)
+	yield VariantExpander(fileToVariantMap('org_societe.syn'), F_ENTREPRISE, True)
+	yield VariantExpander(fileToVariantMap('org_entreprise.syn'), F_ENTREPRISE, True)
+	# Those for which we only keep the main variant associated to the extracted alt variant, because said variants
+	# correspond to specific entities
+	yield VariantExpander(fileToVariantMap('org_rnsr.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT)
+	yield VariantExpander(fileToVariantMap('org_hal.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT)
+	yield VariantExpander(fileToVariantMap('etab_enssup.syn'), F_MESR, False, targetType = F_ETAB_ENSSUP)
 	
 # Main functionality
 
@@ -1529,7 +1684,7 @@ if __name__ == '__main__':
 					  help = "source file")
 	parser.add_option("-d", "--delimiter", dest = "delimiter",
 					  help = "CSV delimiter")
-	parser.add_option("-o", "--output_format", dest = "of",
+	parser.add_option("-f", "--output_format", dest = "of",
 					  help = "Output format (md / csv)")
 	(options, args) = parser.parse_args()
 	separator = options.delimiter if options.delimiter else '|'
@@ -1537,7 +1692,7 @@ if __name__ == '__main__':
 	fields = parseFieldsFromCSV(options.srcFileName, delimiter = separator)
 
 	# Single-pass method
-	#fields.processValues(outputFormat = outputFormat)
+	# fields.processValues(outputFormat = outputFormat)
 
 	# Two-pass method
 	res = list()
