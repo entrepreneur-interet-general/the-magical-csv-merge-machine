@@ -7,3 +7,4 @@ Created on Fri Mar  3 10:41:34 2017
 """
 
 DATA_PATH = 'data'
+RESOURCE_PATH = 'resource'

@@ -22,8 +22,7 @@ from referential import Referential
 
 from CONFIG import DATA_PATH
 
-SOURCE = 'adresse_structure_hal.col' # 'SIREN_FUI.col' # 'abes.csv'
-REF = 'adresse.col' # 'asrc.csv'
+
 class UserProject(Project):
     """
     This class provides tools to manage user projects
@@ -202,6 +201,9 @@ class UserProject(Project):
 
 if __name__ == '__main__':
     import json
+
+    SOURCE = 'adresse_structure_hal.col' # 'SIREN_FUI.col' # 'abes.csv'
+    REF = 'adresse.col' # 'asrc.csv'
 
     logging.basicConfig(filename = 'log/preprocess_fields.log', level = logging.DEBUG)
     

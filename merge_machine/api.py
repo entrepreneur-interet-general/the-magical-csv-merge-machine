@@ -101,6 +101,10 @@ USES: /python-memcached
 import gc
 import os
 
+# Change current path to path of api.py
+curdir = os.path.dirname(os.path.realpath(__file__))
+os.chdir(curdir)
+
 import flask
 from flask import Flask, jsonify, render_template, request, send_file, url_for
 from flask_session import Session
@@ -121,9 +125,6 @@ from referential import Referential
 #==============================================================================
 # INITIATE APPLICATION
 #==============================================================================
-# Change current path to path of api.py
-curdir = os.path.dirname(os.path.realpath(__file__))
-os.chdir(curdir)
 
 # Initiate application
 app = Flask(__name__)
@@ -1026,4 +1027,4 @@ def list_referentials():
 
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    socketio.run(app, host='0.0.0.0', debug=True)
