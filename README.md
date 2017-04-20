@@ -37,13 +37,12 @@ Ce projet est développé de Janvier à Novembre 2017 dans le cadre du [programm
 Pour faire tourner l'application 
 
 - Installer docker: [lien](https://www.docker.com/community-edition)
-- Si vous êtes derrière un proxy, [ce lien](https://robinwinslow.uk/2016/06/23/fix-docker-networking-dns/) peut vous aider
-
+- Construire l'image puis lancer le container
 ```
-# Construire l'image puis lancer le container
 $ docker build -t merge_machine .
 $ docker run -p 5000:5000 merge_machine
 ```
+- Si vous êtes derrière un proxy et que vous rencontrez une erreur, [ce lien](https://robinwinslow.uk/2016/06/23/fix-docker-networking-dns/) peut aider
 - Après une minute, l'application devrait être disponible via: `http://127.0.0.1:5000/`
 - Pour voir le container docker (et son identifiant): `docker ps`
 - Pour rejoindre un container précédent: `docker attach <identifiant_container>`
