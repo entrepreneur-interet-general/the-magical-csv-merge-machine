@@ -171,7 +171,6 @@ def parse_data_params(proj, data_params, file_role=None):
     '''
     Returns identifiers for data based on project history. Uses `get_last_written`
     to retrieve the last file written given the constraints in data_params
-    
     INPUT:
         - proj: a user project
         - data_params: {'file_role': ..., 'module_name': ..., 'file_name': ...}
@@ -275,8 +274,8 @@ def web_index(project_type='user'):
                        next_url=url_for('web_select_files', project_type=project_type))
 
 
-@app.route('/web/<project_type>/select/', methods=['GET'])
-@app.route('/web/<project_type>/select/<project_id>/', methods=['GET', 'POST'])
+@app.route('/web/<project_type>/select_files/', methods=['GET'])
+@app.route('/web/<project_type>/select_files/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
 def web_select_files(project_type, project_id=None):
     MAX_FILE_SIZE = 1048576
@@ -288,10 +287,10 @@ def web_select_files(project_type, project_id=None):
     all_internal_refs = admin.list_referentials() # TODO: take care of this
     
     if project_type == 'admin':
-        next_url = url_for('web_missing_values', project_type=project_type, 
+        next_url = url_for('web_mvs', project_type=project_type, 
                            project_id=project_id, file_role='ref')
     else:
-        next_url = url_for('web_missing_values', project_type=project_type, 
+        next_url = url_for('web_mvs', project_type=project_type, 
                            project_id=project_id, file_role='source')
     # next_url = next_url = url_for('web_match_columns', project_id=project_id)
     print(all_internal_refs)
@@ -310,10 +309,9 @@ def web_select_files(project_type, project_id=None):
 
 # order:
 # select_project; select_files; missing_values_source; missing_values_ref; dedupe 1 dedupe 2
-
 @app.route('/web/<project_type>/missing_values/<project_id>/<file_role>', methods=['GET'])
 @cross_origin()
-def web_missing_values(project_type, project_id, file_role):
+def web_mvs(project_type, project_id, file_role):
     NUM_ROWS_TO_DISPLAY = 30
     NUM_PER_MISSING_VAL_TO_DISPLAY = 4
     
@@ -332,29 +330,23 @@ def web_missing_values(project_type, project_id, file_role):
         # Infer missing values + save
         mvs_config = proj.infer('infer_mvs', params=None)
     
-    # Select rows to display based on result
-    row_idxs = []
-    for col, mvs in mvs_config['mvs_dict']['columns'].items():
-        for mv in mvs:
-            sel = (proj.mem_data[col] == mv['val']).diff().fillna(True)
-            sel.index = range(len(sel))
-            row_idxs.extend(list(sel[sel].index)[:NUM_PER_MISSING_VAL_TO_DISPLAY])
-            
-    if not row_idxs:
-        row_idxs = range(NUM_ROWS_TO_DISPLAY)
-
-    sample = proj.get_sample(file_role, module_name, file_name,
-                                 row_idxs=[0] + [x+1 for x in row_idxs])
-
+    # Generate sample to display 
+    paths = {''}
+    sample_params = {'num_rows_to_display': NUM_ROWS_TO_DISPLAY,
+                     'num_per_missing_val_to_display': NUM_PER_MISSING_VAL_TO_DISPLAY}
+    sample = proj.gen_sample('sample_mvs', paths, mvs_config, sample_params)
+    
+    # Choose next URL
     if project_type == 'admin':
         next_url = url_for('web_index', project_type=project_type)
     else:
         if (file_role == 'source') and not (proj.metadata['current']['ref']['internal']):
-            next_url = url_for('web_missing_values', project_type=project_type, 
+            next_url = url_for('web_mvs', project_type=project_type, 
                                project_id=project_id, file_role='ref')
         else:
             next_url = url_for('web_match_columns', project_id=project_id)
     
+    # Format infered_mvs for display in web app
     formated_infered_mvs = dict()
     formated_infered_mvs['columns'] = {col:[mv['val'] for mv in mvs] \
                     for col, mvs in mvs_config['mvs_dict']['columns'].items()}

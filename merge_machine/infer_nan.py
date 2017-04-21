@@ -273,6 +273,24 @@ def replace_mvs(tab, params):
     return tab
 
 
+def sample_ilocs(tab, params, sample_params):
+    '''Displays interesting rows following inference'''
+    # Select rows to display based on result
+    num_rows_to_display = sample_params.get('num_rows_to_display', 30)
+    num_per_missing_val_to_display = sample_params.get('sample_params', 4)
+    
+    row_idxs = []
+    for col, mvs in params['mvs_dict']['columns'].items():
+        for mv in mvs:
+            sel = (tab[col] == mv['val']).diff().fillna(True)
+            sel.index = range(len(sel))
+            row_idxs.extend(list(sel[sel].index)[:num_per_missing_val_to_display])
+            
+    if not row_idxs:
+        row_idxs = range(num_rows_to_display)
+
+    return sample_ilocs    
+
 
 if __name__ == '__main__':
     
