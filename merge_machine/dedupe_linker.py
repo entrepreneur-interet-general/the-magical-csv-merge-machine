@@ -37,6 +37,17 @@ NO_TRAINING_MESSAGE = 'No training file could be found. Use the interface (XXX)'
                       ', specify a matching ID to generate train (YYY), or ' \
                       'upload a training file using (ZZZ)'
 
+def pd_pre_process(series, remove_punctuation=False):
+    '''Applies pre-processing to series using builtin pandas.str'''
+    series = series.str.replace(' +', ' ')
+    series = series.str.replace('\n', ' ')
+    if remove_punctuation:
+        for punc in punctuation:
+            series = series.str.replace(punc, ' ')
+    series = series.str.strip(' \"\'').str.lower()
+    series = series.replace('', None)
+    return series
+
 def pre_process(val, remove_punctuation=False):
     """
     Do a little bit of data cleaning. Things like casing, extra spaces, 
@@ -49,9 +60,9 @@ def pre_process(val, remove_punctuation=False):
     if remove_punctuation:
         for punc in punctuation:
             val = re.sub(re.escape(punc), ' ', val)
-    val = val.strip().strip('"').strip("'").strip().lower()
+    val = val.strip(' \"\'').lower()
     val = unidecode.unidecode(val)
-    if val == '' :
+    if val == '':
         val = None
     return val
 

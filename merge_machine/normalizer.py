@@ -1,49 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Feb 24 14:04:51 2017
+Created on Fri Apr 21 19:39:45 2017
 
 @author: leo
-
-Abstract class that deals with csv data, transformations, and inference.
-
-
-IDEAS:
-    - split file
-
-DEV GUIDELINES:
-    - Modules take as input (pd.DataFrame, dict_for_parameters)
-    - Current state should be fully understandable from metadata
-    - Each module shall take care of creating it's own directory
-    - File name is unique (not accross reference)
-
-    - Follow module writing order (MODULE_ORDER)
-
-    - Dedupe: Numbers predicate ? Lycée Acajou 1	LYCEE POLYVALENT ACAJOU 2
-
-TODO:
-    - Store user params
-    - Deal with log for merge 
-    
-    - Create Data Class ?
 """
 
 import csv
 import gc
-import hashlib
 import itertools
-import json
 import os
-import random
 import shutil
 import time
 
 import pandas as pd
 
-from dedupe_linker import dedupe_linker
+from abstract_project import AbstractProject, NOT_IMPLEMENTED_MESSAGE
 from infer_nan import infer_mvs, replace_mvs, sample_mvs
-from performance import results_analysis
 from preprocess_fields_v3 import inferTypes, normalizeValues
+from results_analysis import results_analysis
 
 MODULES = {
         'transform':{
@@ -65,7 +40,7 @@ MODULES = {
                                 'write_to': 'replace_mvs',
                                 'desc': infer_mvs.__doc__
                             },
-               'inferTypes': {
+                'inferTypes': {
                                 'func': inferTypes,
                                 'write_to': 'normalize',
                                 'desc': inferTypes.__doc__
@@ -74,12 +49,6 @@ MODULES = {
                                 'func': results_analysis,
                                 'write_to': 'results_analysis',
                                 'desc': results_analysis.__doc__
-                            }
-                },
-        'link': {
-                'dedupe_linker': {
-                                'func': dedupe_linker,
-                                'desc': dedupe_linker.__doc__
                             }
                 },
                 
@@ -93,31 +62,7 @@ MODULES = {
 
 
 
-
-def gen_proj_id():
-    '''Generate unique non-guessable string for project ID'''
-    unique_string = str(time.time()) + '_' + str(random.random())
-    h = hashlib.md5()
-    h.update(unique_string.encode('utf-8'))
-    project_id = h.hexdigest()
-    return project_id
-
-    
-def get_arb(dir_path):
-    '''Return arborescence as dict'''
-    to_return = dict()
-    for name in os.listdir(dir_path):
-        if os.path.isdir(os.path.join(dir_path, name)):
-            to_return[name] = get_arb(os.path.join(dir_path, name))
-        else:
-            to_return[name] = {}
-    return to_return
-
-
-
-NOT_IMPLEMENTED_MESSAGE = 'NOT IMPLEMENTED in abstract class'
-
-class Project():
+class Normalizer(AbstractProject):
     """
     Abstract class to deal with data, data transformation, and metadata.
     
@@ -132,75 +77,61 @@ class Project():
     
     In short: Objects stored in memory are:
         - TODO: write this
-    
     """
-
 #==============================================================================
 # Methods that should be implemented in children
 #==============================================================================
 
-    def check_file_role(self, file_role):
-        raise Exception(NOT_IMPLEMENTED_MESSAGE)
-
-    def path_to(self, file_role='', module_name='', file_name=''):
-        raise Exception(NOT_IMPLEMENTED_MESSAGE)
-
-    def create_metadata(self, description=''):
-        raise Exception(NOT_IMPLEMENTED_MESSAGE)    
-
-    def select_file(self, file_role, file_name, internal=False, project_id=None):
+    def select_file(self, file_name, internal=False, project_id=None):
         raise Exception(NOT_IMPLEMENTED_MESSAGE)
     
 #==============================================================================
 # Actual class
-#==============================================================================
+#==============================================================================   
 
     def __init__(self, project_id=None, create_new=False, description=''):
-        if (project_id is None) and (not create_new):
-            raise Exception('Set create_new to True or specify project_id')
-
-        if create_new: 
-            # Generate project id if none is passed
-            if project_id is None:
-                self.project_id = gen_proj_id()
-            else:
-                self.project_id = project_id
-            
-            path_to_proj = self.path_to()
-            
-            if os.path.isdir(path_to_proj):
-                raise Exception('Project already exists. Choose a new path or \
-                                delete the existing: {}'.format(path_to_proj))
-            else:
-                os.makedirs(path_to_proj)
-                
-            # Create metadata
-            self.metadata = self.create_metadata(description=description)
-            self.write_metadata()
-        else:
-            self.project_id = project_id
-            self.metadata = self.read_metadata()
-            
-        # Initiate with no data in memory
-        self.mem_data = None
-        self.mem_data_info = {} # Information on data in memory
-        self.log_buffer = [] # List of logs not yet written to metadata.json    
+        super().__init__(project_id, create_new, description)
     
+
+    def path_to(self, data_path, module_name='', file_name=''):
+        '''
+        Return path to directory that stores specific information for a project 
+        module
+        '''
+        if module_name is None:
+            module_name = ''
+        if file_name is None:
+            file_name = ''
+        
+        path = os.path.join(data_path, self.project_id, module_name, file_name)
+
+        return os.path.abspath(path)    
+
+    def create_metadata(self, description=''):
+        metadata = dict()
+        metadata['description'] = description
+        metadata['log'] = []
+        metadata['project_id'] = self.project_id
+        metadata['timestamp'] = time.time()
+        metadata['user_id'] = '__ NOT IMPLEMENTED'
+        return metadata   
 
     def init_log(self, module_name, module_type):
         '''
         Initiate a log (before a module call). Use end_log to complete log message
         '''
-        assert module_type in ['transform', 'infer', 'link']
-        log = { # Data being modified
+        assert module_type in ['transform', 'infer']
+        log = { 
+                # Data being modified
                'file_name': self.mem_data_info.get('file_name', None), 
                'origin': self.mem_data_info.get('module_name', None),
-               'file_role': self.mem_data_info.get('file_role', None),
+               
                 # Modification at hand                        
                'module_name': module_name, # Module to be executed
                'module_type': module_type, # Type (transform, infer, or dedupe)
                'start_timestamp': time.time(),
-               'end_timestamp': None, 'error':None, 'error_msg':None, 'written': False}
+               'end_timestamp': None, 'error':None, 'error_msg':None, 'written': False
+               }
         return log
         
     def end_log(self, log, error=False):
@@ -222,10 +153,6 @@ class Project():
             last_time = max(last_time, float(self.metadata['log'][-1]['end_timestamp']))
         return time.time() - last_time
 
-    def get_arb(self):
-        '''List directories and files in project'''
-        path_to_proj = self.path_to()
-        return get_arb(path_to_proj)
 
     def _list_files(self, extensions=['.csv']):
         '''
@@ -237,16 +164,13 @@ class Project():
         
         all_files = dict()
         root_path = self.path_to()
-        for file_role in filter(lambda x: is_dir(root_path, x), os.listdir(root_path)):
-            all_files[file_role] = dict()
-            sub_root_path = self.path_to(file_role=file_role)
-            for _dir in filter(lambda x: is_dir(sub_root_path, x), os.listdir(sub_root_path)):
-                for file_name in os.listdir(os.path.join(sub_root_path, _dir)):
-                    if any(file_name[-len(ext):] == ext for ext in extensions):
-                        if file_name not in all_files[file_role]:
-                            all_files[file_role][file_name] = [_dir]
-                        else:
-                            all_files[file_role][file_name].append(_dir)
+        for _dir in filter(lambda x: is_dir(root_path, x), os.listdir(root_path)):
+            for file_name in os.listdir(os.path.join(root_path, _dir)):
+                if any(file_name[-len(ext):] == ext for ext in extensions):
+                    if file_name not in all_files:
+                        all_files[file_name] = [_dir]
+                    else:
+                        all_files[file_name].append(_dir)
         return all_files
 
     def log_by_file_name(self):
@@ -258,39 +182,32 @@ class Project():
         for key, group in itertools.groupby(sorted_log, lambda x: x['file_name']):
             resp[key] = list(group)
         return resp
-            
 
-
-    def get_last_written(self, file_role=None, module_name=None, file_name=None, 
+    def get_last_written(self, module_name=None, file_name=None, 
                          before_module=None):
         '''
         Return info on data that was last successfully written (from log)
         
         INPUT:
-            - file_role: filter on file role (last data with given file_role)
             - module_name: filter on given module
             - file_name: filter on file_name
             - before_module: Looks for file that was written in a module previous or
               or equal to before_module (in the order defined by MODULE_ORDER)
             
         OUTPUT:
-            - (file_role, module_name, file_name)
+            - (module_name, file_name)
         '''
         
-        MODULE_ORDER = ['INIT', 'replace_mvs', 'dedupe_linker']
+        MODULE_ORDER = ['INIT', 'replace_mvs']
         
         for module_from_loop in MODULE_ORDER:
-            assert (module_from_loop in MODULES['transform']) \
-                or (module_from_loop in MODULES['link'])
-            
+            assert (module_from_loop in MODULES['transform'])
         
         previous_modules = {MODULE_ORDER[i]: MODULE_ORDER[:i+1] for i in range(len(MODULE_ORDER))}
-        
-        self.check_file_role(file_role)
+    
     
         for log in self.metadata['log'][::-1]:
             if (not log['error']) and log['written'] \
-                      and ((file_role is None) or (log['file_role'] == file_role)) \
                       and ((module_name is None) or (log['module_name'] == module_name)) \
                       and ((file_name is None) or (log['file_name'] == file_name)) \
                       and ((before_module is None) or (log['module_name'] in previous_modules[before_module])):                
@@ -298,16 +215,15 @@ class Project():
         else:
             raise Exception('No written data could be found in logs')
         
-        file_role = log['file_role']
         module_name = log['module_name']
         file_name = log['file_name']        
-        return (file_role, module_name, file_name)
+        return (module_name, file_name)
 
-    def path_to_last_written(self, file_role=None, module_name=None, 
-                             file_name=None, before_module=None):
-        (file_role, module_name, file_name) = self.get_last_written(file_role, 
-                                        module_name, file_name, before_module)
-        path = self.path_to(file_role, module_name, file_name)
+
+    def path_to_last_written(self, module_name=None, file_name=None, before_module=None):
+        (module_name, file_name) = self.get_last_written(module_name,
+                                                        file_name, before_module)
+        path = self.path_to(module_name, file_name)
         return path
 
     def check_mem_data(self):
@@ -321,7 +237,9 @@ class Project():
         path_to_proj = self.path_to()
         shutil.rmtree(path_to_proj)
     
-    def upload_init_data(self, file, file_role, file_name):
+    def upload_init_data(self, file, file_name, user_given_name=None):
+        # TODO: deal with og_file_name, file_id, display_name, user_given_name
+        
         """
         Upload and write source or reference to the project. Tables will
         be added to the "INIT" module.
@@ -332,14 +250,9 @@ class Project():
         CHARS_TO_REPLACE = [' ', ',', '.', '(', ')', '\'', '\"']
         ENCODINGS = ['utf-8', 'windows-1252']
         SEPARATORS = [',', ';', '\t']
-        
-        self.check_file_role(file_role)
-        
+                
         # Check that file is not already present
-        
-        #
-        self.mem_data_info = {'file_role': file_role, 
-                              'file_name': file_name,
+        self.mem_data_info = {'file_name': file_name,
                               'module_name': 'INIT'}
         log = self.init_log('INIT', 'transform')
         
@@ -376,70 +289,6 @@ class Project():
         self.clear_memory()
     
 
-    def upload_config_data(self, config_dict, file_role, module_name, file_name):
-        '''Will write config file'''
-        VALID_FILE_NAMES = ['config.json', 'infered_config.json', 
-                             'training.json', 'column_matches.json',
-                             'column_certain_matches.json',
-                             'columns_to_return_source.json', 
-                             'columns_to_return_ref.json']
-        
-        if config_dict is None:
-            return
-        
-        #        if (module_name not in MODULES['link']) and (module_name not in MODULES['transform']) :
-        #            raise Exception('Config files can only be uploaded to module \
-        #                            directories of type link or transform') 
-            
-        if file_name not in VALID_FILE_NAMES:
-            raise Exception('For now you can only upload files named \
-                            {0}'.format(' or '.join(VALID_FILE_NAMES)))
-
-        # Create directories
-        dir_path = self.path_to(file_role, module_name)
-        if not os.path.isdir(dir_path):
-            os.makedirs(dir_path)   
-        
-        # Write file
-        file_path = self.path_to(file_role, module_name, file_name)
-        with open(file_path, 'w') as w:
-            json.dump(config_dict, w)
-
-    def read_config_data(self, file_role, module_name, file_name):
-        '''
-        Reads json file and returns dictionary (empty dict if file is not found)
-        '''
-        file_path = self.path_to(file_role=file_role, module_name=module_name, 
-                                 file_name=file_name)
-        if os.path.isfile(file_path):
-            config = json.loads(open(file_path).read())
-        else: 
-            config = {}
-        return config    
-    
-
-    def read_metadata(self):
-        '''Wrapper around read_config_data'''
-        metadata = self.read_config_data('', '', file_name='metadata.json')
-        assert metadata['project_id'] == self.project_id
-        return metadata
-    
-    def write_metadata(self):
-        path_to_metadata = self.path_to(file_name='metadata.json')
-        json.dump(self.metadata, open(path_to_metadata, 'w'))
-
-
-    def remove(self, file_role, module_name='', file_name=''):
-        '''Removes a file from the project'''
-        self.check_file_role(file_role)
-        file_path = self.path_to(file_role, module_name, file_name)
-        
-        if os.path.isfile(file_path):
-            os.remove(file_path)
-        else:
-            raise Exception('{0} (in: {1}, as: {1}) could not be found in \
-                            project'.format(file_name, module_name, file_role))
-
     def remove_all(self, file_name):
         '''
         Remove all occurences of files with a given file_name from the project
@@ -447,38 +296,32 @@ class Project():
         '''
         # TODO: deal with .csv dependency
         all_files = self._list_files(extensions=['.csv'])
-        
-        for file_role, name_dict in all_files.items():
-            for _file_name, module_name in name_dict.items():
-                if file_name == _file_name:
-                    self.remove(file_role, module_name, file_name)
+    
+        for _file_name, module_name in all_files.items():
+            if file_name == _file_name:
+                self.remove(module_name, file_name)
         
         self.metadata['log'] = filter(lambda x: (x['file_name']!=file_name), 
                                                  self.metadata['log'])     
         self.write_metadata()
         
         
-    def load_data(self, file_role, module_name, file_name):
+    def load_data(self, module_name, file_name):
         '''Load data as pandas DataFrame to memory'''
-        file_path = self.path_to(file_role, module_name, file_name)
-        try:
-            self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str)
-        except:
-            import pdb
-            pdb.set_trace()
-        self.mem_data_info = {'file_role': file_role, 
-                               'file_name': file_name,
-                               'module_name': module_name}
+        file_path = self.path_to(module_name, file_name)
+        self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str)
+        self.mem_data_info = {'file_name': file_name,
+                              'module_name': module_name}
         
-    def get_header(self, file_role, module_name, file_name):
-        file_path = self.path_to(file_role, module_name, file_name)
+    def get_header(self, module_name, file_name):
+        file_path = self.path_to(module_name, file_name)
         header = list(pd.read_csv(file_path, encoding='utf-8', nrows=0).columns)
         return header
     
-    def get_sample(self, file_role, module_name, file_name, row_idxs=range(5), 
+    def get_sample(self, module_name, file_name, row_idxs=range(5), 
                    columns=None, drop_duplicates=True):
         '''Returns a dict with the selected rows (including header)'''
-        file_path = self.path_to(file_role, module_name, file_name)
+        file_path = self.path_to(module_name, file_name)
         
         if row_idxs is not None:
             if row_idxs[0] != 0:
@@ -542,12 +385,10 @@ class Project():
         self.check_mem_data()
             
         # Write data
-        dir_path = self.path_to(self.mem_data_info['file_role'], 
-                                self.mem_data_info['module_name'])
+        dir_path = self.path_to(self.mem_data_info['module_name'])
         if not os.path.isdir(dir_path):
             os.makedirs(dir_path)        
-        file_path = self.path_to(self.mem_data_info['file_role'], 
-                                 self.mem_data_info['module_name'], 
+        file_path = self.path_to(self.mem_data_info['module_name'], 
                                  self.mem_data_info['file_name'])
         self.mem_data.to_csv(file_path, encoding='utf-8', index=False, 
                              quoting=csv.QUOTE_NONNUMERIC)
@@ -595,8 +436,7 @@ class Project():
         
         # Write result of inference
         module_to_write_to = MODULES['infer'][module_name]['write_to']
-        self.upload_config_data(infered_params, self.mem_data_info['file_role'], \
-                                module_to_write_to, 'infered_config.json')
+        self.upload_config_data(infered_params, module_to_write_to, 'infered_config.json')
         
         # Update log buffer
         self.log_buffer.append(log)     
@@ -610,13 +450,11 @@ class Project():
         
         NB: This is here for uniformity with transform and infer
         '''
-        
-        file_role = paths['file_role']
         module_name = paths['module_name']
         file_name = paths['file_names']
         
         sample_ilocs = MODULES['sample'][module_name]['func'](self.mem_data, params, sample_params)
         
-        sample = self.get_sample(file_role, module_name, file_name,
+        sample = self.get_sample(module_name, file_name,
                                  row_idxs=[0] + [x+1 for x in sample_ilocs])        
         return sample
