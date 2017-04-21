@@ -1,4 +1,5 @@
-# Server side file system structure
+# Server side file system structure [DEPRECATED]
+### TODO: Change to unique file transform + linking project
 
 ```
 data/
