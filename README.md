@@ -12,11 +12,6 @@ Dans le contexte d'études statistiques, il est souvent nécessaire de recouper 
 |---|---|---|---|---|---|---|---|---|
 | Société Française de Ramonage | 2 rue du Beffroy | Orsay |  | ... |  | s.f. rammonage| rue du beffroy, 2 | orsay |
 
-
-
-
-
-
 ## Objectif
 
 L'objectif de ce projet est de créer une **API** ainsi qu'une **interface web** permettant d'apparier automatiquement des données csv sales à un réferentiel propre. Le service devra aussi pouvoir être installé et **tourner localement** (pour les utilisateurs ayant des données confidentielles). Nous projettons de proposer plusieurs sous-services:
@@ -35,3 +30,23 @@ Le projet est encore en développement... Vous pouvez [faire des remarques (lais
 
 # Contexte
 Ce projet est développé de Janvier à Novembre 2017 dans le cadre du [programme d'entrepreneur d'intérêt général](https://www.etalab.gouv.fr/decouvrez-la-1e-promotion-des-entrepreneurs-dinteret-general) au sein du département outils d'aide à la décision du Ministere de l'éducation nationale, de l'enseignement supérieur et de la recherche.
+
+-------------------------------------------
+
+# Faire tourner l'application localement avec Docker [NON OPTIMISE, TRAVAIL EN COURS]
+Pour faire tourner l'application 
+
+- Installer docker: [lien](https://www.docker.com/community-edition)
+- Construire l'image puis lancer le container
+```
+$ docker build -t merge_machine .
+$ docker run -p 5000:5000 merge_machine
+```
+- Si vous êtes derrière un proxy et que vous rencontrez une erreur, [ce lien](https://robinwinslow.uk/2016/06/23/fix-docker-networking-dns/) peut aider
+- Après une minute, l'application devrait être disponible via: `http://127.0.0.1:5000/`
+- Pour voir le container docker (et son identifiant): `docker ps`
+- Pour rejoindre un container précédent: `docker attach <identifiant_container>`
+
+
+
+
