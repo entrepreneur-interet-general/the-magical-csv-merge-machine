@@ -14,7 +14,6 @@ Created on Fri Mar  3 10:37:58 2017
 # ERRORS in DOC:
 indexes=True --> index=True
 
-
 Given a dedupe formated training set, perform linking between source and reference using gazetteer.
 
 """

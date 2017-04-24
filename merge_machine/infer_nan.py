@@ -273,7 +273,7 @@ def replace_mvs(tab, params):
     return tab
 
 
-def sample_ilocs(tab, params, sample_params):
+def sample_mvs_ilocs(tab, params, sample_params):
     '''Displays interesting rows following inference'''
     # Select rows to display based on result
     num_rows_to_display = sample_params.get('num_rows_to_display', 30)
@@ -289,7 +289,7 @@ def sample_ilocs(tab, params, sample_params):
     if not row_idxs:
         row_idxs = range(num_rows_to_display)
 
-    return sample_ilocs    
+    return row_idxs    
 
 
 if __name__ == '__main__':

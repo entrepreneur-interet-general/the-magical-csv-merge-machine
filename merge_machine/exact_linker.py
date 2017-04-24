@@ -12,6 +12,7 @@ from dedupe_linker import pd_pre_process
 
 
 def enrich_sirene(tab):
+    # TODO: this has nothing to do here
     '''Splits column L6_DECLAREE to create L6_DECLAREE.code_commune and L6_DECLAREE.localite'''
     tab.loc[:, 'L6_DECLAREE.code_commune'] = np.nan
     tab.loc[:, 'L6_DECLAREE.localite'] = np.nan
@@ -152,10 +153,8 @@ if __name__ == '__main__':
                            'ref': 'ENSEIGNE_OU_NOMEN_LONG'}
                          ],
               'sep': ' '           
-              }
-
-        
+             }
     
     tab = exact_linker(paths, params)
-
+    
     print(tab._merge.value_counts())
