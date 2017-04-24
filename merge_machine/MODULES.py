@@ -7,9 +7,11 @@ Created on Mon Apr 24 17:18:28 2017
 """
 
 from dedupe_linker import dedupe_linker
-from infer_nan import infer_mvs, replace_mvs, sample_mvs
+from infer_nan import infer_mvs, replace_mvs, sample_mvs_ilocs
 from performance import results_analysis
 from preprocess_fields_v3 import inferTypes, normalizeValues
+
+MODULE_ORDER = ['INIT', 'replace_mvs', 'dedupe_linker']
 
 MODULES = {
         'transform':{
@@ -51,8 +53,13 @@ MODULES = {
                 
         'sample': {
                 'sample_mvs': {
-                        'func': sample_mvs,
-                        'desc': sample_mvs.__doc__
+                        'func': sample_mvs_ilocs,
+                        'desc': sample_mvs_ilocs.__doc__
                         }
                 }
         }
+                
+# Sanity check
+for module_from_loop in MODULE_ORDER:
+    assert (module_from_loop in MODULES['transform']) \
+        or (module_from_loop in MODULES['link'])

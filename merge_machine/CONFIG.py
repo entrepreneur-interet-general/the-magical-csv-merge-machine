@@ -7,4 +7,6 @@ Created on Fri Mar  3 10:41:34 2017
 """
 
 DATA_PATH = 'data'
+LINK_DATA_PATH = 'data/link'
+NORMALIZE_DATA_PATH = 'data/normalize'
 RESOURCE_PATH = 'resource'

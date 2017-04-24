@@ -10,7 +10,9 @@ import hashlib
 import json
 import os
 import random
+import shutil
 import time
+
 
 def gen_id():
     '''Generate unique non-guessable string for project ID'''
@@ -23,25 +25,14 @@ def gen_id():
 NOT_IMPLEMENTED_MESSAGE = 'NOT IMPLEMENTED in abstract class'
 
 class AbstractProject():
-    def path_to(self, file_role='', module_name='', file_name=''):
+    def path_to(self, module_name='', file_name=''):
         raise Exception(NOT_IMPLEMENTED_MESSAGE)
 
-    def create_metadata(self, description=None, display_name=None):
-        '''Core metadatas'''
-        metadata = dict()
-        metadata['description'] = description
-        metadata['display_name'] = display_name
-        metadata['log'] = []
-        metadata['project_id'] = self.project_id
-        metadata['timestamp'] = time.time()
-        metadata['user_id'] = '__ NOT IMPLEMENTED'
-        return metadata     
-        
     def __init__(self, 
                  project_id=None, 
                  create_new=False, 
-                 display_name=None,
-                 description=None):
+                 description=None,
+                 display_name=None):
         
         if (project_id is None) and (not create_new):
             raise Exception('Set create_new to True or specify project_id')
@@ -76,6 +67,17 @@ class AbstractProject():
         self.mem_data_info = {} # Information on data in memory
         self.log_buffer = [] # List of logs not yet written to metadata.json    
 
+    def create_metadata(self, description=None, display_name=None):
+        '''Core metadatas'''
+        metadata = dict()
+        metadata['description'] = description
+        metadata['display_name'] = display_name
+        metadata['log'] = []
+        metadata['project_id'] = self.project_id
+        metadata['timestamp'] = time.time()
+        metadata['user_id'] = '__ NOT IMPLEMENTED'
+        return metadata     
+
     def _path_to(self, data_path, module_name='', file_name=''):
         '''
         Return path to directory that stores specific information for a project 
@@ -91,27 +93,27 @@ class AbstractProject():
 
         return os.path.abspath(path)    
         
-    def upload_config_data(self, config_dict, file_role, module_name, file_name):
+    def upload_config_data(self, config_dict, module_name, file_name):
         '''Will write config file'''
         
         if config_dict is None:
             return
 
         # Create directories
-        dir_path = self.path_to(file_role, module_name)
+        dir_path = self.path_to(module_name)
         if not os.path.isdir(dir_path):
             os.makedirs(dir_path)   
         
         # Write file
-        file_path = self.path_to(file_role, module_name, file_name)
+        file_path = self.path_to(module_name, file_name)
         with open(file_path, 'w') as w:
             json.dump(config_dict, w)
 
-    def read_config_data(self, file_role, module_name, file_name):
+    def read_config_data(self, module_name, file_name):
         '''
         Reads json file and returns dictionary (empty dict if file is not found)
         '''
-        file_path = self.path_to(file_role=file_role, module_name=module_name, 
+        file_path = self.path_to(module_name=module_name, 
                                  file_name=file_name)
         if os.path.isfile(file_path):
             config = json.loads(open(file_path).read())
@@ -121,8 +123,12 @@ class AbstractProject():
     
     def read_metadata(self):
         '''Wrapper around read_config_data'''
-        metadata = self.read_config_data('', '', file_name='metadata.json')
-        assert metadata['project_id'] == self.project_id
+        metadata = self.read_config_data(module_name='', file_name='metadata.json')
+        print(metadata)
+        try:
+            assert metadata['project_id'] == self.project_id
+        except:
+            import pdb; pdb.set_trace()
         return metadata
     
     def write_metadata(self):
@@ -130,13 +136,19 @@ class AbstractProject():
         json.dump(self.metadata, open(path_to_metadata, 'w'))
         
         
-    def remove(self, file_role, module_name='', file_name=''):
+    def remove(self, module_name='', file_name=''):
         '''Removes a file from the project'''
-        self.check_file_role(file_role)
-        file_path = self.path_to(file_role, module_name, file_name)
+        file_path = self.path_to(module_name, file_name)
         
         if os.path.isfile(file_path):
             os.remove(file_path)
         else:
-            raise Exception('{0} (in: {1}, as: {1}) could not be found in \
-                            project'.format(file_name, module_name, file_role))
+            raise Exception('{0} (in: {1}) could not be found in \
+                            project'.format(file_name, module_name))
+
+    def delete_project(self):
+        '''Deletes entire folder containing the project'''
+        path_to_proj = self.path_to()
+        shutil.rmtree(path_to_proj)
+
+
