@@ -16,51 +16,8 @@ import time
 import pandas as pd
 
 from abstract_project import AbstractProject, NOT_IMPLEMENTED_MESSAGE
-from infer_nan import infer_mvs, replace_mvs, sample_mvs
-from preprocess_fields_v3 import inferTypes, normalizeValues
-from results_analysis import results_analysis
-
-MODULES = {
-        'transform':{
-                    'INIT': {
-                                'desc': 'Initial upload (cannot be called)'                            
-                            },
-                    'replace_mvs': {
-                                'func': replace_mvs,
-                                'desc': replace_mvs.__doc__
-                            },
-                    'normalize': {
-                                'func':  normalizeValues,
-                                'desc': normalizeValues.__doc__
-                            }
-                    },
-        'infer':{
-                'infer_mvs': {
-                                'func': infer_mvs,
-                                'write_to': 'replace_mvs',
-                                'desc': infer_mvs.__doc__
-                            },
-                'inferTypes': {
-                                'func': inferTypes,
-                                'write_to': 'normalize',
-                                'desc': inferTypes.__doc__
-                            },
-                'results_analysis': {
-                                'func': results_analysis,
-                                'write_to': 'results_analysis',
-                                'desc': results_analysis.__doc__
-                            }
-                },
-                
-        'sample': {
-                'sample_mvs': {
-                        'func': sample_mvs,
-                        'desc': sample_mvs.__doc__
-                        }
-                }
-        }
-
-
+from CONFIG import NORMALIZE_DATA_PATH
+from MODULES import MODULES
 
 class Normalizer(AbstractProject):
     """
@@ -89,31 +46,13 @@ class Normalizer(AbstractProject):
 # Actual class
 #==============================================================================   
 
-    def __init__(self, project_id=None, create_new=False, description=''):
-        super().__init__(project_id, create_new, description)
-    
+    def __init__(self, project_id=None, create_new=False, description=None, display_name=None):
+        super().__init__(project_id, create_new, description, display_name=display_name)
 
-    def path_to(self, data_path, module_name='', file_name=''):
-        '''
-        Return path to directory that stores specific information for a project 
-        module
-        '''
-        if module_name is None:
-            module_name = ''
-        if file_name is None:
-            file_name = ''
-        
-        path = os.path.join(data_path, self.project_id, module_name, file_name)
-
-        return os.path.abspath(path)    
-
-    def create_metadata(self, description=''):
-        metadata = dict()
-        metadata['description'] = description
-        metadata['log'] = []
-        metadata['project_id'] = self.project_id
-        metadata['timestamp'] = time.time()
-        metadata['user_id'] = '__ NOT IMPLEMENTED'
+    def create_metadata(self, description=None, display_name=None):
+        metadata = super().create_metadata(description=description, 
+                                            display_name=display_name)
+        metadata['files'] = dict() # Contains single file metadata
         return metadata   
 
     def init_log(self, module_name, module_type):
@@ -236,6 +175,9 @@ class Normalizer(AbstractProject):
         '''Deletes entire folder containing the project'''
         path_to_proj = self.path_to()
         shutil.rmtree(path_to_proj)
+        
+    def safe_filename(self, filename):
+        return "".join([c for c in filename if c.isalpha() or c.isdigit() or c==' ']).rstrip()
     
     def upload_init_data(self, file, file_name, user_given_name=None):
         # TODO: deal with og_file_name, file_id, display_name, user_given_name
@@ -251,11 +193,25 @@ class Normalizer(AbstractProject):
         ENCODINGS = ['utf-8', 'windows-1252']
         SEPARATORS = [',', ';', '\t']
                 
-        # Check that file is not already present
-        self.mem_data_info = {'file_name': file_name,
-                              'module_name': 'INIT'}
-        log = self.init_log('INIT', 'transform')
+        # TODO: Check that file is not already present
+        self.mem_data_info = {
+                                'og_file_name': file_name,
+                                'module_name': 'INIT'
+                             }
+    
+        if user_given_name is None:
+            self.mem_data_info['file_name'] = self.safe_filename(file_name)
+            display_name = file_name
+        else:
+            self.mem_data_info['file_name'] = user_given_name
+            display_name = user_given_name
         
+        # Check that file name is not already present 
+        if file_name in self.metadata['files']:
+            raise Exception('File: {0} already exists. Delete this file ' \
+                             + 'or choose another name'.format(file_name))
+        
+        log = self.init_log('INIT', 'transform')
         could_read = False
         for encoding in ENCODINGS:
             for sep in SEPARATORS:
@@ -275,8 +231,13 @@ class Normalizer(AbstractProject):
             raise Exception('Separator and/or Encoding not detected. Try uploading \
                             a csv with "," as separator with utf-8 encoding')
 
-        # TODO: add error if same column names
-
+        # Add file to metadata
+        self.metadata['files'][file_name] = {
+                                                'og_file_name': file_name,
+                                                'display_name': display_name
+                                            }
+        self.write_metadata()
+        
         # Complete log
         log = self.end_log(log, error=False)
                           
@@ -458,3 +419,13 @@ class Normalizer(AbstractProject):
         sample = self.get_sample(module_name, file_name,
                                  row_idxs=[0] + [x+1 for x in sample_ilocs])        
         return sample
+
+
+class UserNormalizer(Normalizer):
+    def path_to(self, module_name='', file_name=''):
+        return self._path_to(NORMALIZE_DATA_PATH, module_name='', file_name='')
+    
+class InternalNormalizer(Normalizer):
+    def path_to(self, module_name='', file_name=''):
+        return self._path_to(NORMALIZE_DATA_PATH, module_name='', file_name='')
+    

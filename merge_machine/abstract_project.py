@@ -12,7 +12,7 @@ import os
 import random
 import time
 
-def gen_proj_id():
+def gen_id():
     '''Generate unique non-guessable string for project ID'''
     unique_string = str(time.time()) + '_' + str(random.random())
     h = hashlib.md5()
@@ -26,21 +26,33 @@ class AbstractProject():
     def path_to(self, file_role='', module_name='', file_name=''):
         raise Exception(NOT_IMPLEMENTED_MESSAGE)
 
-    def create_metadata(self, description=''):
-        raise Exception(NOT_IMPLEMENTED_MESSAGE)       
+    def create_metadata(self, description=None, display_name=None):
+        '''Core metadatas'''
+        metadata = dict()
+        metadata['description'] = description
+        metadata['display_name'] = display_name
+        metadata['log'] = []
+        metadata['project_id'] = self.project_id
+        metadata['timestamp'] = time.time()
+        metadata['user_id'] = '__ NOT IMPLEMENTED'
+        return metadata     
         
     def __init__(self, 
                  project_id=None, 
                  create_new=False, 
-                 description=''):
+                 display_name=None,
+                 description=None):
         
         if (project_id is None) and (not create_new):
             raise Exception('Set create_new to True or specify project_id')
+        if (project_id is not None) and create_new:
+            raise Exception('You cannot specify ID for a new project (will be hash)')
+
 
         if create_new: 
             # Generate project id if none is passed
             if project_id is None:
-                self.project_id = gen_proj_id()
+                self.project_id = gen_id()
             else:
                 self.project_id = project_id
             
@@ -53,7 +65,7 @@ class AbstractProject():
                 os.makedirs(path_to_proj)
             
             # Create metadata
-            self.metadata = self.create_metadata(description=description)
+            self.metadata = self.create_metadata(description=description, display_name=display_name)
             self.write_metadata()
         else:
             self.project_id = project_id
@@ -63,7 +75,21 @@ class AbstractProject():
         self.mem_data = None
         self.mem_data_info = {} # Information on data in memory
         self.log_buffer = [] # List of logs not yet written to metadata.json    
-    
+
+    def _path_to(self, data_path, module_name='', file_name=''):
+        '''
+        Return path to directory that stores specific information for a project 
+        module
+        '''
+        
+        if module_name is None:
+            module_name = ''
+        if file_name is None:
+            file_name = ''
+        
+        path = os.path.join(data_path, self.project_id, module_name, file_name)
+
+        return os.path.abspath(path)    
         
     def upload_config_data(self, config_dict, file_role, module_name, file_name):
         '''Will write config file'''
