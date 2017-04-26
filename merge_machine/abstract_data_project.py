@@ -32,20 +32,18 @@ class AbstractDataProject(AbstractProject):
         '''
         log['end_timestamp'] = time.time()
         log['error'] = error
-        return log
-    
+        return log    
     
     def check_mem_data(self):
         '''Check that there is data loaded in memory'''
         if self.mem_data is None:
             raise Exception('No data in memory: use `load_data` (reload is \
-                        mandatory after dedupe)')        
-
+                        mandatory after dedupe)')
         
-    def load_data(self, module_name, file_name):
+    def load_data(self, module_name, file_name, nrows=None):
         '''Load data as pandas DataFrame to memory'''
         file_path = self.path_to(module_name, file_name)
-        self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str)
+        self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, nrows=nrows)
         self.mem_data_info = {'file_name': file_name,
                               'module_name': module_name}
         
@@ -87,7 +85,7 @@ class AbstractDataProject(AbstractProject):
         
         return tab.to_dict('records')
         
-    def gen_sample(self, cur_module_name, params, sample_params):
+    def get_sample(self, cur_module_name, params, sample_params):
         '''
         Returns an interesting sample for the data and config at hand.
         
@@ -95,11 +93,20 @@ class AbstractDataProject(AbstractProject):
         '''
         self.check_mem_data()
         
-        sample_ilocs = MODULES['sample'][cur_module_name]['func'](self.mem_data, params, sample_params)
+        sample_ilocs = MODULES['sample'][cur_module_name]['func'](self.mem_data, 
+                                                          params, sample_params)
+        sub_tab = self.mem_data.iloc[sample_ilocs, :]
         
-        sample = self._get_sample(module_name, file_name,
-                                 row_idxs=[0] + [x+1 for x in sample_ilocs])        
-        return sample    
+        if sample_params.get('drop_duplicates', True):
+            sub_tab.drop_duplicates(inplace=True)
+        
+        # Replace missing values
+        sub_tab.fillna('', inplace=True)
+        
+        #        sample = self._get_sample(module_name, file_name,
+        #                                 row_idxs=[0] + [x+1 for x in sample_ilocs])        
+        sample = sub_tab.to_dict('records')    
+        return sample
     
     
     def write_log_buffer(self, written):

@@ -130,7 +130,7 @@ from referential import Referential
 app = Flask(__name__)
 cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
-app.config['SERVER_NAME'] = '127.0.0.1:5000'
+#app.config['SERVER_NAME'] = '127.0.0.1:5000'
 app.config['SESSION_TYPE'] = "memcached"# 'memcached'
 
 Session(app)
@@ -145,23 +145,28 @@ socketio = SocketIO(app)
 # HELPER FUNCTIONS
 #==============================================================================
     
+def check_privilege(privilege):
+    if privilege not in ['user', 'admin']:
+        raise Exception('privilege can be only user or admin')
+
 def check_project_type(project_type):
-    if project_type not in ['user', 'admin']:
-        raise Exception('project_type can be only user or admin')
+    if privilege not in ['normalize', 'link']:
+        raise Exception('project type can be only normalize or link')
+
 
 def check_request():
     '''Check that input request is valid'''
     pass
 
-def init_project(project_type, project_id=None, create_new=False, description=''):
+def init_project(privilege, project_id=None, create_new=False, description=''):
     '''Initialize project'''
     
-    check_project_type(project_type)
+    check_privilege(privilege)
     
     if description:
         assert create_new
     
-    if project_type == 'user':
+    if privilege == 'user':
         proj = UserProject(project_id, create_new=create_new, description=description)
     else:
         proj = Referential(project_id, create_new=create_new, description=description)
@@ -255,93 +260,106 @@ def gen_dedupe_variable_definition(col_matches):
 
 @app.route('/')
 @app.route('/web/', methods=['GET'])
-@app.route('/web/<project_type>/', methods=['GET'])
+@app.route('/web/<privilege>/', methods=['GET'])
+@app.route('/web/<privilege>/<project_type>', methods=['GET'])
 @cross_origin()
-def web_index(project_type='user'):
+def web_index(privilege='user', project_type='normalize'):
     # TODO: Replace with call to list_projects + Use USER projects
-    check_project_type(project_type)
+    check_privilege(privilege)
     
     admin = Admin()
-    if project_type == 'user':
+    if privilege == 'user':
         list_of_projects = admin.list_projects()    
-    elif project_type == 'admin':
+    elif privilege == 'admin':
         list_of_projects = admin.list_referentials()
+    
     return render_template('index.html', 
-                       project_type=project_type,
-                       delete_project_api_url=url_for('delete_project', project_type=project_type, project_id=''),
+                       privilege=privilege,
+                       delete_project_api_url=url_for('delete_project', privilege=privilege, project_id=''),
                        list_of_projects=list_of_projects,
-                       new_project_api_url=url_for('new_project', project_type=project_type),
-                       next_url=url_for('web_select_files', project_type=project_type))
+                       new_project_api_url=url_for('new_project', privilege=privilege),
+                       next_url=url_for('web_select_files', privilege=privilege))
 
 
-@app.route('/web/<project_type>/select_files/', methods=['GET'])
-@app.route('/web/<project_type>/select_files/<project_id>/', methods=['GET', 'POST'])
+# @app.route('/web/<privilege>/select_files/', methods=['GET'])
+@app.route('/web/<privilege>/select_files/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
-def web_select_files(project_type, project_id=None):
+def web_select_files(privilege, project_id=None):
     MAX_FILE_SIZE = 1048576
     
-    proj = init_project(project_type=project_type, project_id=project_id)
+    proj = init_project(privilege=privilege, project_id=project_id)
     all_csvs = proj._list_files(extensions=['.csv'])
     
     admin = Admin()
     all_internal_refs = admin.list_referentials() # TODO: take care of this
     
-    if project_type == 'admin':
-        next_url = url_for('web_mvs', project_type=project_type, 
+    if privilege == 'admin':
+        next_url = url_for('web_mvs', privilege=privilege, 
                            project_id=project_id, file_role='ref')
     else:
-        next_url = url_for('web_mvs', project_type=project_type, 
+        next_url = url_for('web_mvs', privilege=privilege, 
                            project_id=project_id, file_role='source')
-    # next_url = next_url = url_for('web_match_columns', project_id=project_id)
-    print(all_internal_refs)
+
     return render_template('select_files.html', 
                            project_id=project_id,
-                           project_type=project_type,
+                           privilege=privilege,
                            previous_sources=all_csvs.get('source', []),
                            previous_references=all_csvs.get('ref', []),
                            internal_references=all_internal_refs,
-                           upload_source_api_url=url_for('upload', project_type=project_type, project_id=project_id, file_role='source'),
-                           upload_ref_api_url=url_for('upload', project_type=project_type, project_id=project_id, file_role='ref'),
-                           select_file_api_url=url_for('select_file', project_type=project_type, project_id=project_id),
+                           upload_source_api_url=url_for('upload', privilege=privilege, project_id=project_id, file_role='source'),
+                           upload_ref_api_url=url_for('upload', privilege=privilege, project_id=project_id, file_role='ref'),
+                           select_file_api_url=url_for('select_file', privilege=privilege, project_id=project_id),
                            next_url=next_url,
                            MAX_FILE_SIZE=MAX_FILE_SIZE)
 
 
 # order:
-# select_project; select_files; missing_values_source; missing_values_ref; dedupe 1 dedupe 2
-@app.route('/web/<project_type>/missing_values/<project_id>/<file_role>', methods=['GET'])
+# var can be: either: file_name (normalize) or ref or sources
+@app.route('/web/<privilege>/missing_values/<project_type>/<project_id>/<var>', methods=['GET'])
 @cross_origin()
-def web_mvs(project_type, project_id, file_role):
+def web_mvs(privilege, project_type, project_id, var):
     NUM_ROWS_TO_DISPLAY = 30
     NUM_PER_MISSING_VAL_TO_DISPLAY = 4
+        
+    #    if file_role not in ['source', 'ref']:
+    #        raise Exception('Can only detect missing values for source of ref as file_role')
     
-    if file_role not in ['source', 'ref']:
-        raise Exception('Can only detect missing values for source of ref as file_role')
+    # TODO: add click on missing values (???)
     
-    # TODO: add click on missing values
+    proj_norm = init_normalizer_project(privilege=privilege, project_type, project_id=project_id)
     
-    proj = init_project(project_type=project_type, project_id=project_id)
-    (file_role, module_name, file_name) = proj.get_last_written(file_role, 'INIT', None, before_module=None) # TODO: replace INIT with before_module
-    print(file_role, module_name, file_name)
-    proj.load_data(file_role, module_name, file_name)
+    # Act on last file 
+    if project_type == 'normalizer':
+        file_name = var
+    else:
+        # Get file name from config by file_role (var) if it is a linking project
+        proj_link = UserLinker(project_id)
+        file_name = proj_link.metadata['current'][var]['file_name']
+        
+    (module_name, file_name) = proj_norm.get_last_written(None, file_name, before_module='replace_mvs') # TODO: replace INIT with before_module
     
-    mvs_config = proj.read_config_data(file_role, 'replace_mvs', 'config.json')
+    # Read config or perform inference for project
+    proj_norm.load_data(module_name, file_name)
+    mvs_config = proj_norm.read_config_data(file_role, 'replace_mvs', 'config.json')
     if not mvs_config:
         # Infer missing values + save
         mvs_config = proj.infer('infer_mvs', params=None)
     
     # Generate sample to display 
     paths = {''}
-    sample_params = {'num_rows_to_display': NUM_ROWS_TO_DISPLAY,
-                     'num_per_missing_val_to_display': NUM_PER_MISSING_VAL_TO_DISPLAY}
-    sample = proj.gen_sample('sample_mvs', paths, mvs_config, sample_params)
+    sample_params = {
+                    'num_rows_to_display': NUM_ROWS_TO_DISPLAY,
+                    'num_per_missing_val_to_display': NUM_PER_MISSING_VAL_TO_DISPLAY,
+                    'drop_duplicates': True
+                     }
+    sample = proj.get_sample('sample_mvs', paths, mvs_config, sample_params)
     
     # Choose next URL
-    if project_type == 'admin':
-        next_url = url_for('web_index', project_type=project_type)
+    if project_type == 'normalize':
+        next_url = url_for('web_index', privilege=privilege, project_type='normalize')
     else:
         if (file_role == 'source') and not (proj.metadata['current']['ref']['internal']):
-            next_url = url_for('web_mvs', project_type=project_type, 
+            next_url = url_for('web_mvs', privilege=privilege, 
                                project_id=project_id, file_role='ref')
         else:
             next_url = url_for('web_match_columns', project_id=project_id)
@@ -364,10 +382,10 @@ def web_mvs(project_type, project_id, file_role):
                            
                            data_params=data_params,
                            add_config_api_url=url_for('upload_config', 
-                                    project_type=project_type,  project_id=project_id, 
+                                    privilege=privilege,  project_id=project_id, 
                                     module_name='replace_mvs'),
                            recode_missing_values_api_url=url_for('replace_mvs', 
-                                        project_type=project_type, project_id=project_id),
+                                        privilege=privilege, project_id=project_id),
                            next_url=next_url)
 
 
@@ -376,7 +394,7 @@ def web_mvs(project_type, project_id, file_role):
 def web_match_columns(project_id):
     ROWS_TO_DISPLAY = range(3)
     
-    proj = init_project(project_type='user', project_id=project_id)
+    proj = init_project(privilege='user', project_id=project_id)
     
     # Load source sample
     source_data = proj.metadata['current']['source']
@@ -431,7 +449,7 @@ def web_match_columns(project_id):
                            
                            add_column_matches_api_url=url_for('add_column_matches', project_id=project_id),
                            next_url=url_for('web_dedupe', project_id=project_id))
-  
+
     
 @socketio.on('answer', namespace='/')
 def web_get_answer(user_input):
@@ -474,7 +492,7 @@ def load_labeller():
         print('Got here')
         
         project_id = flask._app_ctx_stack.project_id
-        proj = init_project(project_type='user', project_id=project_id)
+        proj = init_project(privilege='user', project_id=project_id)
         flask._app_ctx_stack.proj = proj
         
         # TODO: Add extra config page
@@ -533,7 +551,7 @@ def web_dedupe(project_id):
     flask._app_ctx_stack.project_id = project_id
     
     # TODO: deal with duplicate with load_labeller 
-    proj = init_project(project_type='user', project_id=project_id)
+    proj = init_project(privilege='user', project_id=project_id)
     paths = proj.gen_paths_dedupe()  
     
     dummy_labeller = DummyLabeller(paths, use_previous=True)
@@ -607,7 +625,7 @@ def web_select_return(project_id):
 @cross_origin()
 def web_download(project_id):    
     
-    proj = init_project(project_type='user', project_id=project_id)
+    proj = init_project(privilege='user', project_id=project_id)
     
     res_file_name = 'm3_result.csv'
     
@@ -738,7 +756,7 @@ def web_download(project_id):
                            # ref_sample=ref_sample,  
                            metrics=metrics,
                            download_api_url=url_for('download', 
-                                    project_type='user', project_id=project_id))
+                                    privilege='user', project_id=project_id))
 
 
 
@@ -746,15 +764,15 @@ def web_download(project_id):
 # API
 #==============================================================================
 
-@app.route('/api/<project_type>/new/', methods=['GET', 'POST'])
-def new_project(project_type):
-    check_project_type(project_type)
+@app.route('/api/<privilege>/new/', methods=['GET', 'POST'])
+def new_project(privilege):
+    check_privilege(privilege)
 
-    if project_type == 'admin':
+    if privilege == 'admin':
         if request.json:
             project_id = request.json.get('project_id', None)
             description = request.json.get('description', '')
-            proj = init_project(project_type, project_id, create_new=True, description=description)
+            proj = init_project(privilege, project_id, create_new=True, description=description)
         else:
             raise Exception('Missing POST argument project_id to create new internal referential')
     else:
@@ -762,23 +780,23 @@ def new_project(project_type):
             description = request.json.get('description', '')
         else:
             description = ''
-        proj = init_project(project_type, create_new=True, description=description)
+        proj = init_project(privilege, create_new=True, description=description)
     return jsonify(error=False, 
                    project_id=proj.project_id)
 
-@app.route('/api/<project_type>/delete/<project_id>', methods=['GET'])
-def delete_project(project_type, project_id):
-    check_project_type(project_type)
-    proj = init_project(project_type, project_id=project_id, create_new=False)
+@app.route('/api/<privilege>/delete/<project_id>', methods=['GET'])
+def delete_project(privilege, project_id):
+    check_privilege(privilege)
+    proj = init_project(privilege, project_id=project_id, create_new=False)
     proj.delete_project()
     return jsonify(error=False)
     
 
-@app.route('/api/<project_type>/metadata/<project_id>/', methods=['GET', 'POST'])
+@app.route('/api/<privilege>/metadata/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
-def metadata(project_type, project_id):
+def metadata(privilege, project_id):
     '''Fetch metadata for project ID'''
-    proj = init_project(project_type=project_type, project_id=project_id)
+    proj = init_project(privilege=privilege, project_id=project_id)
     resp = jsonify(error=False,
                    metadata=proj.metadata, 
                    project_id=proj.project_id)
@@ -797,7 +815,7 @@ def download(project_id):
     '''
     project_id = secure_filename(project_id)
 
-    proj = init_project(project_type='user', project_id=project_id)
+    proj = init_project(privilege='user', project_id=project_id)
     data_params, _ = parse_1file_request()
     
     if data_params is None:
@@ -826,10 +844,10 @@ def download(project_id):
     
 
 
-@app.route('/api/<project_type>/select_file/<project_id>/', methods=['POST'])
-def select_file(project_type, project_id):
+@app.route('/api/<privilege>/select_file/<project_id>/', methods=['POST'])
+def select_file(privilege, project_id):
     '''send {file_role: "source", file_name: "XXX", internal: False}'''
-    proj = init_project(project_type=project_type, project_id=project_id)
+    proj = init_project(privilege=privilege, project_id=project_id)
     params = request.json
     proj.select_file(params['file_role'], params.get('file_name', None), \
                      params['internal'], params.get('project_id', project_id))
@@ -837,20 +855,20 @@ def select_file(project_type, project_id):
     return jsonify(error=False)
  
     
-@app.route('/api/<project_type>/exists/<project_id>/', methods=['GET', 'POST'])
+@app.route('/api/<privilege>/exists/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
-def project_exists(project_type, project_id):
+def project_exists(privilege, project_id):
     '''Check if project exists'''
     try:
-        init_project(project_type, project_id)
+        init_project(privilege, project_id)
         return jsonify(error=False, exists=True)
     except: 
         return jsonify(error=False, exists=False)
     
 
-@app.route('/api/<project_type>/upload/<project_id>/<file_role>', methods=['POST'])
+@app.route('/api/<privilege>/upload/<project_id>/<file_role>', methods=['POST'])
 @cross_origin()
-def upload(project_type, project_id, file_role):
+def upload(privilege, project_id, file_role):
     '''
     Uploads source and reference files to project either passed as variable or
     loaded from request parameters
@@ -859,7 +877,7 @@ def upload(project_type, project_id, file_role):
         raise Exception('file_role should be ref or source')
     
     # Load project
-    proj = init_project(project_type=project_type, project_id=project_id) 
+    proj = init_project(privilege=privilege, project_id=project_id) 
     
     # Upload data
     if file_role in request.files:
@@ -876,11 +894,11 @@ def upload(project_type, project_id, file_role):
                project_id=proj.project_id)
 
 
-@app.route('/api/<project_type>/<module_name>/upload_confid/<project_id>/', methods=['POST'])
+@app.route('/api/<privilege>/<module_name>/upload_confid/<project_id>/', methods=['POST'])
 @cross_origin()
-def upload_config(project_type, module_name, project_id):
+def upload_config(privilege, module_name, project_id):
     # TODO: do not expose ?
-    proj = init_project(project_type=project_type, project_id=project_id)    
+    proj = init_project(privilege=privilege, project_id=project_id)    
     paths = request.json['data']
     params = request.json['params']
     proj.upload_config_data(params, paths['file_role'], paths['module_name'], paths['file_name'])
@@ -891,7 +909,7 @@ def upload_config(project_type, module_name, project_id):
 @cross_origin()
 def add_column_matches(project_id):
     column_matches = request.json
-    proj = init_project(project_type='user', project_id=project_id)
+    proj = init_project(privilege='user', project_id=project_id)
     proj.add_col_matches(column_matches)
     return jsonify(error=False)
     
@@ -900,7 +918,7 @@ def add_column_matches(project_id):
 @cross_origin()
 def add_column_certain_matches(project_id):
     column_matches = request.json
-    proj = init_project(project_type='user', project_id=project_id)
+    proj = init_project(privilege='user', project_id=project_id)
     proj.add_col_certain_matches(column_matches)
     return jsonify(error=False)
 
@@ -908,7 +926,7 @@ def add_column_certain_matches(project_id):
 @cross_origin()
 def add_columns_to_return(project_id, file_role):
     columns_to_return = request.json
-    proj = init_project(project_type='user', project_id=project_id)
+    proj = init_project(privilege='user', project_id=project_id)
     proj.add_cols_to_return(file_role, columns_to_return)    
     return jsonify(error=False)
 
@@ -924,11 +942,11 @@ def list_modules():
                    message='This should list the available modules') #TODO: <--
 
 
-@app.route('/api/<project_type>/modules/infer_mvs/<project_id>/', methods=['GET', 'POST'])
+@app.route('/api/<privilege>/modules/infer_mvs/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
-def infer_mvs(project_type, project_id):
+def infer_mvs(privilege, project_id):
     '''Runs the infer_mvs module'''
-    proj = init_project(project_type=project_type, project_id=project_id)
+    proj = init_project(privilege=privilege, project_id=project_id)
     data_params, module_params = parse_1file_request()    
     
     load_from_params(proj, data_params)
@@ -942,11 +960,11 @@ def infer_mvs(project_type, project_id):
                    response=result)
     
     
-@app.route('/api/<project_type>/modules/replace_mvs/<project_id>/', methods=['POST'])
+@app.route('/api/<privilege>/modules/replace_mvs/<project_id>/', methods=['POST'])
 @cross_origin()
-def replace_mvs(project_type, project_id):
+def replace_mvs(privilege, project_id):
     '''Runs the mvs replacement module'''
-    proj = init_project(project_type=project_type, project_id=project_id)
+    proj = init_project(privilege=privilege, project_id=project_id)
     data_params, module_params = parse_1file_request()
     
     load_from_params(proj, data_params)
@@ -973,7 +991,7 @@ def linker(project_id):
     }
     
     '''
-    proj = init_project(project_type='user', project_id=project_id)
+    proj = init_project(privilege='user', project_id=project_id)
     data_params, module_params = parse_linking_request()
     
     # Set paths
@@ -999,14 +1017,34 @@ def linker(project_id):
     # Admin
 #==============================================================================
 
-@app.route('/api/admin/list_projects/', methods=['GET', 'POST'])
+@app.route('/api/admin/list_normalize_projects/', methods=['GET', 'POST'])
 @cross_origin()
-def list_projects():
+def list_normalize_projects(user_id=None):
     '''Lists all project id_s'''
+    raise Exception('Wrong implementation')
+    
+    if user_id is not None:
+        raise NotImplementedError
+    
     admin = Admin()
     list_of_projects = admin.list_projects()
     return jsonify(error=False,
                    response=list_of_projects)
+
+@app.route('/api/admin/list_link_projects/', methods=['GET', 'POST'])
+@cross_origin()
+def list_link_projects(user_id=None):
+    '''Lists all project id_s'''
+    raise Exception('Wrong implementation')
+    
+    if user_id is not None:
+        raise NotImplementedError    
+
+    admin = Admin()
+    list_of_projects = admin.list_projects()
+    return jsonify(error=False,
+                   response=list_of_projects)
+
 
 @app.route('/api/admin/list_referentials/', methods=['GET', 'POST'])
 @cross_origin()
@@ -1019,4 +1057,4 @@ def list_referentials():
 
 
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', debug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True)

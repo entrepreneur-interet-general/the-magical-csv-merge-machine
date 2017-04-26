@@ -26,10 +26,10 @@ class Linker(AbstractDataProject):
         # Add source and ref if the were selected
         if (self.metadata['current']['source'] is not None) \
             and (self.metadata['current']['ref'] is not None):
-            self.load_data_to_merge('source')
-            self.load_data_to_merge('ref')
+            self.load_projects_to_merge('source')
+            self.load_projects_to_merge('ref')
          
-    def load_data_to_merge(self, file_role):
+    def load_projects_to_merge(self, file_role):
         '''Uses the "current" field in metadata to load source or ref'''        
         self.check_file_role(file_role)
         # TODO: Add safeguard somewhere
@@ -114,7 +114,7 @@ class Linker(AbstractDataProject):
         return log
     
 
-    def select_file(self, file_role, internal, project_id, file_name):
+    def add_selected_file(self, file_role, internal, project_id, file_name):
         '''
         Select file to use as source or referential.
         
@@ -141,8 +141,14 @@ class Linker(AbstractDataProject):
                                              'project_id': project_id,
                                              'file_name': file_name}  
         self.write_metadata()
-        self.load_data_to_merge(file_role)
+        self.load_projects_to_merge(file_role)
        
+    def read_selected_files(self):
+        '''
+        Returns self.metadata['current']
+        '''
+        return self.metadata['current']
+    
 
     def linker(self, module_name, paths, params):
         '''
@@ -240,8 +246,8 @@ if __name__ == '__main__':
 
     # Try deduping
     proj = UserLinker(create_new=True)
-    proj.select_file('source', False, source_proj_id, source_user_given_name)
-    proj.select_file('ref', False, ref_proj_id, ref_file_name)
+    proj.add_selected_file('source', False, source_proj_id, source_user_given_name)
+    proj.add_selected_file('ref', False, ref_proj_id, ref_file_name)
     
     paths = dict()
     
@@ -287,5 +293,4 @@ if __name__ == '__main__':
     
     import pprint
     pprint.pprint(proj.metadata)
-    
-    pprint.pprint(proj.log_by_file_name())    
+       

@@ -38,8 +38,7 @@ class AbstractProject():
             raise Exception('Set create_new to True or specify project_id')
         if (project_id is not None) and create_new:
             raise Exception('You cannot specify ID for a new project (will be hash)')
-
-
+            
         if create_new: 
             # Generate project id if none is passed
             if project_id is None:
