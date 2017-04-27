@@ -330,11 +330,19 @@ def web_mvs(project_type, project_id, file_role):
         # Infer missing values + save
         mvs_config = proj.infer('infer_mvs', params=None)
     
-    # Generate sample to display 
-    paths = {''}
-    sample_params = {'num_rows_to_display': NUM_ROWS_TO_DISPLAY,
-                     'num_per_missing_val_to_display': NUM_PER_MISSING_VAL_TO_DISPLAY}
-    sample = proj.gen_sample('sample_mvs', paths, mvs_config, sample_params)
+    # Select rows to display based on result
+    row_idxs = []
+    for col, mvs in mvs_config['mvs_dict']['columns'].items():
+        for mv in mvs:
+            sel = (proj.mem_data[col] == mv['val']).diff().fillna(True)
+            sel.index = range(len(sel))
+            row_idxs.extend(list(sel[sel].index)[:NUM_PER_MISSING_VAL_TO_DISPLAY])
+            
+    if not row_idxs:
+        row_idxs = range(NUM_ROWS_TO_DISPLAY)
+
+    sample = proj.get_sample(file_role, module_name, file_name,
+                                 row_idxs=[0] + [x+1 for x in row_idxs])
     
     # Choose next URL
     if project_type == 'admin':
