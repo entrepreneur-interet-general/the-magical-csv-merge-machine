@@ -231,7 +231,7 @@ def main_dedupe(data_ref,
     gazetteer.index(data=data_ref)
     
     # Compute threshold
-    recall_weight = 1.8
+    recall_weight = 2.5
     threshold = gazetteer.threshold(data_source, recall_weight=recall_weight)
 
     matched_records = gazetteer.match(data_source, threshold=threshold)
