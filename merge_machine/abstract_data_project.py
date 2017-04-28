@@ -54,7 +54,17 @@ class AbstractDataProject(AbstractProject):
     
     def _get_sample(self, module_name, file_name, row_idxs=range(5), 
                    columns=None, drop_duplicates=True):
-        '''Returns a dict with the selected rows (including header)'''
+        '''
+        Returns a dict with the selected rows (including header)
+        
+        INPUT:
+            - module_name: module where data is stored
+            - file_name: name of file to load from
+            - row_idxs: list of indexes of rows to show (as in CSV file, 
+                        0 is header and is mandatory as first element of list)
+            - columns: list of columns to display. By default, all are shown
+            - drop_duplicates: wheather or not to show duplicate rows
+        '''
         file_path = self.path_to(module_name, file_name)
         
         if row_idxs is not None:
@@ -85,16 +95,29 @@ class AbstractDataProject(AbstractProject):
         
         return tab.to_dict('records')
         
-    def get_sample(self, cur_module_name, params, sample_params):
+    def get_sample(self, sampler_module_name, params, sample_params):
         '''
         Returns an interesting sample for the data and config at hand.
         
         NB: This is here for uniformity with transform and infer
+        
+        INPUT:
+            - sampler_module_name: name of sampler function (None for first N
+                                                             rows)
+            - params: inference params to send to sampler to help with selection
+            - sample_params: parameters concerning the size of output etc.
+        OUTPUT:
+            - sample
+        
         '''
         self.check_mem_data()
         
-        sample_ilocs = MODULES['sample'][cur_module_name]['func'](self.mem_data, 
-                                                          params, sample_params)
+        if sampler_module_name is None:        
+            sample_ilocs = MODULES['sample'][sampler_module_name]['func'](self.mem_data, 
+                                                              params, sample_params)
+        else:
+            sample_ilocs = sample_params.get('sample_ilocs', range(5))
+            
         sub_tab = self.mem_data.iloc[sample_ilocs, :]
         
         if sample_params.get('drop_duplicates', True):

@@ -11,6 +11,7 @@
         <script type="text/javascript" charset="utf-8">
 
 
+        /*
 		
         $(document).ready(function() {      
 
@@ -101,36 +102,17 @@
 			    }
 			});
         }
+        */
 
         </script>
     </head>
     <body>
-        <h1 id='title'>Welcome to the Magical CSV Merge Machine Experience{% if project_type=='admin' %} (Admin Mode){% endif %}</h1>
+        <h1 id='title'>Welcome to the Magical CSV Merge Machine Experience</h1>
+		
+		<a href='{{ next_url_link }}'> Link </a>
+		<br>
+        <a href='{{ next_url_normalize }}'> Normalize </a>
 
-		<form id="existing_project">
-			 <input type="text" id="project_id_old" name="project_id_old" placeholder='Project ID (ex: af8b2be7b75931...)' list='project_ids'/>
-			 <datalist id="project_ids">
-			 {% for _id in list_of_projects %}
-				<option value="{{ _id }}">
-			 {% endfor %}
-			 </datalist>
-		     <input type="submit" name="submitExisting" value="Join Existing Project" />
-		     <button id="deleteProject"> Delete existing project </button>
-		</form>
-
-		<form id="new_project" method="post" enctype="multipart/form-data">
-			{% if project_type=='admin' %}
-				<input type="text" name="project_id_new" placeholder='Project ID (ex: sirene)'/>
-			{% endif %}
-
-			<input type="text" name="new_project_description" placeholder='[Optional] Describe your project'/>
-		    <input type="submit" name="submitNew" value="Create New Project" />
-		</form>
-
-		<footer>
-			<a href="/web/">User interface</a>
-			<a href="/web/admin/">Admin interface</a>
-		</footer>		
     </body>
 </html>
 

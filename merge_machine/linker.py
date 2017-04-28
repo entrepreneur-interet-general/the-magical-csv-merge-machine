@@ -26,10 +26,10 @@ class Linker(AbstractDataProject):
         # Add source and ref if the were selected
         if (self.metadata['current']['source'] is not None) \
             and (self.metadata['current']['ref'] is not None):
-            self.load_projects_to_merge('source')
-            self.load_projects_to_merge('ref')
+            self.load_project_to_merge('source')
+            self.load_project_to_merge('ref')
          
-    def load_projects_to_merge(self, file_role):
+    def load_project_to_merge(self, file_role):
         '''Uses the "current" field in metadata to load source or ref'''        
         self.check_file_role(file_role)
         # TODO: Add safeguard somewhere
@@ -141,7 +141,7 @@ class Linker(AbstractDataProject):
                                              'project_id': project_id,
                                              'file_name': file_name}  
         self.write_metadata()
-        self.load_projects_to_merge(file_role)
+        self.load_project_to_merge(file_role)
        
     def read_selected_files(self):
         '''
