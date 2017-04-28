@@ -20,6 +20,7 @@ from CONFIG import RESOURCE_PATH
 
 lastTime = 0
 timingInfo = Counter()
+countInfo = Counter()
 MICROS_PER_SEC = 1000000
 
 def snapshotTiming(end):
@@ -36,9 +37,11 @@ def timed(original_func):
 		start = time.clock()
 		result = original_func(*args, **kwargs)
 		end = time.clock()
-		key = str(args[0]) + '.' + original_func.__name__
-		timingInfo[key] += int((end - start) * MICROS_PER_SEC)
-		snapshotTiming(end)
+		key = original_func.__name__ if len(args) < 1 else args[0].__class__.__name__ + '.' + original_func.__name__
+		t = int((end - start) * MICROS_PER_SEC)
+		timingInfo[key] += t
+		countInfo[key] += 1
+		# snapshotTiming(end)
 		return result
 	return wrapper
 
@@ -248,7 +251,11 @@ def fileRowIterator(fileName, sep, path = RESOURCE_PATH):
 	filePath = fileName if path is None else os.path.join(path, fileName)
 	with open(filePath, mode = 'r') as csvfile:
 		reader = csv.reader(csvfile, delimiter = sep, quotechar='"')
-		for row in reader: yield list(map(stripped, row))
+		for row in reader: 
+			try:
+				yield list(map(stripped, row))
+			except UnicodeDecodeError as ude:
+				logging.error('Unicode error while parsing "%s"', row)
 
 def fileColumnToList(fileName, c, sep = '\t', includeInvalid = True): 
 	return [r[c] for r in fileRowIterator(fileName, sep) if len(r) > c and (includeInvalid or isValidValue(r[c]))]
@@ -416,6 +423,7 @@ class TypeMatcher(object):
 		c.registerPartialMatch(t, self.t == t, ms, hit, span)
 	def checkDiversity(self, cells):
 		div = len(self.diversion)
+		if div <= 0: return
 		self.diversion.clear()
 		if div < self.diversity():
 			logging.info('Not enough diversity matches of type {} produced by {} ({})'.format(self.t, self, div))
@@ -437,7 +445,8 @@ class RegexMatcher(TypeMatcher):
 		self.validator = validator
 		self.neg = neg
 		self.wordBoundary = wordBoundary
-		logging.info('SET UP regex matcher for <%s>: %s', self.t, self.p)
+		logging.info('SET UP regex matcher for <%s> (length %d)', self.t, len(self.p))
+	@timed
 	def match(self, c):
 		if self.partial:
 			ms = re.findall(self.p, c.value, self.flags)
@@ -516,6 +525,7 @@ class TokenizedMatcher(TypeMatcher):
 			self.maxTokens, 'user' if maxTokens > 0 else 'data', self.t, len(self.phrases), len(self.tokenIdx))
 	def diversity(self): 
 		return self.distinctCount if self.distinctCount > 0 else math.log(len(self.phrases), 1.5)
+	@timed
 	def match(self, c):
 		tokens = normalizeAndValidateTokens(c.value)
 		if tokens is not None:
@@ -568,6 +578,7 @@ class LabelMatcher(TypeMatcher):
 			logging.info('SET UP close label matcher for <%s>: lexicon of size %d', self.t, len(labelsMap))
 	def diversity(self): 
 		return math.log(len(self.labelsMap), 1.8)
+	@timed
 	def match(self, c):
 		v = normalizeAndValidatePhrase(c.value)
 		if not v: return
@@ -653,6 +664,7 @@ class CompositeRegexMatcher(TypeMatcher):
 		self.flags = re.I if ignoreCase else 0
 		self.partial = partial
 		self.validators = validators
+	@timed
 	def match(self, c):
 		if self.partial:
 			ms = re.findall(self.p, v, flags = self.flags)
@@ -704,6 +716,7 @@ class Fields(object):
 	def __init__(self, fields, entries):
 		self.fields = fields # Mapping from header Cell object to value Field object
 		self.entries = entries
+	@timed
 	def matchHeadersAndValues(self):
 		logging.info('RUNNING all header matchers')
 		for hm in headerMatchers():
@@ -793,6 +806,7 @@ class Fields(object):
 				print(outputFormat.join(ovs))
 	# The following two methods do the same thing as the previous one, but with redundant operations
 	# (splitting them is required in order to provide separate API calls prior to deduping)
+	@timed
 	def inferTypes(self):
 		''' Returns a dictionary mapping input field name to likeliest type. 
 			Fields for which no type has been inferred will be missing from the output dictionary.'''
@@ -822,6 +836,7 @@ class Fields(object):
 					break
 			if fieldName not in types: logging.info('Could not infer type for %s values', fieldName)
 		return types
+	@timed
 	def normalizeValues(self, types):
 		''' Generates (field name, list of field values) pairs for each output field. '''
 		for (h, f) in self.fields.items():
@@ -856,7 +871,9 @@ class Field(object):
 		# Map from type to a list of individual scores
 		typeScores = { t: [0] * len(self.cells) for t in candidateTypes }
 		for (i, c) in enumerate(self.cells):
+			nets = c.notExcludedTypes()
 			for (t, tis) in c.tis.items():
+				if t not in nets: continue
 				s = max(ti.ms for ti in tis)
 				if s > 0: typeScores[t][i] = s
 		return { t: nonZeroRatio(scores) for (t, scores) in typeScores.items() }
@@ -942,11 +959,13 @@ class Cell(object):
 		''' If normedIfHeaderField is True and the target type is the cell's parent type, then the output 
 			field should indicate that normalization has been done in order not to conflict with the 
 			original field. '''
+		if ms <= 0: return
 		t0 = self.normedType(t, normedIfHeaderField)
 		logging.debug('FULL MATCH of type <%s> for %s (p=%d): %s', t, self, ms, self.value if hit is None else hit)
 		self.tis[t].append(TypeInference(t0, FULL_MATCH, ms, self.value if hit is None else hit, 0, len(self.value)))
 	def registerPartialMatch(self, t, normedIfHeaderField, ms, hit, span): 
 		# TODO accept span = None and fetch start/end indices on-the-fly
+		if ms <= 0: return
 		checkSpan(hit, span)
 		t0 = self.normedType(t, normedIfHeaderField)
 		logging.debug('PARTIAL MATCH of type <%s> for %s (p=%d): %s', t, self, ms, hit)
@@ -1006,6 +1025,7 @@ DDP = DateDataParser(languages = ['fr', 'en'], settings = { 'PREFER_LANGUAGE_DAT
 class CustomDateMatcher(TypeMatcher):
 	def __init__(self):
 		super(CustomDateMatcher, self).__init__(F_DATE)
+	@timed
 	def match(self, c):
 		# TODO check prioritization of ambiguous dates: the most complex case would be first encountering some FR date(s), 
 		# then an ambiguous date implicitly using US (not UK or AUS) locale (e.g. 03/04/2014 which should resolve to 
@@ -1028,8 +1048,10 @@ class CustomDateMatcher(TypeMatcher):
 				self.registerFullMatch(c, F_MONTH, 100, ds)
 			else:
 				self.registerFullMatch(c, F_DATE, 100, '{}/{}'.format(do.day, ds))
-		except TypeError as e:
-			logging.error('Error while parsing date %s: %s', c.value, e)
+		except TypeError as te:
+			logging.error('Error while parsing value which is not a date %s: %s', c.value, te)
+		except OverflowError as oe:
+			logging.error('Overflow while parsing date %s: %s', c.value, oe)
 
 def scorePhoneNumber(z): return 100 if phonenumbers.is_valid_number(z) else 75 if phonenumbers.is_possible_number(z) else 5
 
@@ -1039,6 +1061,7 @@ class CustomTelephoneMatcher(TypeMatcher):
 	def __init__(self, partial = False):
 		super(CustomTelephoneMatcher, self).__init__(F_PHONE)
 		self.partial = partial
+	@timed
 	def match(self, c):
 		if partial:
 			try:
@@ -1218,6 +1241,7 @@ def parsePersonNames(s):
 class CustomPersonNameMatcher(TypeMatcher):
 	def __init__(self):
 		super(CustomPersonNameMatcher, self).__init__(F_PERSON)
+	@timed
 	def match(self, c):
 		parsedList = parsePersonNames(c.value)
 		if not parsedList: return
@@ -1254,6 +1278,7 @@ def rejoin(v): return toASCII(v)
 class CustomAddressMatcher(TypeMatcher):
 	def __init__(self):
 		super(CustomAddressMatcher, self).__init__(F_ADDRESS)
+	@timed
 	def match(self, c):
 		if c.value.isdigit():
 			logging.debug('Bailing out of %s for numeric value: %s', self, c)
@@ -1288,6 +1313,7 @@ COMMUNE_LEXICON = fileToSet('commune')
 class FrenchAddressMatcher(LabelMatcher):
 	def __init__(self):
 		super(FrenchAddressMatcher, self).__init__(F_ADDRESS, COMMUNE_LEXICON, MATCH_MODE_CLOSE)
+	@timed
 	def match(self, c):
 		response = urllib.urlopen("http://api-adresse.data.gouv.fr/search/?q=%s" % c.value)
 		try:
@@ -1346,6 +1372,7 @@ class AcronymMatcher(TypeMatcher):
 		super(AcronymMatcher, self).__init__(F_ACRONYMS)
 		self.minAcroSize = minAcroSize
 		self.maxAcroSize = maxAcroSize
+	@timed
 	def match(self, c):
 		for (acro, i) in self.acronymsInPhrase(c.value):
 			self.registerPartialMatch(c, '{} - {}'.format(F_ACRONYMS, c.f), 100, acro, (i, i + len(acro)))
@@ -1387,6 +1414,7 @@ class VariantExpander(TypeMatcher):
 				self.tokenIdx[matchedVariantPhrase].add(altVariant)
 				if altVariant not in variantsMap: 
 					raise RuntimeError('Alternative variant {} not found in variants map'.format(altVariant))
+	@timed
 	def match(self, c):
 		if self.domainType not in c.notExcludedTypes(): return
 		tokens = normalizeAndValidateTokens(c.value)
@@ -1453,23 +1481,37 @@ def headerMatchers():
 		yield HeaderMatcher(r[0], set(r))
 		logging.info('Registered matcher for <%s> header with %d variants', r[0], len(r))
 
-MATCH_FULL_NAMES = False
+
+VALUE_MATCHERS = list()
+@timed
 def valueMatchers():
+	''' Lazy, one-time-only creation of value matchers list. '''
+	if len(VALUE_MATCHERS) < 1:
+		for vm in generateValueMatchers():
+			VALUE_MATCHERS.append(vm)
+	return VALUE_MATCHERS
+
+def generateValueMatchers(lvl = 0):
 	''' Generates type matcher objects that can be applied to each value cell in a column in order to infer 
-		whether that column's type is the matcher's type (or alternatively a parent type or a child type).'''
+		whether that column's type is the matcher's type (or alternatively a parent type or a child type).
+
+		Parameter:
+		lvl 0 for lightweight matching, 2 for the heaviest variants, 1 as an intermediate level
+		'''
 
 	# Identifiers (typically but not necessarily unique)
 	# yield TemplateMatcher('Identifiant', 90) # TODO distinguish unique vs. non-unique
 
 	# Person names
-	yield LabelMatcher(F_FIRST, PRENOM_LEXICON, MATCH_MODE_EXACT)
-	yield TokenizedMatcher(F_FIRST, PRENOM_LEXICON, 
+	if lvl >= 0: yield LabelMatcher(F_FIRST, PRENOM_LEXICON, MATCH_MODE_EXACT)
+	if lvl >= 2: yield TokenizedMatcher(F_FIRST, PRENOM_LEXICON, 
 		# maxTokens set to 2 in order to deal with composite first names
 		maxTokens = 2, scorer = partial(tokenScorer, minSrcTokenRatio = 20, minSrcCharRatio = 10)) 
-	yield LabelMatcher(F_LAST, PATRONYME_LEXICON, MATCH_MODE_EXACT)
-	titleLexicon = fileToSet('titre_appel') | fileToSet('titre_academique') 
-	yield TokenizedMatcher(F_TITLE, titleLexicon, maxTokens = 1)
-	if MATCH_FULL_NAMES:
+	if lvl >= 0: yield LabelMatcher(F_LAST, PATRONYME_LEXICON, MATCH_MODE_EXACT)
+	if lvl >= 2: 
+		titleLexicon = fileToSet('titre_appel') | fileToSet('titre_academique') 
+		yield TokenizedMatcher(F_TITLE, titleLexicon, maxTokens = 1)
+	if lvl >= 2: 
 		yield CustomPersonNameMatcher()
 		fullNameValidators = { F_FIRST: lambda v: len(stripped(v)) > 1, F_LAST: lambda v: len(stripped(v)) > 2 }
 		yield CompositeRegexMatcher(F_PERSON, PAT_FIRST_NAME, { F_FIRST: 1}, 
@@ -1484,101 +1526,105 @@ def valueMatchers():
 			ignoreCase = False, validators = fullNameValidators)
 	yield CompositeMatcher(F_PERSON, [F_TITLE, F_FIRST])
 	# Negate person name matches when it's a street name
-	yield RegexMatcher(F_PERSON, "(rue|avenue|av|boulevard|bvd|bd|chemin|route|place|allee) .{0,10} (%s)" % PAT_FIRST_NAME, 
+	if lvl >= 0: yield RegexMatcher(F_PERSON, "(rue|avenue|av|boulevard|bvd|bd|chemin|route|place|allee) .{0,10} (%s)" % PAT_FIRST_NAME, 
 		g = 1, ignoreCase = True, partial = True, neg = True)
 
 	# Web stuff: Email, URL
 	# PAT_EMAIL = "(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)"
 	PAT_EMAIL = "[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
-	yield RegexMatcher(F_EMAIL, PAT_EMAIL)
+	if lvl >= 0: yield RegexMatcher(F_EMAIL, PAT_EMAIL)
 	PAT_URL = "@^(https?|ftp)://[^\s/$.?#].[^\s]*$@iS"
-	yield RegexMatcher(F_URL, PAT_URL)
+	if lvl >= 0: yield RegexMatcher(F_URL, PAT_URL)
 
 	# Phone number
-	yield CustomTelephoneMatcher()
-	yield CustomTelephoneMatcher(partial = True)
+	if lvl >= 0: yield CustomTelephoneMatcher()
+	if lvl >= 2: yield CustomTelephoneMatcher(partial = True)
 
 	# Other individual IDs
 
 	# from https://fr.wikipedia.org/wiki/Code_Insee#Identification_des_individus
-	yield RegexMatcher(F_NIR, "[0-9]15") 
+	if lvl >= 0: yield RegexMatcher(F_NIR, "[0-9]15") 
 
 	# Date-time
-	yield RegexMatcher(F_YEAR, "19[0-9]{2}")
-	yield RegexMatcher(F_YEAR, "20[0-9]{2}")
-	yield CustomDateMatcher()
+	if lvl >= 0: yield RegexMatcher(F_YEAR, "19[0-9]{2}")
+	if lvl >= 0: yield RegexMatcher(F_YEAR, "20[0-9]{2}")
+	if lvl >= 1: yield CustomDateMatcher()
 	yield SubtypeMatcher(F_DATE, [F_YEAR])
 	yield SubtypeMatcher(F_STRUCTURED_TYPE, [F_DATE, F_URL, F_EMAIL, F_PHONE])
 
 	# MESR Domain
 	PAT_SIREN = "[0-9]{9}"
-	yield RegexMatcher(F_SIREN, PAT_SIREN, validator = validateLuhn)
+	if lvl >= 0: yield RegexMatcher(F_SIREN, PAT_SIREN, validator = validateLuhn)
 	PAT_SIRET = "[0-9]{14}"
-	yield RegexMatcher(F_SIRET, PAT_SIRET, validator = validateLuhn)
+	if lvl >= 0: yield RegexMatcher(F_SIRET, PAT_SIRET, validator = validateLuhn)
 	PAT_NNS = "[0-9]{9}[a-zA-Z]"
-	yield RegexMatcher(F_NNS, PAT_NNS)
+	if lvl >= 0: yield RegexMatcher(F_NNS, PAT_NNS)
 	PAT_UAI = "[0-9]{7}[a-zA-Z]"
-	yield RegexMatcher(F_UAI, PAT_UAI)
-	yield RegexMatcher(F_UMR, "UMR-?[ A-Z]{0,8}([0-9]{3,4})", g = 1, partial = True)
+	if lvl >= 0: yield RegexMatcher(F_UAI, PAT_UAI)
+	if lvl >= 0: yield RegexMatcher(F_UMR, "UMR-?[ A-Z]{0,8}([0-9]{3,4})", g = 1, partial = True)
 	# Negate dates for all thoses regex matches (which happen to match using our custom matcher, especially for UAI patterns)
-	yield RegexMatcher(F_DATE, PAT_SIREN, ignoreCase = True, neg = True)
-	yield RegexMatcher(F_DATE, PAT_SIRET, ignoreCase = True, neg = True)
-	yield RegexMatcher(F_DATE, PAT_NNS, ignoreCase = True, neg = True)
-	yield RegexMatcher(F_DATE, PAT_UAI, ignoreCase = True, neg = True)
+	if lvl >= 0: 
+		yield RegexMatcher(F_DATE, PAT_SIREN, ignoreCase = True, neg = True)
+		yield RegexMatcher(F_DATE, PAT_SIRET, ignoreCase = True, neg = True)
+		yield RegexMatcher(F_DATE, PAT_NNS, ignoreCase = True, neg = True)
+		yield RegexMatcher(F_DATE, PAT_UAI, ignoreCase = True, neg = True)
 
-	yield LabelMatcher(F_RD_STRUCT, fileToSet('structure_recherche_short.col'), MATCH_MODE_EXACT)
-	yield TokenizedMatcher(F_RD_PARTNER, 
+	if lvl >= 2: yield LabelMatcher(F_RD_STRUCT, fileToSet('structure_recherche_short.col'), MATCH_MODE_EXACT)
+	if lvl >= 2: yield TokenizedMatcher(F_RD_PARTNER, 
 		fileToSet('partenaire_recherche_ANR.col') | 
 		fileToSet('partenaire_recherche_FUI.col') | 
 		fileToSet('institution_H2020.col'), 
 		maxTokens = 6)
-	yield TokenizedMatcher(F_CLINICALTRIAL_COLLAB, fileToSet('clinical_trial_sponsor_collab.col'), 
+	if lvl >= 2: yield TokenizedMatcher(F_CLINICALTRIAL_COLLAB, fileToSet('clinical_trial_sponsor_collab.col'), 
 		maxTokens = 4)
 	yield SubtypeMatcher(F_RD, [F_RD_STRUCT, F_RD_PARTNER, F_CLINICALTRIAL_COLLAB])
 	# SIES/APB 
-	yield VocabMatcher(F_ETAB, fileToSet('etablissement.vocab'), ignoreCase = True, partial = False)
+	if lvl >= 0: yield VocabMatcher(F_ETAB, fileToSet('etablissement.vocab'), ignoreCase = True, partial = False)
 	# yield TokenizedMatcher(F_ETAB, fileToSet('etablissement'), 
 	# 	maxTokens = 2)
-	yield LabelMatcher(F_ETAB_ENSSUP, fileToSet('etab_enssup'), MATCH_MODE_EXACT)
+	if lvl >= 0: yield LabelMatcher(F_ETAB_ENSSUP, fileToSet('etab_enssup'), MATCH_MODE_EXACT)
 	yield SubtypeMatcher(F_ETAB, [F_ETAB_ENSSUP])
-	yield LabelMatcher(F_APB_MENTION, fileToSet('mention_licence_sise'), MATCH_MODE_EXACT)
-	yield TokenizedMatcher(F_APB_MENTION, fileToSet('mention_licence_apb2017.col'), 
+	if lvl >= 1: yield LabelMatcher(F_APB_MENTION, fileToSet('mention_licence_sise'), MATCH_MODE_EXACT)
+	if lvl >= 2: yield TokenizedMatcher(F_APB_MENTION, fileToSet('mention_licence_apb2017.col'), 
 		maxTokens = 5)
-	yield TokenizedMatcher(F_RD_DOMAIN, fileToSet('domaine_recherche.col'), 
+	if lvl >= 2: yield TokenizedMatcher(F_RD_DOMAIN, fileToSet('domaine_recherche.col'), 
 		maxTokens = 4)
 	# yield CategoryMatcher(F_RD_DOMAIN, 'publi')
 	yield SubtypeMatcher(F_MESR, [F_RD, F_APB_MENTION, F_RD_DOMAIN])
 
 	# Geo Domain
 	# yield FrenchAddressMatcher()
-	yield CustomAddressMatcher()
-	yield RegexMatcher(F_ZIP, "[0-9]{5}")
-	yield LabelMatcher(F_COUNTRY, fileToSet('country'), MATCH_MODE_EXACT)
+	if lvl >= 2: yield CustomAddressMatcher()
+	if lvl >= 0: yield RegexMatcher(F_ZIP, "[0-9]{5}")
+	if lvl >= 0: yield LabelMatcher(F_COUNTRY, fileToSet('country'), MATCH_MODE_EXACT)
 
 	# yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT) # MATCH_MODE_CLOSE too imprecise
 	# yield TokenizedMatcher(F_CITY, COMMUNE_LEXICON, maxTokens = 3)
-	yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
+	if lvl >= 0: yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
 
-	yield TokenizedMatcher(F_DPT, fileToSet('departement'), distinctCount = 7)
-	yield TokenizedMatcher(F_REGION, fileToSet('region'), distinctCount = 3)
-	yield TokenizedMatcher(F_STREET, fileToSet('voie.col'), maxTokens = 2)
+	if lvl >= 2: 
+		yield TokenizedMatcher(F_DPT, fileToSet('departement'), distinctCount = 7)
+		yield TokenizedMatcher(F_REGION, fileToSet('region'), distinctCount = 3)
+		yield TokenizedMatcher(F_STREET, fileToSet('voie.col'), maxTokens = 2)
 	yield CompositeMatcher(F_ADDRESS, [F_STREET, F_ZIP, F_CITY, F_COUNTRY])
 	yield SubtypeMatcher(F_GEO, [F_ADDRESS, F_ZIP, F_CITY, F_DPT, F_REGION, F_COUNTRY])
 
 	# Publications
 	# From http://stackoverflow.com/questions/27910/finding-a-doi-in-a-document-or-page
 	PAT_DOI = '\b(10[.][0-9]{4,}(?:[.][0-9]+)*/(?:(?!["&\'<>])\S)+)\b'
-	yield RegexMatcher(F_DOI, PAT_DOI) 
+	if lvl >= 0: yield RegexMatcher(F_DOI, PAT_DOI) 
 	PAT_ISSN = '\d{4}-\d{3}[\dxX]$'
-	yield RegexMatcher(F_ISSN, PAT_ISSN)
+	if lvl >= 0: yield RegexMatcher(F_ISSN, PAT_ISSN)
 	 # TODO see if we should add IdRef
 	yield SubtypeMatcher(F_PUBLI_ID, [F_DOI, F_ISSN])
-	pubTitleLexicon = fileToSet('titre_revue')
-	yield LabelMatcher(F_JOURNAL, pubTitleLexicon, MATCH_MODE_EXACT)
-	yield TokenizedMatcher(F_JOURNAL, pubTitleLexicon, 
+	if lvl >= 0: 
+		pubTitleLexicon = fileToSet('titre_revue')
+		yield LabelMatcher(F_JOURNAL, pubTitleLexicon, MATCH_MODE_EXACT)
+	if lvl >= 2: yield TokenizedMatcher(F_JOURNAL, pubTitleLexicon, 
 		maxTokens = 5, scorer = partial(tokenScorer, minSrcTokenRatio = 90))
-	articleLexicon = fileToSet('article_fr') | fileToSet('article_en')
-	yield TokenizedMatcher(F_ARTICLE, articleLexicon)
+	if lvl >= 2: 
+		articleLexicon = fileToSet('article_fr') | fileToSet('article_en')
+		yield TokenizedMatcher(F_ARTICLE, articleLexicon)
 	yield SubtypeMatcher(F_ARTICLE, [F_ABSTRACT, F_PUBLI_ID, F_ARTICLE_CONTENT])
 	# yield BiblioMatcher()
 	yield SubtypeMatcher(F_PUBLI, [F_JOURNAL, F_PUBLI_ID, F_ARTICLE, F_ABSTRACT])
@@ -1588,16 +1634,18 @@ def valueMatchers():
 	yield SubtypeMatcher(F_TEXT, [F_ARTICLE, F_ABSTRACT])
 
 	# Biomedical Domain
-	yield TokenizedMatcher(F_CLINICALTRIAL_NAME, fileToSet('clinical_trial_acronym'))
-	yield TokenizedMatcher(F_MEDICAL_SPEC, 
-		fileToSet('specialite_medicale_fr') | 
-		fileToSet('specialite_medicale_en'))
+	if lvl >= 2:
+		yield TokenizedMatcher(F_CLINICALTRIAL_NAME, fileToSet('clinical_trial_acronym'))
+		yield TokenizedMatcher(F_MEDICAL_SPEC, 
+			fileToSet('specialite_medicale_fr') | 
+			fileToSet('specialite_medicale_en'))
 	yield SubtypeMatcher(F_BIOMEDICAL, [F_CLINICALTRIAL_NAME, F_MEDICAL_SPEC])
 
 	# Agro Domain
-	phytoLexicon = fileToSet('phyto')
-	yield LabelMatcher(F_PHYTO, phytoLexicon, MATCH_MODE_EXACT)
-	yield TokenizedMatcher(F_PHYTO, phytoLexicon,
+	if lvl >= 0:
+		phytoLexicon = fileToSet('phyto')
+		yield LabelMatcher(F_PHYTO, phytoLexicon, MATCH_MODE_EXACT)
+	if lvl >= 2: yield TokenizedMatcher(F_PHYTO, phytoLexicon,
 		maxTokens = 4, scorer = partial(tokenScorer, minSrcTokenRatio = 30))
 	yield SubtypeMatcher(F_AGRO, [F_PHYTO])
 
@@ -1609,23 +1657,24 @@ def valueMatchers():
 	# The top-level data type for organizations
 	yield SubtypeMatcher(F_INSTITUTION, [F_RD_STRUCT, F_ETAB, F_ENTREPRISE])
 
-	yield VocabMatcher(F_ENTREPRISE, fileToSet('org_entreprise.vocab'), ignoreCase = True, partial = False)
-	yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('org_enseignement.vocab'), ignoreCase = True, partial = False)
+	if lvl >= 0:
+		yield VocabMatcher(F_ENTREPRISE, fileToSet('org_entreprise.vocab'), ignoreCase = True, partial = False)
+		yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('org_enseignement.vocab'), ignoreCase = True, partial = False)
 
 	# Spot acronyms on-the-fly
-	yield AcronymMatcher()
+	if lvl >= 1: yield AcronymMatcher()
 
 	# Normalize by expanding alternative variants (such as acronyms, abbreviations and synonyms) to their main variant
-
-	# Those for which we keep surrounding context, because their variants correspond to generic 
-	# terms (denominations and the like)
-	yield VariantExpander(fileToVariantMap('org_societe.syn'), F_ENTREPRISE, True)
-	yield VariantExpander(fileToVariantMap('org_entreprise.syn'), F_ENTREPRISE, True)
-	# Those for which we only keep the main variant associated to the extracted alt variant, because said variants
-	# correspond to specific entities
-	yield VariantExpander(fileToVariantMap('org_rnsr.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT)
-	yield VariantExpander(fileToVariantMap('org_hal.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT)
-	yield VariantExpander(fileToVariantMap('etab_enssup.syn'), F_MESR, False, targetType = F_ETAB_ENSSUP)
+	if lvl >= 2:
+		# Those for which we keep surrounding context, because their variants correspond to generic 
+		# terms (denominations and the like)
+		yield VariantExpander(fileToVariantMap('org_societe.syn'), F_ENTREPRISE, True)
+		yield VariantExpander(fileToVariantMap('org_entreprise.syn'), F_ENTREPRISE, True)
+		# Those for which we only keep the main variant associated to the extracted alt variant, because said variants
+		# correspond to specific entities
+		yield VariantExpander(fileToVariantMap('org_rnsr.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT)
+		yield VariantExpander(fileToVariantMap('org_hal.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT)
+		yield VariantExpander(fileToVariantMap('etab_enssup.syn'), F_MESR, False, targetType = F_ETAB_ENSSUP)
 	
 # Main functionality
 
@@ -1698,12 +1747,28 @@ if __name__ == '__main__':
 	res = list()
 	for i in range(fields.entries): res.append(dict())
 	types = fields.inferTypes()
+	hofs = set()
 	for (of, vs) in fields.normalizeValues(types):
+		hofs.add(of)
 		for i, v in enumerate(vs):
 			res[i][of] = v
+	# Output normalization results
+	ofs = uniq(list(hofs))
+	if outputFormat == 'md':
+		print('|{}|'.format('|'.join(ofs)))
+		print('|{}|'.format('|'.join('-' * len(ofs))))
+	else:
+		print(outputFormat.join(ofs))
 	for row in res:
-		for k, v in row.items(): 
-			if not k.startswith('++'): print(k.rjust(60), str(v))
-		for k, v in row.items(): 
-			if k.startswith('++'): print(k.rjust(60), str(v))
-		print()
+		if outputFormat == 'txt':
+			for k, v in row.items():
+				if not k.startswith('++'): print(k.rjust(60), str(v))
+			for k, v in row.items():
+				if k.startswith('++'): print(k.rjust(60), str(v))
+			print()
+		elif outputFormat == 'md':
+				print('|{}|'.format('|'.join([str(row[f]) if f in row else '' for f in ofs])))
+		else:
+				print(outputFormat.join([str(row[f]) if f in row else '' for f in ofs]))
+	for key in timingInfo:
+		logging.info('TIMING for {}: {} calls, cumulated {} ms'.format(key, countInfo[key], int(timingInfo[key] / 1000)))
