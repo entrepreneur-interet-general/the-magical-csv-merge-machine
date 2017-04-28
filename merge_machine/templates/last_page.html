@@ -64,25 +64,28 @@
 			 </table>
 		</div>
 
-		<h3> Errors in matches found (using validation subset) </h3>
-        <!-- Display results -->
-        <div style="overflow: auto; max-height: 400px;">
-			<table class="match_table" style="font-size: 75%; ">
-				<tr>
-				    {% for col in match_index %}
-				        <th class="{{ col }}">{{ col }}</th>
-				    {% endfor %}
-				</tr>
 
-				{% for row in match_error_samples %}
-				    <tr>
-				    {% for col in match_index %}
-				        <td class="{{ col }}">{{ row[col] }}</td>
-				    {% endfor %}
-				    </tr>
-				{% endfor %}
-			 </table>
-		</div>
+		{% if match_error_samples %}
+			<h3> Errors in matches found (using validation subset) </h3>
+	        <!-- Display results -->
+	        <div style="overflow: auto; max-height: 400px;">
+				<table class="match_table" style="font-size: 75%; ">
+					<tr>
+					    {% for col in match_index %}
+					        <th class="{{ col }}">{{ col }}</th>
+					    {% endfor %}
+					</tr>
+
+					{% for row in match_error_samples %}
+					    <tr>
+					    {% for col in match_index %}
+					        <td class="{{ col }}">{{ row[col] }}</td>
+					    {% endfor %}
+					    </tr>
+					{% endfor %}
+				 </table>
+			</div>
+		{% endif %}
 
 
 		<!--
