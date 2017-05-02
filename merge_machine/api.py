@@ -205,7 +205,7 @@ def _load_from_params(proj, data_params=None):
     (file_role, module_name, file_name) = _parse_data_params(proj, data_params)
     proj.load_data(file_role, module_name, file_name)
 
-def _parse_1file_request():
+def _parse_normalize_request():
     # Parse json request
     data_params = None
     module_params = None
@@ -316,54 +316,56 @@ def web_select_link_project():
                            exists_url_partial=exists_url_partial)
     
 
-# @app.route('/web/<privilege>/select_files/', methods=['GET'])
-@app.route('/web/select_files/<project_type>/<project_id>', methods=['GET'])
+# TODO: look into use of sessions for url generation
+
+@app.route('/web/link/select_files/<project_id>/', methods=['GET']) # (Actually select_projects)
 @cross_origin()
-def web_select_files(project_type, project_id=''):
-    '''View to create or join 1 or 2 Normalization projects (1 for norm, 2 for link)'''
+def web_linker_select_files(project_id):
+    '''View to create or join 1 or 2 normalization projects (1 for norm, 2 for link)'''
     MAX_FILE_SIZE = 1048576
     
-    if project_type == 'normalize':
-        next_url = None
-        next_url_partial = url_for('web_mvs', project_type='normalize') # Missing project_id and file_name
-    else:
-        next_url = url_for('web_mvs', project_type='link',
-                           project_id=project_id, var='source')    
-        next_url_partial = None
-        
-    new_project_api_url = url_for('new_project', project_type=project_type)
-    delete_normalize_project_api_url_partial=url_for('delete_project', 'normalize', '')
-    delete_file_api_url=None
+    next_url = url_for('web_mvs', project_type='link',
+                       project_id=project_id, var='source')
+    
+    new_normalize_project_api_url = url_for('new_project', project_type='normalize')
+    delete_normalize_project_api_url_partial=url_for('delete_project', 
+                                                     project_type='normalize', 
+                                                     project_id='')
     
     # Generate Next URLs
     
     # Do what you fina do
-    proj = _init_project(project_id=project_id)
-    all_csvs = proj._list_files(extensions=['.csv'])
-    
-    admin = Admin()
-    all_internal_refs = admin.list_referentials() # TODO: take care of this
-
-    admin = admin.Admin()
-    list_of_projects = user.list_projects()
+#    proj = _init_project(project_id=project_id)
+#    all_csvs = proj._list_files(extensions=['.csv'])
+#    
+#    admin = Admin()
+#    all_internal_refs = admin.list_referentials() # TODO: take care of this
+#
+#    admin = admin.Admin()
+#    list_of_projects = user.list_projects()
 
     # TODO: If you have link, also add files to current 
     
-    return render_template('select_files.html', 
+    return render_template('select_files_linker.html', 
                            project_id=project_id,
                            #previous_sources=all_csvs.get('source', []),
                            #previous_references=all_csvs.get('ref', []),
                            #internal_references=all_internal_refs,
-                           new_project_api_url=new_project_api_url,
+                           new_normalize_project_api_url=new_normalize_project_api_url,
                            delete_normalize_project_api_url_partial = delete_normalize_project_api_url_partial,
                            
-                           upload_source_api_url=url_for('upload', project_id=project_id, file_role='source'),
-                           upload_ref_api_url=url_for('upload', project_id=project_id, file_role='ref'),
+                           upload_source_api_url_partial=url_for('upload', project_id=''),
                            select_file_api_url=url_for('select_file', project_id=project_id),
                            next_url=next_url,
                            next_url_partial=next_url_partial,
                            MAX_FILE_SIZE=MAX_FILE_SIZE)
 
+
+@app.route('/web/normalize/select_file', methods=['GET']) # (Actually select_project)
+@cross_origin()
+def web_normalizer_select_file():
+    next_url_partial = url_for('web_mvs_normalize', project_type='normalize', file_name='') # Missing project_id and file_name    
+    
 
 #def _next_url(project_type=None, project_id=None, var=None):
 #    # Order if project_type is normalise
@@ -606,7 +608,6 @@ def load_labeller():
     load_dis_labeller()
     # socketio.start_background_task(load_dis_labeller)
 
-
 @app.route('/web/link/dedupe_linker/<project_id>/', methods=['GET'])
 @cross_origin()    
 def web_dedupe(project_id):
@@ -629,14 +630,18 @@ def web_dedupe(project_id):
     #return render_template('dedupe_training.html', **DUMMY_EMIT)
 
 
-@app.route('/web/select_return/<project_id>/<project_id>', methods=['GET'])
+@app.route('/web/select_return/link/<project_id>', methods=['GET'])
 @cross_origin()
-def web_select_return(project_id):
+def web_select_return(project_type, project_id):
     '''
     Configurate file to return for ref and source in same page as well as columns
     that are supposed to match to test results (ex: Siren, SIRENE)
     '''
     # TODO: default to matching columns
+    _check_project_type(project_type)
+    if project_type == 'normalize':
+        raise Exception('Normalize project_type is not supported for select_return')
+    
     
     ROWS_TO_DISPLAY = range(3)
     
@@ -688,7 +693,7 @@ def web_select_return(project_id):
 @cross_origin()
 def web_download(project_id):    
     
-    proj = _init_project(privilege='user', project_id=project_id)
+    proj = _init_project(project_id=project_id)
     
     res_file_name = 'm3_result.csv'
     
@@ -882,8 +887,8 @@ def download(project_id):
     '''
     project_id = secure_filename(project_id)
 
-    proj = _init_project(privilege='user', project_id=project_id)
-    data_params, _ = _parse_1file_request()
+    proj = _init_project(project_id=project_id)
+    data_params, _ = _parse_normalize_request()
     
     if data_params is None:
         data_params = {}
@@ -912,7 +917,10 @@ def download(project_id):
 
 @app.route('/api/link/select_file/<project_id>', methods=['POST'])
 def select_file(project_id):
-    '''send {file_role: "source", file_name: "XXX", internal: False}'''
+    '''
+    Choose a file to use as source or referential for merging
+    send {file_role: "source", file_name: "XXX", internal: False}
+    '''
     proj = _init_project(project_id=project_id)
     params = request.json
     proj.select_file(params['file_role'], params.get('file_name', None), \
@@ -937,28 +945,27 @@ def project_exists(project_type, project_id):
 @cross_origin()
 def upload(project_id):
     '''
-    Uploads source and reference files to project either passed as variable or
-    loaded from request parameters
+    Uploads files to a normalization project. (NB: cannot upload directly to 
+    a link type project, you have to create two normalization projects)
     '''
     # Load project
     proj = UserNormalizer(project_id=project_id) 
     
     # Upload data
-    if 'source' in request.files: # REMOVE "source"; replace by smt
-        file = request.files['source']
-        if file:
-            proj.upload_init_data(file.stream, file.filename)
-        else:
-            raise Exception('Empty file')
+    file = request.files['source']
+    if file:
+        proj.upload_init_data(file.stream, file.filename)
+    else:
+        raise Exception('Empty file')
     
     return jsonify(error=False,
                metadata=proj.metadata,
                project_id=proj.project_id)
 
 
-@app.route('/api/<module_name>/upload_config/<project_type>/<project_id>/', methods=['POST'])
+@app.route('/api/upload_config/<project_type>/<module_name>/<project_id>/', methods=['POST'])
 @cross_origin()
-def upload_config(module_name, project_id):
+def upload_config(project_type, module_name, project_id):
     # TODO: do not expose ?
     proj = _init_project(project_id=project_id)    
     paths = request.json['data']
@@ -971,7 +978,7 @@ def upload_config(module_name, project_id):
 @cross_origin()
 def add_column_matches(project_id):
     column_matches = request.json
-    proj = _init_project(privilege='user', project_id=project_id)
+    proj = _init_project(project_id=project_id)
     proj.add_col_matches(column_matches)
     return jsonify(error=False)
     
@@ -980,7 +987,7 @@ def add_column_matches(project_id):
 @cross_origin()
 def add_column_certain_matches(project_id):
     column_matches = request.json
-    proj = _init_project(privilege='user', project_id=project_id)
+    proj = _init_project(project_id=project_id)
     proj.add_col_certain_matches(column_matches)
     return jsonify(error=False)
 
@@ -988,7 +995,7 @@ def add_column_certain_matches(project_id):
 @cross_origin()
 def add_columns_to_return(project_id, file_role):
     columns_to_return = request.json
-    proj = _init_project(privilege='user', project_id=project_id)
+    proj = _init_project(project_id=project_id)
     proj.add_cols_to_return(file_role, columns_to_return)    
     return jsonify(error=False)
 
@@ -996,7 +1003,7 @@ def add_columns_to_return(project_id, file_role):
 # MODULES
 #==============================================================================
 
-@app.route('/api/modules/', methods=['GET', 'POST'])
+@app.route('/api/list_modules/', methods=['GET', 'POST'])
 @cross_origin()
 def list_modules():
     '''List available modules'''
@@ -1004,14 +1011,14 @@ def list_modules():
                    message='This should list the available modules') #TODO: <--
 
 
-@app.route('/api/modules/infer_mvs/<project_id>/', methods=['GET', 'POST'])
+@app.route('/api/normalize/infer_mvs/<project_id>/<file_name>/', methods=['GET', 'POST'])
 @cross_origin()
 def infer_mvs(project_id):
     '''Runs the infer_mvs module'''
     proj = _init_project(project_id=project_id)
-    data_params, module_params = _parse_1file_request()    
+    data_params, module_params = _parse_normalize_request()    
     
-    load_from_params(proj, data_params)
+    _load_from_params(proj, data_params)
     
     result = proj.infer('infer_mvs', module_params)
         
@@ -1020,16 +1027,16 @@ def infer_mvs(project_id):
     
     return jsonify(error=False,
                    response=result)
+
     
-    
-@app.route('/api/modules/replace_mvs/<project_id>/', methods=['POST'])
+@app.route('/api/normalize/replace_mvs/<project_id>/', methods=['POST'])
 @cross_origin()
 def replace_mvs(project_id):
     '''Runs the mvs replacement module'''
     proj = _init_project(project_id=project_id)
-    data_params, module_params = parse_1file_request()
+    data_params, module_params = parse_normalize_request()
     
-    load_from_params(proj, data_params)
+    _load_from_params(proj, data_params)
     proj.transform('replace_mvs', module_params)
     # Write transformations and log
     proj.write_data()    
@@ -1046,14 +1053,14 @@ def linker(project_id):
     paths as input (in addition to module parameters)
     
     {
-    'data': {'source': {},  
-            'ref': {}}
-    'params': {'variable_definition': {...},
-               'columns_to_keep': [...]}
+        'data': {'source': {},  
+                'ref': {}}
+        'params': {'variable_definition': {...},
+                   'columns_to_keep': [...]}
     }
     
     '''
-    proj = _init_project(privilege='user', project_id=project_id)
+    proj = _init_project(project_id=project_id)
     data_params, module_params = _parse_linking_request()
     
     # Set paths
@@ -1078,44 +1085,50 @@ def linker(project_id):
 #==============================================================================
     # Admin
 #==============================================================================
-
-@app.route('/api/list_normalize_projects/', methods=['GET', 'POST'])
-@cross_origin()
-def list_normalize_projects(user_id=None):
-    '''Lists all project id_s'''
-    raise Exception('Wrong implementation')
-    
-    if user_id is not None:
-        raise NotImplementedError
-    
-    admin = Admin()
-    list_of_projects = admin.list_projects()
-    return jsonify(error=False,
-                   response=list_of_projects)
-
-@app.route('/api/list_link_projects/', methods=['GET', 'POST'])
-@cross_origin()
-def list_link_projects(user_id=None):
-    '''Lists all project id_s'''
-    raise Exception('Wrong implementation')
-    
-    if user_id is not None:
-        raise NotImplementedError    
-
-    admin = Admin()
-    list_of_projects = admin.list_projects()
-    return jsonify(error=False,
-                   response=list_of_projects)
-
-
-@app.route('/api/list_referentials/', methods=['GET', 'POST'])
-@cross_origin()
-def list_referentials():
-    '''Lists all internal referentials'''
-    admin = Admin()
-    list_of_projects = admin.list_referentials()
-    return jsonify(error=False,
-                   response=list_of_projects)
+#
+#@app.route('/api/list_normalize_projects/', methods=['GET', 'POST'])
+#@cross_origin()
+#def list_normalize_projects(user_id=None):
+#    '''Lists all project id_s'''
+#    raise Exception('Wrong implementation')
+#    
+#    if user_id is not None:
+#        raise NotImplementedError
+#    
+#    admin = Admin()
+#    list_of_projects = admin.list_projects()
+#    return jsonify(error=False,
+#                   response=list_of_projects)
+#
+#@app.route('/api/list_user_projects/<internal>/<user_id>/<project_type>/', methods=['GET', 'POST'])
+#@cross_origin()
+#def list_projects(internal, user_only=True, project_type=None):
+#    '''
+#    Lists all project id_s
+#    
+#    INPUT:
+#        - internal: True will return only internal (i.e: visible to all)
+#                     False will return all projects
+#        - user_only:   
+#    '''
+#    internal = bool(internal)
+#    
+#    raise NotImplementedError    
+#
+#    admin = Admin()
+#    list_of_projects = admin.list_projects()
+#    return jsonify(error=False,
+#                   response=list_of_projects)
+#
+#
+#@app.route('/api/list_referentials/', methods=['GET', 'POST'])
+#@cross_origin()
+#def list_referentials():
+#    '''Lists all internal referentials'''
+#    admin = Admin()
+#    list_of_projects = admin.list_referentials()
+#    return jsonify(error=False,
+#                   response=list_of_projects)
 
 
 if __name__ == '__main__':
