@@ -288,9 +288,7 @@ def _init_project(project_type,
 def web_index():
     #  /!\ Partial URL. Full URL will depend on user form
     next_url_link = url_for('web_select_link_project') 
-    next_url_normalize = url_for('web_select_files', 
-                                 project_type='normalize', 
-                                 project_id='')
+    next_url_normalize = url_for('web_normalizer_select_file')
     
     return render_template('index.html',
                        next_url_link=next_url_link, 
@@ -327,7 +325,7 @@ def web_linker_select_files(project_id):
     next_url = url_for('web_mvs', project_type='link',
                        project_id=project_id, var='source')
     
-    new_normalize_project_api_url = url_for('new_project', project_type='normalize')
+    new_normalize_project_api_urlZ = url_for('new_project', project_type='normalize')
     delete_normalize_project_api_url_partial=url_for('delete_project', 
                                                      project_type='normalize', 
                                                      project_id='')
@@ -357,15 +355,34 @@ def web_linker_select_files(project_id):
                            upload_source_api_url_partial=url_for('upload', project_id=''),
                            select_file_api_url=url_for('select_file', project_id=project_id),
                            next_url=next_url,
-                           next_url_partial=next_url_partial,
                            MAX_FILE_SIZE=MAX_FILE_SIZE)
 
 
 @app.route('/web/normalize/select_file', methods=['GET']) # (Actually select_project)
 @cross_origin()
 def web_normalizer_select_file():
-    next_url_partial = url_for('web_mvs_normalize', project_type='normalize', file_name='') # Missing project_id and file_name    
+    MAX_FILE_SIZE = 1048576
     
+    next_url_partial = '/web/missing_values/normalize/' #url_for('web_mvs_normalize', file_name='') # Missing project_id and file_name    
+    
+    new_normalize_project_api_url = url_for('new_project', project_type='normalize')
+    delete_normalize_project_api_url_partial=url_for('delete_project', 
+                                                     project_type='normalize', 
+                                                     project_id='')
+    
+    previous_projects = [] 
+
+    return render_template('select_file_normalizer.html', 
+                           #previous_sources=all_csvs.get('source', []),
+                           #previous_references=all_csvs.get('ref', []),
+                           #internal_references=all_internal_refs,
+                           previous_projects=previous_projects,
+                           new_normalize_project_api_url=new_normalize_project_api_url,
+                           delete_normalize_project_api_url_partial = delete_normalize_project_api_url_partial,
+                           
+                           upload_api_url_partial=url_for('upload', project_id=''),
+                           next_url_partial=next_url_partial,
+                           MAX_FILE_SIZE=MAX_FILE_SIZE)
 
 #def _next_url(project_type=None, project_id=None, var=None):
 #    # Order if project_type is normalise
@@ -844,7 +861,7 @@ def new_project(project_type):
     if internal and (not description):
         raise Exception('Internal referentials should have a description')
 
-    if project_type == 'normalizer':
+    if project_type == 'normalize':
         proj = UserNormalizer(create_new=True, description=description, display_name=display_name)
     else:
         proj = UserLinker(create_new=True, description=description, display_name=display_name)

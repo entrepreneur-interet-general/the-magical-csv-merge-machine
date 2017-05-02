@@ -52,6 +52,7 @@ class AbstractProject():
                 raise Exception('Project already exists. Choose a new path or \
                                 delete the existing: {}'.format(path_to_proj))
             else:
+                print(path_to_proj)
                 os.makedirs(path_to_proj)
             
             # Create metadata
