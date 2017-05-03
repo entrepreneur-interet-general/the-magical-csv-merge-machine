@@ -125,10 +125,7 @@ class AbstractProject():
         '''Wrapper around read_config_data'''
         metadata = self.read_config_data(module_name='', file_name='metadata.json')
         print(metadata)
-        try:
-            assert metadata['project_id'] == self.project_id
-        except:
-            import pdb; pdb.set_trace()
+        assert metadata['project_id'] == self.project_id
         return metadata
     
     def write_metadata(self):

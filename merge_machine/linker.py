@@ -21,7 +21,7 @@ class Linker(AbstractDataProject):
                  display_name=None,
                  description=None):
         
-        super().__init__(project_id, create_new, display_name, description)
+        super().__init__(project_id, create_new, display_name=display_name, description=description)
         
         # Add source and ref if the were selected
         if (self.metadata['current']['source'] is not None) \
@@ -35,10 +35,15 @@ class Linker(AbstractDataProject):
         # TODO: Add safeguard somewhere
         # Add source
         info = self.metadata['current'][file_role]
-        if info['internal']:
-            self.__dict__[file_role] = InternalNormalizer(info['project_id'])
-        else:
-            self.__dict__[file_role] = UserNormalizer(info['project_id'])
+        project_id = info['project_id']
+        try:
+            if info['internal']:
+                self.__dict__[file_role] = InternalNormalizer(project_id)
+            else:
+                self.__dict__[file_role] = UserNormalizer(project_id)
+        except:
+            self.__dict__[file_role] = None
+            #raise Exception('Normalizer project with id {0} could not be found'.format(project_id))
          
 
     def check_file_role(self, file_role):
@@ -59,10 +64,10 @@ class Linker(AbstractDataProject):
     def add_col_matches(self, column_matches):
         '''column_matches is a json file as list of dict of list'''
         # TODO: add checks on file
-        self.upload_config_data(column_matches, 'link', 'dedupe_linker', 'column_matches.json')
+        self.upload_config_data(column_matches, 'dedupe_linker', 'column_matches.json')
 
     def read_col_matches(self):
-        config = self.read_config_data('link', 'dedupe_linker', 'column_matches.json')
+        config = self.read_config_data('dedupe_linker', 'column_matches.json')
         if not config:
             config = []
         return config
@@ -70,10 +75,10 @@ class Linker(AbstractDataProject):
     def add_col_certain_matches(self, column_matches):
         '''column_matches is a json file as list of dict of list'''
         # TODO: add checks on file
-        self.upload_config_data(column_matches, 'link', 'dedupe_linker', 'column_certain_matches.json')
+        self.upload_config_data(column_matches, 'dedupe_linker', 'column_certain_matches.json')
 
     def read_col_certain_matches(self):
-        config = self.read_config_data('link', 'dedupe_linker', 'column_certain_matches.json')
+        config = self.read_config_data('dedupe_linker', 'column_certain_matches.json')
         if not config:
             config = []
         return config    
@@ -84,11 +89,11 @@ class Linker(AbstractDataProject):
         return during download
         '''
         config_file_name = 'columns_to_return_{0}.json'.format(file_role)
-        self.upload_config_data(columns, 'link', 'dedupe_linker', config_file_name)
+        self.upload_config_data(columns, 'dedupe_linker', config_file_name)
         
     def read_cols_to_return(self, file_role):
         config_file_name = 'columns_to_return_{0}.json'.format(file_role)
-        config = self.read_config_data('link', 'dedupe_linker', config_file_name)
+        config = self.read_config_data('dedupe_linker', config_file_name)
         if not config:
             config = []
         return config
@@ -99,7 +104,7 @@ class Linker(AbstractDataProject):
         '''
         # TODO: change this
         # TODO: look where to load source and ref
-        assert module_type in ['link']
+        assert module_type in ['infer', 'link']
         log = { 
                 # Data being modified
                'file_name': self.mem_data_info.get('file_name', None), 
@@ -114,7 +119,7 @@ class Linker(AbstractDataProject):
         return log
     
 
-    def add_selected_file(self, file_role, internal, project_id, file_name):
+    def add_selected_project(self, file_role, internal, project_id):
         '''
         Select file to use as source or referential.
         
@@ -131,10 +136,11 @@ class Linker(AbstractDataProject):
         else:
             proj = UserNormalizer(project_id)
             
-            
-        if file_name not in proj.metadata['files']:
-            raise Exception('File {0} could not be found in project {1} \
-                 (internal: {2})'.format(file_name, project_id, internal))
+        #        if file_name not in proj.metadata['files']:
+        #            raise Exception('File {0} could not be found in project {1} \
+        #                 (internal: {2})'.format(file_name, project_id, internal))
+        
+        file_name = proj.get_last_written()[1]
         
         # Check that         
         self.metadata['current'][file_role] = {'internal': internal, 

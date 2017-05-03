@@ -203,7 +203,7 @@ def _load_from_params(proj, data_params=None):
     Implicit load is systematic. TODO: Define implicit load
     '''
     (file_role, module_name, file_name) = _parse_data_params(proj, data_params)
-    proj.load_data(file_role, module_name, file_name)
+    proj.load_data(module_name, file_name)
 
 def _parse_normalize_request():
     # Parse json request
@@ -297,13 +297,13 @@ def web_index():
 @app.route('/web/link/select_project/', methods=['GET'])
 @cross_origin()
 def web_select_link_project():
-    next_url_partial = url_for('web_select_files', project_type='link', project_id='')
+    next_url_partial = url_for('web_linker_select_files', project_id='')
     new_link_project_api_url = url_for('new_project', project_type='link')
     delete_project_api_url_partial=url_for('delete_project', project_type='link', project_id='')
     exists_url_partial=url_for('project_exists', project_type='link', project_id='')
     
     admin = Admin()
-    list_of_projects = admin.list_projects()
+    list_of_projects = admin.list_project_ids('link')
     
     return render_template('select_link_project.html',
                            list_of_projects = list_of_projects,
@@ -313,52 +313,8 @@ def web_select_link_project():
                            delete_project_api_url_partial=delete_project_api_url_partial,
                            exists_url_partial=exists_url_partial)
     
-
-# TODO: look into use of sessions for url generation
-
-@app.route('/web/link/select_files/<project_id>/', methods=['GET']) # (Actually select_projects)
-@cross_origin()
-def web_linker_select_files(project_id):
-    '''View to create or join 1 or 2 normalization projects (1 for norm, 2 for link)'''
-    MAX_FILE_SIZE = 1048576
     
-    next_url = url_for('web_mvs', project_type='link',
-                       project_id=project_id, var='source')
-    
-    new_normalize_project_api_urlZ = url_for('new_project', project_type='normalize')
-    delete_normalize_project_api_url_partial=url_for('delete_project', 
-                                                     project_type='normalize', 
-                                                     project_id='')
-    
-    # Generate Next URLs
-    
-    # Do what you fina do
-#    proj = _init_project(project_id=project_id)
-#    all_csvs = proj._list_files(extensions=['.csv'])
-#    
-#    admin = Admin()
-#    all_internal_refs = admin.list_referentials() # TODO: take care of this
-#
-#    admin = admin.Admin()
-#    list_of_projects = user.list_projects()
-
-    # TODO: If you have link, also add files to current 
-    
-    return render_template('select_files_linker.html', 
-                           project_id=project_id,
-                           #previous_sources=all_csvs.get('source', []),
-                           #previous_references=all_csvs.get('ref', []),
-                           #internal_references=all_internal_refs,
-                           new_normalize_project_api_url=new_normalize_project_api_url,
-                           delete_normalize_project_api_url_partial = delete_normalize_project_api_url_partial,
-                           
-                           upload_source_api_url_partial=url_for('upload', project_id=''),
-                           select_file_api_url=url_for('select_file', project_id=project_id),
-                           next_url=next_url,
-                           MAX_FILE_SIZE=MAX_FILE_SIZE)
-
-
-@app.route('/web/normalize/select_file', methods=['GET']) # (Actually select_project)
+@app.route('/web/normalize/select_file/', methods=['GET']) # (Actually select_project)
 @cross_origin()
 def web_normalizer_select_file():
     MAX_FILE_SIZE = 1048576
@@ -372,7 +328,7 @@ def web_normalizer_select_file():
     
     previous_projects = [] 
 
-    return render_template('select_file_normalizer.html', 
+    return render_template('select_file_normalize.html', 
                            #previous_sources=all_csvs.get('source', []),
                            #previous_references=all_csvs.get('ref', []),
                            #internal_references=all_internal_refs,
@@ -382,7 +338,53 @@ def web_normalizer_select_file():
                            
                            upload_api_url_partial=url_for('upload', project_id=''),
                            next_url_partial=next_url_partial,
+                           MAX_FILE_SIZE=MAX_FILE_SIZE)    
+    
+
+# TODO: look into use of sessions for url generation
+
+@app.route('/web/link/select_files/<project_id>', methods=['GET']) # (Actually select_projects)
+@cross_origin()
+def web_linker_select_files(project_id):
+    '''View to create or join 1 or 2 normalization projects (1 for norm, 2 for link)'''
+    MAX_FILE_SIZE = 1048576
+    
+    next_url = url_for('web_mvs_link', project_id=project_id, file_role='source')
+    
+    new_normalize_project_api_url = url_for('new_project', project_type='normalize')
+    delete_normalize_project_api_url_partial=url_for('delete_project', 
+                                                     project_type='normalize', 
+                                                     project_id='')
+    
+    # Generate Next URLs
+    
+    # Do what you fina do
+#    proj = _init_project(project_id=project_id)
+#    all_csvs = proj._list_files(extensions=['.csv'])
+#    
+    admin = Admin()
+    all_user_projects = admin.list_projects('normalize') # TODO: take care of this
+    all_internal_projects = admin.list_projects('normalize') # TODO:
+
+#    admin = admin.Admin()
+#    list_of_projects = user.list_projects()
+
+    # TODO: If you have link, also add files to current 
+    
+    return render_template('select_files_linker.html', 
+                           project_id=project_id,
+                           all_user_projects=all_user_projects, 
+                           all_internal_projects=all_internal_projects,
+                           new_normalize_project_api_url=new_normalize_project_api_url,
+                           delete_normalize_project_api_url_partial = delete_normalize_project_api_url_partial,
+                           
+                           upload_api_url_partial=url_for('upload', project_id=''),
+                           select_file_api_url=url_for('select_file', project_id=project_id),
+                           next_url=next_url,
                            MAX_FILE_SIZE=MAX_FILE_SIZE)
+
+
+
 
 #def _next_url(project_type=None, project_id=None, var=None):
 #    # Order if project_type is normalise
@@ -418,9 +420,9 @@ def web_mvs_normalize(project_id, file_name):
 def web_mvs_link(project_id, file_role):
     _check_file_role(file_role)
     
-    proj = UserNormalizer(project_id, create_new=False)
-    normalize_project_id = proj['metadata']['current'][file_role]['project_id']
-    normalize_file_name = proj['metadata']['current'][file_role]['file_name']
+    proj = UserLinker(project_id)
+    normalize_project_id = proj.metadata['current'][file_role]['project_id']
+    normalize_file_name = proj.metadata['current'][file_role]['file_name']
     
     if file_role == 'source':
         next_url = url_for('web_mvs_link', project_id=project_id, file_role='ref')
@@ -437,7 +439,7 @@ def _web_mvs_normalize(project_id, file_name, next_url):
     # proj_norm = init_normalizer_project(project_type=, project_id=project_id)
     
     # Act on last file 
-    proj = UserNormalizer()
+    proj = UserNormalizer(project_id)
     (module_name, file_name) = proj.get_last_written(None, file_name, before_module='replace_mvs') 
     
     # Read config or perform inference for project
@@ -447,14 +449,13 @@ def _web_mvs_normalize(project_id, file_name, next_url):
         # Infer missing values + save
         mvs_config = proj.infer('infer_mvs', params=None)
     
-    # Generate sample to display 
-    paths = {''}
+    # Generate sample to display
     sample_params = {
                     'num_rows_to_display': NUM_ROWS_TO_DISPLAY,
                     'num_per_missing_val_to_display': NUM_PER_MISSING_VAL_TO_DISPLAY,
                     'drop_duplicates': True
                      }
-    sample = proj.get_sample('sample_mvs', paths, mvs_config, sample_params)
+    sample = proj.get_sample('sample_mvs', mvs_config, sample_params)
     
     # Format infered_mvs for display in web app
     formated_infered_mvs = dict()
@@ -472,8 +473,8 @@ def _web_mvs_normalize(project_id, file_name, next_url):
                            
                            data_params=data_params,
                            add_config_api_url=url_for('upload_config', 
-                                                      project_id=project_id, 
-                                                      module_name='replace_mvs'),
+                                                      project_type='normalize',
+                                                      project_id=project_id),
                            recode_missing_values_api_url=url_for('replace_mvs', 
                                                       project_id=project_id),
                            next_url=next_url)
@@ -496,7 +497,7 @@ def web_match_columns(project_id):
         (_, file_name) = proj.__dict__[file_role].get_last_written(module_name=None, 
                                                       file_name=None, 
                                                       before_module='dedupe_linker')
-        proj.__dict__[file_role].load_data('INIT', file_name, nrows=max(ROWS_TO_DISPLAY))
+        proj.__dict__[file_role].load_data('INIT', file_name, nrows=max(ROWS_TO_DISPLAY)+1)
         samples[file_role] = proj.__dict__[file_role].get_sample(None, None, sample_params)
         proj.__dict__[file_role].clear_memory()
 
@@ -554,7 +555,7 @@ def web_get_answer(user_input):
                 print('Wrote train')
     
                 # TODO: Do dedupe
-                next_url = url_for('web_select_return', project_id=flask._app_ctx_stack.project_id, file_role='ref')
+                next_url = url_for('web_select_return', project_type='link', project_id=flask._app_ctx_stack.project_id)
                 emit('redirect', {'url': next_url})
             else:
                 flask._app_ctx_stack.labeller.new_label()
@@ -577,7 +578,7 @@ def load_labeller():
         print('Got here')
         
         project_id = flask._app_ctx_stack.project_id
-        proj = _init_project(privilege='user', project_id=project_id)
+        proj = UserLinker(project_id=project_id)
         flask._app_ctx_stack.proj = proj
         
         # TODO: Add extra config page
@@ -647,7 +648,7 @@ def web_dedupe(project_id):
     #return render_template('dedupe_training.html', **DUMMY_EMIT)
 
 
-@app.route('/web/select_return/link/<project_id>', methods=['GET'])
+@app.route('/web/select_return/<project_type>/<project_id>', methods=['GET'])
 @cross_origin()
 def web_select_return(project_type, project_id):
     '''
@@ -675,8 +676,8 @@ def web_select_return(project_type, project_id):
         (module_name, file_name) = proj.__dict__[file_role].get_last_written(None, 
                                                     data['file_name'], 
                                                     before_module='dedupe_linker')
-        proj.__dict__[file_role].load_data(module_name, file_name, nrows=max(ROWS_TO_DISPLAY))
-        samples[file_role] = proj.get_sample(None, None, {'sample_ilocs':ROWS_TO_DISPLAY})
+        proj.__dict__[file_role].load_data(module_name, file_name, nrows=max(ROWS_TO_DISPLAY)+1)
+        samples[file_role] = proj.__dict__[file_role].get_sample(None, None, {'sample_ilocs':ROWS_TO_DISPLAY})
         
         selected_columns_to_return[file_role] = proj.read_cols_to_return(file_role) 
     
@@ -692,7 +693,7 @@ def web_select_return(project_type, project_id):
     select_return_api_urls['ref'] = url_for('add_columns_to_return', 
                                           project_id=project_id, file_role='ref')
     
-    next_url = url_for('web_download', project_id=project_id)
+    next_url = url_for('web_download', project_type=project_type, project_id=project_id)
     return render_template('select_return.html', 
                            indexes=indexes,                           
                            samples=samples,
@@ -705,19 +706,22 @@ def web_select_return(project_type, project_id):
                            select_return_api_urls=select_return_api_urls,
                            next_url=next_url)
     
+@app.route('/web/download/normalize/<project_id>/<file_name>', methods=['GET'])
+def web_download_normalize(project_id, file_name):
+    return 'PLACEHOLDER'
+
 
 @app.route('/web/download/<project_type>/<project_id>/', methods=['GET'])
-@cross_origin()
-def web_download(project_id):    
+def web_download(project_type, project_id):    
     
-    proj = _init_project(project_id=project_id)
+    if project_type == 'normalize':
+        raise NotImplementedError
+    
+    proj = _init_project(project_type, project_id=project_id)
     
     res_file_name = 'm3_result.csv'
     
-    file_path = proj.path_to('link', 
-                             'dedupe_linker', 
-                             res_file_name
-                             )    
+    file_path = proj.path_to('dedupe_linker', res_file_name)    
     
     if False or (not os.path.isfile(file_path)):        
         paths = proj.gen_paths_dedupe()
@@ -742,13 +746,12 @@ def web_download(project_id):
         proj.write_data()    
         proj.write_log_buffer(True)
         
-        file_path = proj.path_to(proj.mem_data_info['file_role'], 
-                                 proj.mem_data_info['module_name'], 
+        file_path = proj.path_to(proj.mem_data_info['module_name'], 
                                  proj.mem_data_info['file_name'])
         print('Wrote data to: ', file_path)
 
     # Identify rows to display
-    proj.load_data('link', 'dedupe_linker', res_file_name)  
+    proj.load_data('dedupe_linker', res_file_name)  
 
     certain_col_matches = proj.read_col_certain_matches()
     use_lower = True
@@ -799,13 +802,17 @@ def web_download(project_id):
 
     # Choose rows to display # TODO: Absolutely move this
     NUM_ROWS_TO_DISPLAY = 1000
-    rows_to_display = [0] + list(proj.mem_data.index[proj.mem_data.__CONFIDENCE.notnull()] + 1)
+    rows_to_display = list(proj.mem_data.index[proj.mem_data.__CONFIDENCE.notnull()])
     rows_to_display = rows_to_display[:NUM_ROWS_TO_DISPLAY + 1]
     
     # Generate display sample
-    match_sample = proj.get_sample('link', 'dedupe_linker', res_file_name,
-                                row_idxs=rows_to_display, columns=cols_to_display_match)
-
+    #    match_sample = proj.get_sample('dedupe_linker', res_file_name,
+    #                                row_idxs=rows_to_display, columns=cols_to_display_match)
+    sample_params = {
+                    'sample_ilocs': rows_to_display,
+                    'drop_duplicates': True
+                     }
+    match_sample = proj.get_sample(None, None, sample_params)
     
     if certain_col_matches:
         sel = proj.mem_data.__CONFIDENCE.notnull()
@@ -815,16 +822,20 @@ def web_download(project_id):
         else:
             sel = sel & (proj.mem_data[certain_col_matches['source']] \
                          != proj.mem_data[certain_col_matches['ref']])
-        rows_to_display_error = [0] + list(proj.mem_data.index[sel] + 1)
+        rows_to_display_error = list(proj.mem_data.index[sel])
         rows_to_display_error = rows_to_display_error[:NUM_ROWS_TO_DISPLAY + 1]
         
-        match_error_samples = proj.get_sample('link', 'dedupe_linker', res_file_name,
-                                    row_idxs=rows_to_display_error, columns=cols_to_display_match)
+        sample_params = {
+                        'sample_ilocs': rows_to_display_error,
+                        'drop_duplicates': True
+                         }        
+        
+        match_error_samples = proj.get_sample(None, None, sample_params)
     else:
         match_error_samples = []
     
-    source_sample = proj.get_sample('source', 'INIT', proj.metadata['current']['source']['file_name'],
-                                row_idxs=rows_to_display, columns=cols_to_display_source)
+    #    source_sample = proj.get_sample('INIT', proj.metadata['current']['source']['file_name'],
+    #                                row_idxs=rows_to_display, columns=cols_to_display_source)
     #ref_sample = proj.get_sample('ref', 'INIT', proj.metadata['current']['ref']['file_name'],
     #                            row_idxs=rows_to_display, columns=cols_to_display_ref)
 
@@ -836,12 +847,11 @@ def web_download(project_id):
                            match_error_samples=match_error_samples,                           
                            
                            source_index=cols_to_display_source,
-                           source_sample=source_sample,
                            ref_index=cols_to_display_ref,
                            # ref_sample=ref_sample,  
                            metrics=metrics,
                            download_api_url=url_for('download', 
-                                    privilege='user', project_id=project_id))
+                                project_type=project_type, project_id=project_id))
 
 
 
@@ -872,7 +882,7 @@ def new_project(project_type):
 @app.route('/api/delete/<project_type>/<project_id>', methods=['GET'])
 def delete_project(project_type, project_id):
     _check_project_type(project_type)
-    if project_type == 'normalizer':
+    if project_type == 'normalize':
         proj = UserNormalizer(project_id=project_id)
     else:
         proj = UserLinker(project_id=project_id)
@@ -913,21 +923,21 @@ def download(project_id):
     file_role = data_params.get('file_role', None)
     module_name = data_params.get('module_name', None)
     file_name = data_params.get('file_name', None)
-    
+
     if file_role is not None:
         file_role = secure_filename(file_role)
     if module_name is not None:
         module_name = secure_filename(module_name)
     if file_name is not None:
         file_name = secure_filename(file_name)
-        
+
     (file_role, module_name, file_name) = proj.get_last_written(file_role, module_name, file_name)
-        
+
     if module_name == 'INIT':
         return jsonify(error=True,
                message='No changes were made since upload. Download is not \
                        permitted. Please do not use this service for storage')
-    
+
     file_path = proj.path_to(file_role, module_name, file_name)
     return send_file(file_path, as_attachment=True, attachment_filename='m3_merged.csv')
 
@@ -938,14 +948,16 @@ def select_file(project_id):
     Choose a file to use as source or referential for merging
     send {file_role: "source", file_name: "XXX", internal: False}
     '''
-    proj = _init_project(project_id=project_id)
+    proj = UserLinker(project_id)
     params = request.json
-    proj.select_file(params['file_role'], params.get('file_name', None), \
-                     params['internal'], params.get('project_id', project_id))
-
+    print('PARARMS')
+    print(params)
+    proj.add_selected_project(file_role=params['file_role'], 
+                           internal=params.get('internal', False), 
+                           project_id=params['project_id'])
     return jsonify(error=False)
- 
-    
+
+
 @app.route('/api/exists/<project_type>/<project_id>', methods=['GET'])
 @cross_origin()
 def project_exists(project_type, project_id):
@@ -953,8 +965,9 @@ def project_exists(project_type, project_id):
     try:
         _init_project(project_type=project_type, project_id=project_id)
         return jsonify(error=False, exists=True)
-    except: 
-    
+    except Exception as exc: 
+        import pdb
+        pdb.set_trace()
         return jsonify(error=False, exists=False)
     
 
@@ -969,7 +982,7 @@ def upload(project_id):
     proj = UserNormalizer(project_id=project_id) 
     
     # Upload data
-    file = request.files['source']
+    file = request.files['file']
     if file:
         proj.upload_init_data(file.stream, file.filename)
     else:
@@ -980,14 +993,14 @@ def upload(project_id):
                project_id=proj.project_id)
 
 
-@app.route('/api/upload_config/<project_type>/<module_name>/<project_id>/', methods=['POST'])
+@app.route('/api/upload_config/<project_type>/<project_id>/', methods=['POST'])
 @cross_origin()
-def upload_config(project_type, module_name, project_id):
+def upload_config(project_type, project_id):
     # TODO: do not expose ?
-    proj = _init_project(project_id=project_id)    
+    proj = _init_project(project_type=project_type, project_id=project_id)    
     paths = request.json['data']
     params = request.json['params']
-    proj.upload_config_data(params, paths['file_role'], paths['module_name'], paths['file_name'])
+    proj.upload_config_data(params, paths['module_name'], paths['file_name'])
     return jsonify(error=False)
 
 
@@ -995,7 +1008,7 @@ def upload_config(project_type, module_name, project_id):
 @cross_origin()
 def add_column_matches(project_id):
     column_matches = request.json
-    proj = _init_project(project_id=project_id)
+    proj = UserLinker(project_id=project_id)
     proj.add_col_matches(column_matches)
     return jsonify(error=False)
     
@@ -1004,7 +1017,7 @@ def add_column_matches(project_id):
 @cross_origin()
 def add_column_certain_matches(project_id):
     column_matches = request.json
-    proj = _init_project(project_id=project_id)
+    proj = UserLinker(project_id=project_id)
     proj.add_col_certain_matches(column_matches)
     return jsonify(error=False)
 
@@ -1012,7 +1025,7 @@ def add_column_certain_matches(project_id):
 @cross_origin()
 def add_columns_to_return(project_id, file_role):
     columns_to_return = request.json
-    proj = _init_project(project_id=project_id)
+    proj = UserLinker(project_id=project_id)
     proj.add_cols_to_return(file_role, columns_to_return)    
     return jsonify(error=False)
 
@@ -1050,8 +1063,8 @@ def infer_mvs(project_id):
 @cross_origin()
 def replace_mvs(project_id):
     '''Runs the mvs replacement module'''
-    proj = _init_project(project_id=project_id)
-    data_params, module_params = parse_normalize_request()
+    proj = UserNormalizer(project_id=project_id)
+    data_params, module_params = _parse_normalize_request()
     
     _load_from_params(proj, data_params)
     proj.transform('replace_mvs', module_params)

@@ -43,7 +43,11 @@ class AbstractDataProject(AbstractProject):
     def load_data(self, module_name, file_name, nrows=None):
         '''Load data as pandas DataFrame to memory'''
         file_path = self.path_to(module_name, file_name)
-        self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, nrows=nrows)
+        if nrows is not None:
+            print('Nrows is : ', nrows)
+            self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, nrows=nrows)
+        else:
+            self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str)
         self.mem_data_info = {'file_name': file_name,
                               'module_name': module_name}
         
@@ -112,13 +116,17 @@ class AbstractDataProject(AbstractProject):
         '''
         self.check_mem_data()
         
-        if sampler_module_name is None:        
+        if sampler_module_name is not None:
             sample_ilocs = MODULES['sample'][sampler_module_name]['func'](self.mem_data, 
                                                               params, sample_params)
         else:
             sample_ilocs = sample_params.get('sample_ilocs', range(5))
             
-        sub_tab = self.mem_data.iloc[sample_ilocs, :]
+        try:
+            sub_tab = self.mem_data.iloc[sample_ilocs, :]
+        except:
+            import pdb
+            pdb.set_trace()
         
         if sample_params.get('drop_duplicates', True):
             sub_tab.drop_duplicates(inplace=True)
@@ -180,3 +188,26 @@ class AbstractDataProject(AbstractProject):
         self.mem_data = None
         self.mem_data_info = None
         gc.collect()
+        
+        
+    def infer(self, module_name, params):
+        '''
+        Runs the module on pandas DataFrame data in memory and 
+        returns answer + writes to appropriate location
+        '''
+        self.check_mem_data()  
+        
+        # Initiate log
+        log = self.init_log(module_name, 'infer')
+        
+        infered_params = MODULES['infer'][module_name]['func'](self.mem_data, params)
+        
+        # Write result of inference
+        module_to_write_to = MODULES['infer'][module_name]['write_to']
+        self.upload_config_data(infered_params, module_to_write_to, 'infered_config.json')
+        
+        # Update log buffer
+        self.log_buffer.append(log)     
+        
+        return infered_params
+    
