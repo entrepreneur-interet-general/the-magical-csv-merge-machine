@@ -862,7 +862,7 @@ def web_download(project_type, project_id):
 # API
 #==============================================================================
 
-@app.route('/api/new/<project_type>', methods=['GET', 'POST'])
+@app.route('/api/new/<project_type>', methods=['POST'])
 def new_project(project_type):
     _check_project_type(project_type)
     
@@ -872,7 +872,7 @@ def new_project(project_type):
     internal = request.json.get('internal', False)
     
     if internal and (not description):
-        raise Exception('Internal referentials should have a description')
+        raise Exception('Internal projects should have a description')
 
     if project_type == 'normalize':
         proj = UserNormalizer(create_new=True, description=description, display_name=display_name)
@@ -882,9 +882,11 @@ def new_project(project_type):
     return jsonify(error=False, 
                    project_id=proj.project_id)
 
+
 @app.route('/api/delete/<project_type>/<project_id>', methods=['GET'])
 def delete_project(project_type, project_id):
     _check_project_type(project_type)
+    # TODO: replace by _init_project
     if project_type == 'normalize':
         proj = UserNormalizer(project_id=project_id)
     else:
@@ -894,11 +896,11 @@ def delete_project(project_type, project_id):
     
 
 
-@app.route('/api/metadata/<project_type>/<project_id>', methods=['GET', 'POST'])
+@app.route('/api/metadata/<project_type>/<project_id>', methods=['GET'])
 @cross_origin()
-def metadata(project_id):
+def metadata(project_type, project_id):
     '''Fetch metadata for project ID'''
-    proj = _init_project(project_id=project_id)
+    proj = _init_project(project_type, project_id=project_id)
     resp = jsonify(error=False,
                    metadata=proj.metadata, 
                    project_id=proj.project_id)
@@ -983,7 +985,7 @@ def upload(project_id):
     '''
     # Load project
     proj = UserNormalizer(project_id=project_id) 
-    
+        
     # Upload data
     file = request.files['file']
     if file:
