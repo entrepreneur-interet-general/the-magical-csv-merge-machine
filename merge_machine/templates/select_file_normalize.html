@@ -21,17 +21,18 @@
 				// Select file
 				switch ($("input[type=radio][name='select_file']:checked").val()) {
 					case "previous":
-						file_name = $("input[type=radio][name='previous_file']:checked").val()
-						if (file_name===undefined){
-							alert(no_file_msg)
+						project_id = $("input[type=radio][name='previous_file']:checked").val()
+						if (project_id===undefined){
+							alert(no_file_msg + ' 1')
 							return false
 						}
 						//call_select_file("file", file_name, false)
-						alert("Using previously uploaded file: ".concat(file_name))                                                                                                      
+						alert("Using previously uploaded project: ".concat(project_id))
+						break
 					case "upload":
 						var form = new FormData($("#file_to_upload")[0]);
 						if (form.get('file').name == '') {
-							alert(no_file_msg)
+							alert(no_file_msg + ' 2')
 							return false
 						}
 						upload(form);
@@ -41,9 +42,10 @@
 						return false
 				};
 
-			// Redirect
-			next_url = "{{ next_url_partial }}" + project_id + "/" + file_name
-			window.location = next_url
+				// Redirect
+
+				next_url = "{{ next_url_partial }}" + project_id // hack: should include + "/" + file_names
+				window.location = next_url
 			}); 
 
 
@@ -124,15 +126,15 @@
 		<div id="file_index" class="user_only" style="float:left; width: 50%">
 			<h2 id='title'>File select</h2>
 
-	 	  	{% if previous_projects %}
-			 	<input type="radio" name="select_file" value="previous" /> Use previous file </br>
+	 	  	{% if all_user_projects %}
+			 	<input type="radio" name="select_file" value="previous" /> Use previous normalization project </br>
 			 	<div id="previous_file" style="display: none; color: gray">
-				    {% for item in previous_projects %}
-				    	<input type="radio" name="previous_file" value="{{ item['project_id'] }}" /> {{ item['file_name'] }} </br>
+				    {% for item in all_user_projects %}
+				    	<input type="radio" name="previous_file" value="{{ item['project_id'] }}" /> {{ item['display_name'] }} </br>
 				    {% endfor %}
 		 		</div>
 			{% else %}
-				<input type="radio" name="select_file" value="previous" disabled="true"/> Use previous file (No file previously uploaded) </br>
+				<input type="radio" name="select_file" value="previous" disabled="true"/> Use previous  normalization project (No file previously uploaded) </br>
 			{% endif %}
 
 			<input type="radio" name="select_file" value="upload" /> Upload new file </br>

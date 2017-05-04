@@ -288,7 +288,7 @@ def _init_project(project_type,
 def web_index():
     #  /!\ Partial URL. Full URL will depend on user form
     next_url_link = url_for('web_select_link_project') 
-    next_url_normalize = url_for('web_normalizer_select_file')
+    next_url_normalize = url_for('web_normalize_select_file')
     
     return render_template('index.html',
                        next_url_link=next_url_link, 
@@ -297,7 +297,7 @@ def web_index():
 @app.route('/web/link/select_project/', methods=['GET'])
 @cross_origin()
 def web_select_link_project():
-    next_url_partial = url_for('web_linker_select_files', project_id='')
+    next_url_partial = url_for('web_link_select_files', project_id='')
     new_link_project_api_url = url_for('new_project', project_type='link')
     delete_project_api_url_partial=url_for('delete_project', project_type='link', project_id='')
     exists_url_partial=url_for('project_exists', project_type='link', project_id='')
@@ -316,7 +316,7 @@ def web_select_link_project():
     
 @app.route('/web/normalize/select_file/', methods=['GET']) # (Actually select_project)
 @cross_origin()
-def web_normalizer_select_file():
+def web_normalize_select_file():
     MAX_FILE_SIZE = 1048576
     
     next_url_partial = '/web/missing_values/normalize/' #url_for('web_mvs_normalize', file_name='') # Missing project_id and file_name    
@@ -326,13 +326,13 @@ def web_normalizer_select_file():
                                                      project_type='normalize', 
                                                      project_id='')
     
-    previous_projects = [] 
-
+    admin = Admin()
+    all_user_projects = admin.list_projects('normalize') 
     return render_template('select_file_normalize.html', 
                            #previous_sources=all_csvs.get('source', []),
                            #previous_references=all_csvs.get('ref', []),
                            #internal_references=all_internal_refs,
-                           previous_projects=previous_projects,
+                           all_user_projects=all_user_projects,
                            new_normalize_project_api_url=new_normalize_project_api_url,
                            delete_normalize_project_api_url_partial = delete_normalize_project_api_url_partial,
                            
@@ -345,7 +345,7 @@ def web_normalizer_select_file():
 
 @app.route('/web/link/select_files/<project_id>', methods=['GET']) # (Actually select_projects)
 @cross_origin()
-def web_linker_select_files(project_id):
+def web_link_select_files(project_id):
     '''View to create or join 1 or 2 normalization projects (1 for norm, 2 for link)'''
     MAX_FILE_SIZE = 1048576
     
@@ -404,15 +404,18 @@ def web_linker_select_files(project_id):
 #                  'web_download': url_for('web_index')
 #                  }
 
-
-# order:
-# var can be: either: file_name (normalize) or ref or sources
-@app.route('/web/missing_values/normalize/<project_id>/<file_name>', methods=['GET'])
+@app.route('/web/missing_values/normalize/<project_id>/', methods=['GET'])
+@app.route('/web/missing_values/normalize/<project_id>/<file_name>/', methods=['GET'])
 @cross_origin()
-def web_mvs_normalize(project_id, file_name):
+def web_mvs_normalize(project_id, file_name=None):
+    # TODO: remove hack with file_name=None
+    if file_name is None:
+        proj = UserNormalizer(project_id)
+        (_, file_name) = proj.get_last_written()
+    
     next_url = url_for('web_download_normalize', 
                        project_id=project_id, 
-                       file_name=file_name)    
+                       file_name=file_name)   
     return _web_mvs_normalize(project_id, file_name, next_url)
     
 @app.route('/web/missing_values/link/<project_id>/<file_role>/', methods=['GET'])
@@ -436,7 +439,7 @@ def _web_mvs_normalize(project_id, file_name, next_url):
     NUM_PER_MISSING_VAL_TO_DISPLAY = 4          
     # TODO: add click directly on cells with missing values
     
-    # proj_norm = init_normalizer_project(project_type=, project_id=project_id)
+    # proj_norm = init_normalize_project(project_type=, project_id=project_id)
     
     # Act on last file 
     proj = UserNormalizer(project_id)
