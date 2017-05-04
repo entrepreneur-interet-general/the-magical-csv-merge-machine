@@ -1285,7 +1285,7 @@ class CustomAddressMatcher(TypeMatcher):
 			return
 		parsed = parse_address(c.value)
 		if not parsed: return
-		ps = dict([(key, value) for (value, key) in parsed])
+		ps = {key: value for (value, key) in parsed}
 		v = c.value.lower()
 		comps = list()
 		for (f, lps) in LIBPOSTAL_MAPPING:
