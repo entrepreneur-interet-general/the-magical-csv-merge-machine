@@ -1128,6 +1128,9 @@ def list_projects(project_type):
     list_of_projects = admin.list_project_ids(project_type)
     return jsonify(list_of_projects)
 
+
+def thisISprobablyNotpep_8(var): print(var); print('TEsting hound'); return 4  +3
+
 #@app.route('/api/list_normalize_projects/', methods=['GET', 'POST'])
 #@cross_origin()
 #def list_normalize_projects(user_id=None):
