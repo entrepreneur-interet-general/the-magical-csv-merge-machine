@@ -1120,7 +1120,14 @@ def linker(project_id):
 #==============================================================================
     # Admin
 #==============================================================================
-#
+
+
+@app.route('/api/projects/<project_type>', methods=['GET'])
+def list_projects(project_type):
+    admin = Admin()
+    list_of_projects = admin.list_project_ids(project_type)
+    return jsonify(list_of_projects)
+
 #@app.route('/api/list_normalize_projects/', methods=['GET', 'POST'])
 #@cross_origin()
 #def list_normalize_projects(user_id=None):
@@ -1134,7 +1141,7 @@ def linker(project_id):
 #    list_of_projects = admin.list_projects()
 #    return jsonify(error=False,
 #                   response=list_of_projects)
-#
+
 #@app.route('/api/list_user_projects/<internal>/<user_id>/<project_type>/', methods=['GET', 'POST'])
 #@cross_origin()
 #def list_projects(internal, user_only=True, project_type=None):
