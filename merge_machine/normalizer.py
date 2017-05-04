@@ -117,13 +117,18 @@ class Normalizer(AbstractDataProject):
         INPUT:
             - module_name: filter on given module
             - file_name: filter on file_name
-            - before_module: Looks for file that was written in a module previous or
-              or equal to before_module (in the order defined by MODULE_ORDER)
+            - before_module: (string with module name) Looks for file that was 
+                              written in a module previous to before_module 
+                              (in the order defined by MODULE_ORDER)
             
         OUTPUT:
             - (module_name, file_name)
         '''        
-        previous_modules = {MODULE_ORDER[i]: MODULE_ORDER[:i+1] for i in range(len(MODULE_ORDER))}
+        if (module_name is not None) and (before_module is not None):
+            raise Exception('Variables module_name and before_module cannot be \
+                            set simultaneously')
+        
+        previous_modules = {MODULE_ORDER[i]: MODULE_ORDER[:i] for i in range(len(MODULE_ORDER))}
     
         for log in self.metadata['log'][::-1]:
             if (not log['error']) and log['written'] \
@@ -145,8 +150,9 @@ class Normalizer(AbstractDataProject):
         path = self.path_to(module_name, file_name)
         return path
         
-    def safe_filename(self, filename):
-        return "".join([c for c in filename if c.isalpha() or c.isdigit() or c==' ']).rstrip()
+    def safe_filename(self, file_name, ext='.csv'):
+        assert file_name[-len(ext):] == ext        
+        return "".join([c for c in file_name[:-4] if c.isalpha() or c.isdigit() or c==' ']).rstrip() + ext
     
     def upload_init_data(self, file, file_name, user_given_name=None):
         # TODO: deal with og_file_name, file_id, display_name, user_given_name
@@ -162,11 +168,14 @@ class Normalizer(AbstractDataProject):
         ENCODINGS = ['utf-8', 'windows-1252']
         SEPARATORS = [',', ';', '\t']
         
+        # Check that 
+        
         # Check that user given name is not illegal
-        if (len(user_given_name) < 4) or (user_given_name[-4:] != '.csv'):
-            raise Exception('user given name should end with .csv')
-        if any(x in user_given_name[:-4] for x in CHARS_TO_REPLACE):
-            raise Exception('user_given_name sould be alphanumeric or underscores (+.csv)')
+        if user_given_name is not None:
+            if (len(user_given_name) < 4) or (user_given_name[-4:] != '.csv'):
+                raise Exception('user given name should end with .csv')
+            if any(x in user_given_name[:-4] for x in CHARS_TO_REPLACE):
+                raise Exception('user_given_name sould be alphanumeric or underscores (+.csv)')
                 
         # TODO: Check that file is not already present
         self.mem_data_info = {
@@ -211,7 +220,8 @@ class Normalizer(AbstractDataProject):
         # Add file to metadata
         self.metadata['files'][file_name] = {
                                                 'og_file_name': file_name,
-                                                'display_name': display_name
+                                                'display_name': display_name,
+                                                'upload_time': time.time()
                                             }
         self.write_metadata()
         
@@ -264,27 +274,7 @@ class Normalizer(AbstractDataProject):
         return log
     
 
-    def infer(self, module_name, params):
-        '''
-        Runs the module on pandas DataFrame data in memory and 
-        returns answer + writes to appropriate location
-        '''
-        self.check_mem_data()  
-        
-        # Initiate log
-        log = self.init_log(module_name, 'infer')
-        
-        infered_params = MODULES['infer'][module_name]['func'](self.mem_data, params)
-        
-        # Write result of inference
-        module_to_write_to = MODULES['infer'][module_name]['write_to']
-        self.upload_config_data(infered_params, module_to_write_to, 'infered_config.json')
-        
-        # Update log buffer
-        self.log_buffer.append(log)     
-        
-        return infered_params
-    
+
 
 
 class UserNormalizer(Normalizer):

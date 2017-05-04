@@ -38,8 +38,7 @@ class AbstractProject():
             raise Exception('Set create_new to True or specify project_id')
         if (project_id is not None) and create_new:
             raise Exception('You cannot specify ID for a new project (will be hash)')
-
-
+            
         if create_new: 
             # Generate project id if none is passed
             if project_id is None:
@@ -53,6 +52,7 @@ class AbstractProject():
                 raise Exception('Project already exists. Choose a new path or \
                                 delete the existing: {}'.format(path_to_proj))
             else:
+                print(path_to_proj)
                 os.makedirs(path_to_proj)
             
             # Create metadata
@@ -125,10 +125,7 @@ class AbstractProject():
         '''Wrapper around read_config_data'''
         metadata = self.read_config_data(module_name='', file_name='metadata.json')
         print(metadata)
-        try:
-            assert metadata['project_id'] == self.project_id
-        except:
-            import pdb; pdb.set_trace()
+        assert metadata['project_id'] == self.project_id
         return metadata
     
     def write_metadata(self):

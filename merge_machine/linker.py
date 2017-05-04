@@ -21,24 +21,29 @@ class Linker(AbstractDataProject):
                  display_name=None,
                  description=None):
         
-        super().__init__(project_id, create_new, display_name, description)
+        super().__init__(project_id, create_new, display_name=display_name, description=description)
         
         # Add source and ref if the were selected
         if (self.metadata['current']['source'] is not None) \
             and (self.metadata['current']['ref'] is not None):
-            self.load_data_to_merge('source')
-            self.load_data_to_merge('ref')
+            self.load_project_to_merge('source')
+            self.load_project_to_merge('ref')
          
-    def load_data_to_merge(self, file_role):
+    def load_project_to_merge(self, file_role):
         '''Uses the "current" field in metadata to load source or ref'''        
         self.check_file_role(file_role)
         # TODO: Add safeguard somewhere
         # Add source
         info = self.metadata['current'][file_role]
-        if info['internal']:
-            self.__dict__[file_role] = InternalNormalizer(info['project_id'])
-        else:
-            self.__dict__[file_role] = UserNormalizer(info['project_id'])
+        project_id = info['project_id']
+        try:
+            if info['internal']:
+                self.__dict__[file_role] = InternalNormalizer(project_id)
+            else:
+                self.__dict__[file_role] = UserNormalizer(project_id)
+        except:
+            self.__dict__[file_role] = None
+            #raise Exception('Normalizer project with id {0} could not be found'.format(project_id))
          
 
     def check_file_role(self, file_role):
@@ -59,10 +64,10 @@ class Linker(AbstractDataProject):
     def add_col_matches(self, column_matches):
         '''column_matches is a json file as list of dict of list'''
         # TODO: add checks on file
-        self.upload_config_data(column_matches, 'link', 'dedupe_linker', 'column_matches.json')
+        self.upload_config_data(column_matches, 'dedupe_linker', 'column_matches.json')
 
     def read_col_matches(self):
-        config = self.read_config_data('link', 'dedupe_linker', 'column_matches.json')
+        config = self.read_config_data('dedupe_linker', 'column_matches.json')
         if not config:
             config = []
         return config
@@ -70,10 +75,10 @@ class Linker(AbstractDataProject):
     def add_col_certain_matches(self, column_matches):
         '''column_matches is a json file as list of dict of list'''
         # TODO: add checks on file
-        self.upload_config_data(column_matches, 'link', 'dedupe_linker', 'column_certain_matches.json')
+        self.upload_config_data(column_matches, 'dedupe_linker', 'column_certain_matches.json')
 
     def read_col_certain_matches(self):
-        config = self.read_config_data('link', 'dedupe_linker', 'column_certain_matches.json')
+        config = self.read_config_data('dedupe_linker', 'column_certain_matches.json')
         if not config:
             config = []
         return config    
@@ -84,11 +89,11 @@ class Linker(AbstractDataProject):
         return during download
         '''
         config_file_name = 'columns_to_return_{0}.json'.format(file_role)
-        self.upload_config_data(columns, 'link', 'dedupe_linker', config_file_name)
+        self.upload_config_data(columns, 'dedupe_linker', config_file_name)
         
     def read_cols_to_return(self, file_role):
         config_file_name = 'columns_to_return_{0}.json'.format(file_role)
-        config = self.read_config_data('link', 'dedupe_linker', config_file_name)
+        config = self.read_config_data('dedupe_linker', config_file_name)
         if not config:
             config = []
         return config
@@ -99,7 +104,7 @@ class Linker(AbstractDataProject):
         '''
         # TODO: change this
         # TODO: look where to load source and ref
-        assert module_type in ['link']
+        assert module_type in ['infer', 'link']
         log = { 
                 # Data being modified
                'file_name': self.mem_data_info.get('file_name', None), 
@@ -114,7 +119,7 @@ class Linker(AbstractDataProject):
         return log
     
 
-    def select_file(self, file_role, internal, project_id, file_name):
+    def add_selected_project(self, file_role, internal, project_id):
         '''
         Select file to use as source or referential.
         
@@ -131,18 +136,25 @@ class Linker(AbstractDataProject):
         else:
             proj = UserNormalizer(project_id)
             
-            
-        if file_name not in proj.metadata['files']:
-            raise Exception('File {0} could not be found in project {1} \
-                 (internal: {2})'.format(file_name, project_id, internal))
+        #        if file_name not in proj.metadata['files']:
+        #            raise Exception('File {0} could not be found in project {1} \
+        #                 (internal: {2})'.format(file_name, project_id, internal))
+        
+        file_name = proj.get_last_written()[1]
         
         # Check that         
         self.metadata['current'][file_role] = {'internal': internal, 
                                              'project_id': project_id,
                                              'file_name': file_name}  
         self.write_metadata()
-        self.load_data_to_merge(file_role)
+        self.load_project_to_merge(file_role)
        
+    def read_selected_files(self):
+        '''
+        Returns self.metadata['current']
+        '''
+        return self.metadata['current']
+    
 
     def linker(self, module_name, paths, params):
         '''
@@ -240,8 +252,8 @@ if __name__ == '__main__':
 
     # Try deduping
     proj = UserLinker(create_new=True)
-    proj.select_file('source', False, source_proj_id, source_user_given_name)
-    proj.select_file('ref', False, ref_proj_id, ref_file_name)
+    proj.add_selected_file('source', False, source_proj_id, source_user_given_name)
+    proj.add_selected_file('ref', False, ref_proj_id, ref_file_name)
     
     paths = dict()
     
@@ -287,5 +299,4 @@ if __name__ == '__main__':
     
     import pprint
     pprint.pprint(proj.metadata)
-    
-    pprint.pprint(proj.log_by_file_name())    
+       

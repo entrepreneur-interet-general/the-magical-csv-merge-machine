@@ -32,20 +32,22 @@ class AbstractDataProject(AbstractProject):
         '''
         log['end_timestamp'] = time.time()
         log['error'] = error
-        return log
-    
+        return log    
     
     def check_mem_data(self):
         '''Check that there is data loaded in memory'''
         if self.mem_data is None:
             raise Exception('No data in memory: use `load_data` (reload is \
-                        mandatory after dedupe)')        
-
+                        mandatory after dedupe)')
         
-    def load_data(self, module_name, file_name):
+    def load_data(self, module_name, file_name, nrows=None):
         '''Load data as pandas DataFrame to memory'''
         file_path = self.path_to(module_name, file_name)
-        self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str)
+        if nrows is not None:
+            print('Nrows is : ', nrows)
+            self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, nrows=nrows)
+        else:
+            self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str)
         self.mem_data_info = {'file_name': file_name,
                               'module_name': module_name}
         
@@ -56,7 +58,17 @@ class AbstractDataProject(AbstractProject):
     
     def _get_sample(self, module_name, file_name, row_idxs=range(5), 
                    columns=None, drop_duplicates=True):
-        '''Returns a dict with the selected rows (including header)'''
+        '''
+        Returns a dict with the selected rows (including header)
+        
+        INPUT:
+            - module_name: module where data is stored
+            - file_name: name of file to load from
+            - row_idxs: list of indexes of rows to show (as in CSV file, 
+                        0 is header and is mandatory as first element of list)
+            - columns: list of columns to display. By default, all are shown
+            - drop_duplicates: wheather or not to show duplicate rows
+        '''
         file_path = self.path_to(module_name, file_name)
         
         if row_idxs is not None:
@@ -87,19 +99,45 @@ class AbstractDataProject(AbstractProject):
         
         return tab.to_dict('records')
         
-    def gen_sample(self, cur_module_name, params, sample_params):
+    def get_sample(self, sampler_module_name, params, sample_params):
         '''
         Returns an interesting sample for the data and config at hand.
         
         NB: This is here for uniformity with transform and infer
+        
+        INPUT:
+            - sampler_module_name: name of sampler function (None for first N
+                                                             rows)
+            - params: inference params to send to sampler to help with selection
+            - sample_params: parameters concerning the size of output etc.
+        OUTPUT:
+            - sample
+        
         '''
         self.check_mem_data()
         
-        sample_ilocs = MODULES['sample'][cur_module_name]['func'](self.mem_data, params, sample_params)
+        if sampler_module_name is not None:
+            sample_ilocs = MODULES['sample'][sampler_module_name]['func'](self.mem_data, 
+                                                              params, sample_params)
+        else:
+            sample_ilocs = sample_params.get('sample_ilocs', range(5))
+            
+        try:
+            sub_tab = self.mem_data.iloc[sample_ilocs, :]
+        except:
+            import pdb
+            pdb.set_trace()
         
-        sample = self._get_sample(module_name, file_name,
-                                 row_idxs=[0] + [x+1 for x in sample_ilocs])        
-        return sample    
+        if sample_params.get('drop_duplicates', True):
+            sub_tab.drop_duplicates(inplace=True)
+        
+        # Replace missing values
+        sub_tab.fillna('', inplace=True)
+        
+        #        sample = self._get_sample(module_name, file_name,
+        #                                 row_idxs=[0] + [x+1 for x in sample_ilocs])        
+        sample = sub_tab.to_dict('records')    
+        return sample
     
     
     def write_log_buffer(self, written):
@@ -150,3 +188,26 @@ class AbstractDataProject(AbstractProject):
         self.mem_data = None
         self.mem_data_info = None
         gc.collect()
+        
+        
+    def infer(self, module_name, params):
+        '''
+        Runs the module on pandas DataFrame data in memory and 
+        returns answer + writes to appropriate location
+        '''
+        self.check_mem_data()  
+        
+        # Initiate log
+        log = self.init_log(module_name, 'infer')
+        
+        infered_params = MODULES['infer'][module_name]['func'](self.mem_data, params)
+        
+        # Write result of inference
+        module_to_write_to = MODULES['infer'][module_name]['write_to']
+        self.upload_config_data(infered_params, module_to_write_to, 'infered_config.json')
+        
+        # Update log buffer
+        self.log_buffer.append(log)     
+        
+        return infered_params
+    
