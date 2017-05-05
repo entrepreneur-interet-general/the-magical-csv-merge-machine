@@ -121,8 +121,7 @@ from werkzeug.utils import secure_filename
 
 import pandas as pd
 
-from dedupe_linker import format_for_dedupe, load_deduper
-from labeller import Labeller, DummyLabeller
+
 
 from admin import Admin
 #from user_project import UserProject
@@ -245,14 +244,6 @@ def _parse_linking_request():
     
     return data_params, module_params    
 
-def _gen_dedupe_variable_definition(col_matches):
-    my_variable_definition = []
-    for match in col_matches:
-        if (len(match['source']) != 1) or (len(match['ref']) != 1):
-            raise Exception('Not dealing with multiple columns (1 source, 1 ref only)')
-        my_variable_definition.append({"crf": True, "missing_values": True, "field": 
-            {"ref": match['ref'][0], "source": match['source'][0]}, "type": "String"})
-    return my_variable_definition
 
 def _init_project(project_type, 
                  project_id=None, 
@@ -365,13 +356,12 @@ def web_link_select_files(project_id):
 #    
     admin = Admin()
     all_user_projects = admin.list_projects('normalize') # TODO: take care of this
-    all_internal_projects = admin.list_projects('normalize') # TODO:
+    all_internal_projects = admin.list_projects('normalize') 
 
 #    admin = admin.Admin()
 #    list_of_projects = user.list_projects()
 
-    # TODO: If you have link, also add files to current 
-    
+    # TODO: If you have link, also add files to current     
     return render_template('select_files_linker.html', 
                            project_id=project_id,
                            all_user_projects=all_user_projects, 
@@ -580,55 +570,22 @@ def load_labeller():
     def load_dis_labeller():
 
         print('Got here')
-        
+        # TODO: put variables in memory
         project_id = flask._app_ctx_stack.project_id
         proj = UserLinker(project_id=project_id)
         flask._app_ctx_stack.proj = proj
+
+        paths = proj._gen_paths_dedupe()  
+        flask._app_ctx_stack.paths = paths       
         
-        # TODO: Add extra config page
-        # TODO: move this to user_project
-    
-        col_matches = proj.read_col_matches()
-        
-        # Generate variable definition for dedupe
-    
-        my_variable_definition = _gen_dedupe_variable_definition(col_matches)
-        
-        paths = proj.gen_paths_dedupe()  
-        print('XXXXXXXXX', paths, 'XXXXXXXXXXXXXXXXXX')
-        flask._app_ctx_stack.paths = paths
-        
-        # Put to dedupe input format
-        print('loading ref')
-        ref = pd.read_csv(paths['ref'], encoding='utf-8', dtype=str)
-        data_ref = format_for_dedupe(ref, my_variable_definition, 'ref') 
-        del ref # To save memory
-        gc.collect()
-        print('loaded_ref')
-        
-        # Put to dedupe input format
-        print('loading source')
-        source = pd.read_csv(paths['source'], encoding='utf-8', dtype=str)
-        data_source = format_for_dedupe(source, my_variable_definition, 'source')
-        del source
-        gc.collect()
-        print('loaded_source')
-        
-        #==========================================================================
-        # Should really start here
-        #==========================================================================
-        print('yo')
-        deduper = load_deduper(data_ref, data_source, my_variable_definition)
-        print('lo')
-        flask._app_ctx_stack.labeller = Labeller(deduper, 
-                                                 training_path=paths['train'], 
-                                                 use_previous=True)
+        flask._app_ctx_stack.labeller = proj._gen_dedupe_labeller()
         flask._app_ctx_stack.labeller.new_label()   
         
         print('got there')
         emit('message', flask._app_ctx_stack.labeller.to_emit(message=''))
     load_dis_labeller()
     # socketio.start_background_task(load_dis_labeller)
+
 
 @app.route('/web/link/dedupe_linker/<project_id>/', methods=['GET'])
 @cross_origin()    
@@ -641,12 +598,10 @@ def web_dedupe(project_id):
     
     # TODO: deal with duplicate with load_labeller 
     proj = UserLinker(project_id)
-    paths = proj.gen_paths_dedupe()  
     
-    dummy_labeller = DummyLabeller(paths, use_previous=True)
+    dummy_labeller = proj._gen_dedupe_dummy_labeller()
     
     # next_url = url_for('web_dedupe', project_id='{{ project_id }}')
-    
     return render_template('dedupe_training.html', 
                            **dummy_labeller.to_emit(''))
     #return render_template('dedupe_training.html', **DUMMY_EMIT)
@@ -730,7 +685,7 @@ def web_download(project_type, project_id):
         paths = proj.gen_paths_dedupe()
         
         col_matches = proj.read_col_matches()
-        my_variable_definition = _gen_dedupe_variable_definition(col_matches)
+        my_variable_definition = proj._gen_dedupe_variable_definition(col_matches)
         
         module_params = {
                         'variable_definition': my_variable_definition,
@@ -925,9 +880,9 @@ def download(project_id):
     if data_params is None:
         data_params = {}
         
-    file_role = data_params.get('file_role', None)
-    module_name = data_params.get('module_name', None)
-    file_name = data_params.get('file_name', None)
+    file_role = data_params.get('file_role')
+    module_name = data_params.get('module_name')
+    file_name = data_params.get('file_name')
 
     if file_role is not None:
         file_role = secure_filename(file_role)
@@ -1099,10 +1054,10 @@ def linker(project_id):
     data_params, module_params = _parse_linking_request()
     
     # Set paths
-    (file_role, module_name, file_name) = _parse_data_params(proj, data_params.get('source', None), file_role='source')
+    (file_role, module_name, file_name) = _parse_data_params(proj, data_params.get('source'), file_role='source')
     source_path = proj.path_to(file_role='source', module_name=module_name, file_name=file_name)
 
-    (file_role, module_name, file_name) = _parse_data_params(proj, data_params.get('ref', None), file_role='ref')
+    (file_role, module_name, file_name) = _parse_data_params(proj, data_params.get('ref'), file_role='ref')
     ref_path = proj.path_to(file_role='ref', module_name=module_name, file_name=file_name)
     
     paths = {'ref': ref_path, 'source': source_path}

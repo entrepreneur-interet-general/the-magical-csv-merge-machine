@@ -5,9 +5,14 @@ Created on Mon Apr 24 15:46:00 2017
 
 @author: leo
 """
+import gc
 import time
 
+import pandas as pd
+
 from abstract_data_project import AbstractDataProject
+from dedupe_linker import format_for_dedupe, load_deduper
+from labeller import Labeller, DummyLabeller
 from normalizer import InternalNormalizer, UserNormalizer
 
 from CONFIG import LINK_DATA_PATH
@@ -107,8 +112,8 @@ class Linker(AbstractDataProject):
         assert module_type in ['infer', 'link']
         log = { 
                 # Data being modified
-               'file_name': self.mem_data_info.get('file_name', None), 
-               'origin': self.mem_data_info.get('module_name', None),
+               'file_name': self.mem_data_info.get('file_name'), 
+               'origin': self.mem_data_info.get('module_name'),
                
                 # Modification at hand                        
                'module_name': module_name, # Module to be executed
@@ -190,7 +195,7 @@ class Linker(AbstractDataProject):
     #  Module specific
     #==========================================================================
 
-    def gen_paths_dedupe(self):        
+    def _gen_paths_dedupe(self):        
         self.check_select()
         
         # Get path to training file for dedupe
@@ -216,6 +221,56 @@ class Linker(AbstractDataProject):
                 }
         
         return paths
+
+    @staticmethod
+    def _gen_dedupe_variable_definition(col_matches):
+        """Generate my_variable definition for use in dedupe_linker"""
+        my_variable_definition = []
+        for match in col_matches:
+            if (len(match['source']) != 1) or (len(match['ref']) != 1):
+                raise Exception('Not dealing with multiple columns (1 source, 1 ref only)')
+            my_variable_definition.append({"crf": True, "missing_values": True, "field": 
+                {"ref": match['ref'][0], "source": match['source'][0]}, "type": "String"})
+        return my_variable_definition
+
+    def _gen_dedupe_dummy_labeller(self):
+        paths = self._gen_paths_dedupe()
+        return DummyLabeller(paths, use_previous=True)
+
+    def _gen_dedupe_labeller(self):
+        # TODO: Add extra config page
+    
+        col_matches = self.read_col_matches()
+        paths = self._gen_paths_dedupe()
+        
+        
+        # Generate variable definition for dedupe
+        my_variable_definition = self._gen_dedupe_variable_definition(col_matches)
+        
+        # Put to dedupe input format
+        print('loading ref')
+        ref = pd.read_csv(paths['ref'], encoding='utf-8', dtype=str)
+        data_ref = format_for_dedupe(ref, my_variable_definition, 'ref') 
+        del ref # To save memory
+        gc.collect()
+        print('loaded_ref')
+        
+        # Put to dedupe input format
+        print('loading source')
+        source = pd.read_csv(paths['source'], encoding='utf-8', dtype=str)
+        data_source = format_for_dedupe(source, my_variable_definition, 'source')
+        del source
+        gc.collect()
+        print('loaded_source')
+        
+        #==========================================================================
+        # Should really start here
+        #==========================================================================
+        deduper = load_deduper(data_ref, data_source, my_variable_definition)
+        
+        return Labeller(deduper, 
+                        training_path=paths['train'], 
+                        use_previous=True)
 
 
 class UserLinker(Linker):

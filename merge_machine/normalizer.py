@@ -56,8 +56,8 @@ class Normalizer(AbstractDataProject):
         assert module_type in ['transform', 'infer']
         log = { 
                 # Data being modified
-               'file_name': self.mem_data_info.get('file_name', None), 
-               'origin': self.mem_data_info.get('module_name', None),
+               'file_name': self.mem_data_info.get('file_name'), 
+               'origin': self.mem_data_info.get('module_name'),
                
                 # Modification at hand                        
                'module_name': module_name, # Module to be executed
