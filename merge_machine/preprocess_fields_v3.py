@@ -149,7 +149,7 @@ STOP_WORDS = [
 
 def isStopWord(word): return word in STOP_WORDS
 
-def isValidPhrase(tokens): return len(tokens) > 0 and not all([len(t) < 2 and t.isdigit() for t in tokens])
+def isValidPhrase(tokens): return len(tokens) > 0 and not all(len(t) < 2 and t.isdigit() for t in tokens)
 
 def stripped(s): return s.strip(" -_.,'?!").strip('"').strip()
 
@@ -828,8 +828,8 @@ class Fields(object):
 			ts = sorted(f2t[fieldName], key = itemgetter(1), reverse = True)
 			logging.info('Sorted types for {} : {}'. format(fieldName, '; '.join(['{} ({}) '.format(t, s) for (t, s) in ts])))
 			for (t, s) in ts:
-				betterField = any([(p[1] > s and p[0] not in types) for p in t2f[t]])
-				betterChild = t in PARENT_CHILD_RELS and any([(p[1] * PARENT_CHILD_RATIO > s and p[0] in PARENT_CHILD_RELS[t]) for p in ts])
+				betterField = any((p[1] > s and p[0] not in types) for p in t2f[t])
+				betterChild = t in PARENT_CHILD_RELS and any((p[1] * PARENT_CHILD_RATIO > s and p[0] in PARENT_CHILD_RELS[t]) for p in ts)
 				if not (betterField or betterChild):
 					logging.info('Likeliest type for %s values: %s', fieldName, t)
 					types[fieldName] = t
@@ -971,7 +971,7 @@ class Cell(object):
 		logging.debug('PARTIAL MATCH of type <%s> for %s (p=%d): %s', t, self, ms, hit)
 		self.tis[t].append(TypeInference(t0, PARTIAL_MATCH, ms, hit, span[0] if span else -1, span[1] if span else -1))
 	def registerCoverMatch(self, t, ms, tis):
-		if any([ti.mm == FULL_MATCH for ti in tis]):
+		if any(ti.mm == FULL_MATCH for ti in tis):
 			self.registerFullMatch(t, False, ms)
 		elif len(tis) > 0:
 			stis = sorted(tis, cmp = hitsCmp)
@@ -1173,7 +1173,7 @@ PN_TITLE_VARIANTS = {
 	'Pr': ['pr', 'professeur', 'prof', 'professor']
 }
 def customParsePersonNames(l):
-	print( 'list ' + l)
+	print('list ' + l)
 	s = DELIMITER_TOKENS_RE.sub(PN_DELIMITERS[0], l)
 	s0 = s.translate({ PN_STRIP_CHARS: None }) # re.sub(PN_STRIP_CHARS, '', s)
 	for d in PN_DELIMITERS:
@@ -1285,7 +1285,7 @@ class CustomAddressMatcher(TypeMatcher):
 			return
 		parsed = parse_address(c.value)
 		if not parsed: return
-		ps = dict([(key, value) for (value, key) in parsed])
+		ps = {key: value for (value, key) in parsed}
 		v = c.value.lower()
 		comps = list()
 		for (f, lps) in LIBPOSTAL_MAPPING:
