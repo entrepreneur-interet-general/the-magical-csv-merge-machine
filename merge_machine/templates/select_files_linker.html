@@ -22,7 +22,7 @@
 				switch ($("input[type=radio][name='select_source']:checked").val()) {
 					case "previous":
 						normalize_project_id = $("input[type=radio][name='previous_source']:checked").val()
-						if (file_name===undefined){
+						if (normalize_project_id===undefined){
 							alert(no_source_msg)
 							return false
 						}
@@ -47,7 +47,7 @@
 				switch ($("input[type=radio][name='select_ref']:checked").val()) {
 					case "previous":
 						normalize_project_id = $("input[type=radio][name='previous_ref']:checked").val()
-						if (file_name===undefined){
+						if (normalize_project_id===undefined){
 							alert(no_ref_msg)
 							return false
 						}
@@ -55,7 +55,6 @@
 						alert("Using previous referential: ".concat(normalize_project_id))
 						break;
 					case "internal":
-						debugger
 						normalize_project_id = $("input[type=radio][name='internal_ref']:checked").val()
 						if (normalize_project_id===undefined){
 							alert(no_ref_msg)
