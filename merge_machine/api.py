@@ -38,7 +38,6 @@ TODO:
     
     - DOWNLOAD full config
     
-    - ADD Metadata to file upload (file name, date of validity)
     - User account
     - Auto train 
     
@@ -164,39 +163,6 @@ def _check_request():
     pass
 
 
-#def _parse_data_params(proj, data_params, file_role=None):
-#    '''
-#    Returns identifiers for data based on project history. Uses `get_last_written`
-#    to retrieve the last file written given the constraints in data_params
-#    INPUT:
-#        - proj: a user project
-#        - data_params: {'file_role': ..., 'module_name': ..., 'file_name': ...}
-#        - file_role: Constrain the file role (for use in linking...)
-#    '''
-#    if data_params is None:
-#        module_name = None
-#        file_name = None
-#    else:
-#        file_role = data_params.setdefault('file_role', file_role)
-#        # Skip processing for internal referentials
-#        if data_params.setdefault('internal', False):
-#            raise Exception('Internal data NOT YET IMPLEMENTED')
-#        
-#        # Load data from last run (or from user specified)
-#        file_name = data_params.setdefault('file_name', None)
-#        module_name = data_params.setdefault('module_name', None)
-#        
-#    if any(x is None for x in [file_role, module_name, file_name]):
-#        (file_role, module_name, file_name) = proj.get_last_written(\
-#                                        file_role, module_name, file_name)
-#    return (file_role, module_name, file_name)
-
-#def _load_from_params(proj, data_params=None):
-#    '''Load data to project using the parameters received in request.
-#    Implicit load is systematic. TODO: Define implicit load
-#    '''
-#    (file_role, module_name, file_name) = _parse_data_params(proj, data_params)
-#    proj.load_data(module_name, file_name)
 
 def _parse_normalize_request():
     '''
@@ -345,15 +311,9 @@ def web_link_select_files(project_id):
     # Generate Next URLs
     
     # Do what you fina do
-#    proj = _init_project(project_id=project_id)
-#    all_csvs = proj._list_files(extensions=['.csv'])
-#    
     admin = Admin()
     all_user_projects = admin.list_projects('normalize') # TODO: take care of this
     all_internal_projects = admin.list_projects('normalize') 
-
-#    admin = admin.Admin()
-#    list_of_projects = user.list_projects()
 
     # TODO: If you have link, also add files to current     
     return render_template('select_files_linker.html', 
@@ -423,8 +383,6 @@ def _web_mvs_normalize(project_id, file_name, next_url):
     NUM_ROWS_TO_DISPLAY = 30
     NUM_PER_MISSING_VAL_TO_DISPLAY = 4          
     # TODO: add click directly on cells with missing values
-    
-    # proj_norm = init_normalize_project(project_type=, project_id=project_id)
     
     # Act on last file 
     proj = UserNormalizer(project_id)
@@ -592,10 +550,8 @@ def web_dedupe(project_id):
     
     dummy_labeller = proj._gen_dedupe_dummy_labeller()
     
-    # next_url = url_for('web_dedupe', project_id='{{ project_id }}')
     return render_template('dedupe_training.html', 
                            **dummy_labeller.to_emit(''))
-    #return render_template('dedupe_training.html', **DUMMY_EMIT)
 
 
 @app.route('/web/select_return/<project_type>/<project_id>', methods=['GET'])
@@ -660,6 +616,7 @@ def web_select_return(project_type, project_id):
 def web_download_normalize(project_id, file_name):
     return '<a href="{0}">Home</a>'.format(url_for('web_index'))
 
+
 @app.route('/web/download/<project_type>/<project_id>/', methods=['GET'])
 def web_download(project_type, project_id):    
     
@@ -711,10 +668,6 @@ def web_download(project_type, project_id):
     suffixes = ('_x', '_y')
     cols_to_display_match = []
     
-    #    source_cols = list(set(col for match in col_matches for col in match['source']))
-    #    ref_cols = list(set([col for match in col_matches for col in match['ref']] \
-    #                                + proj.read_cols_to_return('ref')))
-
     # TODO: fix for multiple selects of same column
     cols_to_display_match = []
     for col in [_col for match in col_matches for _col in match['source'] + match['ref']]: #\
@@ -755,8 +708,6 @@ def web_download(project_type, project_id):
     rows_to_display = rows_to_display[:NUM_ROWS_TO_DISPLAY + 1]
     
     # Generate display sample
-    #    match_sample = proj.get_sample('dedupe_linker', res_file_name,
-    #                                row_idxs=rows_to_display, columns=cols_to_display_match)
     sample_params = {
                     'sample_ilocs': rows_to_display,
                     'drop_duplicates': True
@@ -1195,50 +1146,6 @@ def list_projects(project_type):
     list_of_projects = admin.list_project_ids(project_type)
     return jsonify(list_of_projects)
 
-
-#@app.route('/api/list_normalize_projects/', methods=['GET', 'POST'])
-#@cross_origin()
-#def list_normalize_projects(user_id=None):
-#    '''Lists all project id_s'''
-#    raise Exception('Wrong implementation')
-#    
-#    if user_id is not None:
-#        raise NotImplementedError
-#    
-#    admin = Admin()
-#    list_of_projects = admin.list_projects()
-#    return jsonify(error=False,
-#                   response=list_of_projects)
-
-#@app.route('/api/list_user_projects/<internal>/<user_id>/<project_type>/', methods=['GET', 'POST'])
-#@cross_origin()
-#def list_projects(internal, user_only=True, project_type=None):
-#    '''
-#    Lists all project id_s
-#    
-#    INPUT:
-#        - internal: True will return only internal (i.e: visible to all)
-#                     False will return all projects
-#        - user_only:   
-#    '''
-#    internal = bool(internal)
-#    
-#    raise NotImplementedError    
-#
-#    admin = Admin()
-#    list_of_projects = admin.list_projects()
-#    return jsonify(error=False,
-#                   response=list_of_projects)
-#
-#
-#@app.route('/api/list_referentials/', methods=['GET', 'POST'])
-#@cross_origin()
-#def list_referentials():
-#    '''Lists all internal referentials'''
-#    admin = Admin()
-#    list_of_projects = admin.list_referentials()
-#    return jsonify(error=False,
-#                   response=list_of_projects)
 
 
 if __name__ == '__main__':
