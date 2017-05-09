@@ -190,7 +190,6 @@ class Normalizer(AbstractDataProject):
             file_name = user_given_name
             self.mem_data_info['file_name'] = file_name
             display_name = user_given_name
-            
         
         # Check that file name is not already present 
         if file_name in self.metadata['files']:
@@ -234,8 +233,17 @@ class Normalizer(AbstractDataProject):
         # write data and log
         self.write_data()
         self.write_log_buffer(written=True)
-        self.clear_memory()
-    
+
+        # Write configuration (sep, encoding) to INIT dir
+        config_dict = {
+                        'sep': sep, 
+                        'encoding': encoding, 
+                        'nrows': self.mem_data.shape[0], 
+                        'ncols': self.mem_data.shape[1]
+                    }
+        proj.upload_config_data(config_dict, 'INIT', 'infered_config.json')
+
+        self.clear_memory()    
 
     def remove_all(self, file_name):
         '''

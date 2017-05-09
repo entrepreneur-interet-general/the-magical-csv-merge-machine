@@ -234,15 +234,15 @@ class Linker(AbstractDataProject):
         return my_variable_definition
 
     def _gen_dedupe_dummy_labeller(self):
+        '''Return DummyLabeller object'''
         paths = self._gen_paths_dedupe()
         return DummyLabeller(paths, use_previous=True)
 
     def _gen_dedupe_labeller(self):
+        '''Return a Labeller object'''
         # TODO: Add extra config page
-    
         col_matches = self.read_col_matches()
         paths = self._gen_paths_dedupe()
-        
         
         # Generate variable definition for dedupe
         my_variable_definition = self._gen_dedupe_variable_definition(col_matches)

@@ -85,6 +85,7 @@ DEV GUIDELINES:
     - Always include project_type as variable or hardcode
     - Put module name before project_type if it exists for all project_type
     - Put module name after project_type if it exists only for this project_type (only with linker)
+    - Put in API code modules that are of use only for the API
 
 NOTES:
     - Pay for persistant storage?
@@ -105,7 +106,6 @@ USES: /python-memcached
 
 """
 
-import gc
 import os
 
 # Change current path to path of api.py
@@ -119,17 +119,10 @@ from flask_socketio import disconnect, emit, SocketIO
 from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
 
-import pandas as pd
-
-
-
 from admin import Admin
-#from user_project import UserProject
-#from referential import Referential
 
 from normalizer import UserNormalizer
 from linker import UserLinker
-
 
 #==============================================================================
 # INITIATE APPLICATION
@@ -171,57 +164,61 @@ def _check_request():
     pass
 
 
-def _parse_data_params(proj, data_params, file_role=None):
-    '''
-    Returns identifiers for data based on project history. Uses `get_last_written`
-    to retrieve the last file written given the constraints in data_params
-    INPUT:
-        - proj: a user project
-        - data_params: {'file_role': ..., 'module_name': ..., 'file_name': ...}
-        - file_role: Constrain the file role (for use in linking...)
-    '''
-    if data_params is None:
-        module_name = None
-        file_name = None
-    else:
-        file_role = data_params.setdefault('file_role', file_role)
-        # Skip processing for internal referentials
-        if data_params.setdefault('internal', False):
-            raise Exception('Internal data NOT YET IMPLEMENTED')
-        
-        # Load data from last run (or from user specified)
-        file_name = data_params.setdefault('file_name', None)
-        module_name = data_params.setdefault('module_name', None)
-        
-    if any(x is None for x in [file_role, module_name, file_name]):
-        (file_role, module_name, file_name) = proj.get_last_written(\
-                                        file_role, module_name, file_name)
-    return (file_role, module_name, file_name)
+#def _parse_data_params(proj, data_params, file_role=None):
+#    '''
+#    Returns identifiers for data based on project history. Uses `get_last_written`
+#    to retrieve the last file written given the constraints in data_params
+#    INPUT:
+#        - proj: a user project
+#        - data_params: {'file_role': ..., 'module_name': ..., 'file_name': ...}
+#        - file_role: Constrain the file role (for use in linking...)
+#    '''
+#    if data_params is None:
+#        module_name = None
+#        file_name = None
+#    else:
+#        file_role = data_params.setdefault('file_role', file_role)
+#        # Skip processing for internal referentials
+#        if data_params.setdefault('internal', False):
+#            raise Exception('Internal data NOT YET IMPLEMENTED')
+#        
+#        # Load data from last run (or from user specified)
+#        file_name = data_params.setdefault('file_name', None)
+#        module_name = data_params.setdefault('module_name', None)
+#        
+#    if any(x is None for x in [file_role, module_name, file_name]):
+#        (file_role, module_name, file_name) = proj.get_last_written(\
+#                                        file_role, module_name, file_name)
+#    return (file_role, module_name, file_name)
 
-def _load_from_params(proj, data_params=None):
-    '''Load data to project using the parameters received in request.
-    Implicit load is systematic. TODO: Define implicit load
-    '''
-    (file_role, module_name, file_name) = _parse_data_params(proj, data_params)
-    proj.load_data(module_name, file_name)
+#def _load_from_params(proj, data_params=None):
+#    '''Load data to project using the parameters received in request.
+#    Implicit load is systematic. TODO: Define implicit load
+#    '''
+#    (file_role, module_name, file_name) = _parse_data_params(proj, data_params)
+#    proj.load_data(module_name, file_name)
 
 def _parse_normalize_request():
+    '''
+    Separates data information from parameters and assures that values in data
+    parameters are safe
+    '''
     # Parse json request
     data_params = None
     module_params = None
     if request.json:
-        params = request.json
-        assert isinstance(params, dict)
+        req = request.json
+        assert isinstance(req, dict)
     
-        if 'data' in params:
-            data_params = params['data']
+        if 'data' in req:
+            data_params = req['data']
             
             # Make paths secure
             for key, value in data_params.items():
                 data_params[key] = secure_filename(value)
             
-        if 'params' in params:
-            module_params = params['params']
+        if 'params' in req:
+            module_params = req['params']
     
     return data_params, module_params
     
@@ -321,9 +318,6 @@ def web_normalize_select_file():
     admin = Admin()
     all_user_projects = admin.list_projects('normalize') 
     return render_template('select_file_normalize.html', 
-                           #previous_sources=all_csvs.get('source', []),
-                           #previous_references=all_csvs.get('ref', []),
-                           #internal_references=all_internal_refs,
                            all_user_projects=all_user_projects,
                            new_normalize_project_api_url=new_normalize_project_api_url,
                            delete_normalize_project_api_url_partial = delete_normalize_project_api_url_partial,
@@ -568,8 +562,6 @@ def load_labeller():
     '''Loads labeller. Necessary to have a separate call to preload page'''    
     # assert flask.session.project_id == project_id   
     def load_dis_labeller():
-
-        print('Got here')
         # TODO: put variables in memory
         project_id = flask._app_ctx_stack.project_id
         proj = UserLinker(project_id=project_id)
@@ -579,10 +571,10 @@ def load_labeller():
         flask._app_ctx_stack.paths = paths       
         
         flask._app_ctx_stack.labeller = proj._gen_dedupe_labeller()
-        flask._app_ctx_stack.labeller.new_label()   
+        flask._app_ctx_stack.labeller.new_label()
         
-        print('got there')
         emit('message', flask._app_ctx_stack.labeller.to_emit(message=''))
+    
     load_dis_labeller()
     # socketio.start_background_task(load_dis_labeller)
 
@@ -596,7 +588,6 @@ def web_dedupe(project_id):
     flask.session.project_id = project_id
     flask._app_ctx_stack.project_id = project_id
     
-    # TODO: deal with duplicate with load_labeller 
     proj = UserLinker(project_id)
     
     dummy_labeller = proj._gen_dedupe_dummy_labeller()
@@ -819,6 +810,13 @@ def web_download(project_type, project_id):
 
 @app.route('/api/new/<project_type>', methods=['POST'])
 def new_project(project_type):
+    '''
+    Create a new project:
+        
+    GET:
+        - project_type: "link" or "normalize"
+    
+    '''
     _check_project_type(project_type)
     
     # TODO: include internal in form somewhere
@@ -840,6 +838,13 @@ def new_project(project_type):
 
 @app.route('/api/delete/<project_type>/<project_id>', methods=['GET'])
 def delete_project(project_type, project_id):
+    """
+    Delete an existing project (including all configuration, data and metadata)
+    
+    GET:
+        - project_type: "link" or "normalize"
+        - project_id
+    """
     _check_project_type(project_type)
     # TODO: replace by _init_project
     if project_type == 'normalize':
@@ -854,22 +859,61 @@ def delete_project(project_type, project_id):
 @app.route('/api/metadata/<project_type>/<project_id>', methods=['GET'])
 @cross_origin()
 def metadata(project_type, project_id):
-    '''Fetch metadata for project ID'''
+    '''
+    Fetch metadata for project ID
+    
+    GET:
+        - project_type: "link" or "normalize"
+        - project_id
+    '''
     proj = _init_project(project_type, project_id=project_id)
     resp = jsonify(error=False,
                    metadata=proj.metadata, 
                    project_id=proj.project_id)
     return resp
 
+@app.route('/api/last_written/<project_type>/<project_id>', methods=['POST'])
+def get_last_written(project_type, project_id):
+    """
+    Get coordinates (module_name, file_name) of the last file written for a 
+    given project.
+    
+    wrapper around: AbstractDataProject.get_last_written
+    
+    GET:
+        - project_type: "link" or "normalize"
+        - project_id
+    POST:
+        - module_name: if not null, get last file written in chosen module
+        - file_name: if not null, get last file written with this given_name
+        - before_module: (contains module_name) if not null, get coordinates 
+                            for file written before the chosen module (with an 
+                            order specified by MODULE_ORDER)
+    """
+    proj = _init_project(project_type, project_id)
+    (module_name, file_name) = proj.get_last_written(request.json.get('module_name'), 
+                          request.json.get('file_name'), 
+                          request.json.get('before_module'))
+    return jsonify(project_type=project_type, 
+                   project_id=project_id, 
+                   module_name=module_name, 
+                   file_name=file_name)
+    
+    
 
 @app.route('/api/download/<project_type>/<project_id>', methods=['GET', 'POST'])
 @cross_origin()
-def download(project_id):
+def download(project_type, project_id):
     '''
-    Download file from project.
+    Download specific file from project.
     
-    If just project_id: return last modified file
-    If variables are specified, return the last file modified with specific variables
+    GET:
+        - project_type: "link" or "normalize"
+        - project_type
+        
+    POST:
+        - module_name: Module from which to fetch the file
+        - file_name
     
     '''
     project_id = secure_filename(project_id)
@@ -907,13 +951,18 @@ def select_file(project_id):
     '''
     Choose a file to use as source or referential for merging
     send {file_role: "source", file_name: "XXX", internal: False}
+    
+    GET:
+        - project_id: ID for the "link" project
+        
+    POST:
+        - file_role: "ref" or "source". Role of the normalized file for linking
+        - project_id: ID of the "normalize" project to use for linking
     '''
     proj = UserLinker(project_id)
     params = request.json
-    print('PARARMS')
-    print(params)
     proj.add_selected_project(file_role=params['file_role'], 
-                           internal=params.get('internal', False), 
+                           internal=params.get('internal', False), # TODO: remove internal
                            project_id=params['project_id'])
     return jsonify(error=False)
 
@@ -921,14 +970,18 @@ def select_file(project_id):
 @app.route('/api/exists/<project_type>/<project_id>', methods=['GET'])
 @cross_origin()
 def project_exists(project_type, project_id):
-    '''Check if project exists'''
+    '''
+    Check if project exists
+    
+    GET:
+        - project_type: "link" or "normalize"
+        - project_id
+    '''
     try:
         _init_project(project_type=project_type, project_id=project_id)
-        return jsonify(error=False, exists=True)
+        return jsonify(exists=True)
     except Exception as exc: 
-        import pdb
-        pdb.set_trace()
-        return jsonify(error=False, exists=False)
+        return jsonify(exists=False)
     
 
 @app.route('/api/normalize/upload/<project_id>', methods=['POST'])
@@ -936,7 +989,14 @@ def project_exists(project_type, project_id):
 def upload(project_id):
     '''
     Uploads files to a normalization project. (NB: cannot upload directly to 
-    a link type project, you have to create two normalization projects)
+    a link type project)
+    
+    GET:
+        - project_id: ID of the normalization project
+        
+    POST:
+        - file: (csv file) A csv to upload to the chosen normalization project
+                NB: the "filename" property will be used to name the file
     '''
     # Load project
     proj = UserNormalizer(project_id=project_id) 
@@ -963,10 +1023,27 @@ def upload_config(project_type, project_id):
     proj.upload_config_data(params, paths['module_name'], paths['file_name'])
     return jsonify(error=False)
 
+# TODO: get_config if module_name is specified specific module, otherwise, entire project
+#@app.route('/api/<project_type>/<project_id>/<module_name>/<file_name>/')
+#def get_config(project_type, project_id, module_name=None, file_name=None):
+#    '''See docs in abstract_project'''
+#    proj = _init_project(project_type, project_id)
+#    return proj.get_config(module_name, file_name)
 
 @app.route('/api/link/add_column_matches/<project_id>/', methods=['POST'])
 @cross_origin()
 def add_column_matches(project_id):
+    """
+    Add pairs of columns to compare for linking.
+    
+    wrapper around UserLinker.add_col_matches
+    
+    GET: 
+        - project_id: ID for the "link" project
+        
+    POST:
+        - [list object]: column matches (see doc in original function)
+    """
     column_matches = request.json
     proj = UserLinker(project_id=project_id)
     proj.add_col_matches(column_matches)
@@ -976,6 +1053,19 @@ def add_column_matches(project_id):
 @app.route('/api/link/add_column_certain_matches/<project_id>/', methods=['POST'])
 @cross_origin()
 def add_column_certain_matches(project_id):
+    '''
+    Specify certain column matches (exact match on a subset of columns equivalent 
+    to entity identity). This is used to test performances.
+    
+    wrapper around UserLinker.add_col_certain_matches
+    
+    GET:
+        - project_id: ID for "link" project
+        
+    POST:
+        - [list object]: (see doc in original function)
+    
+    '''
     column_matches = request.json
     proj = UserLinker(project_id=project_id)
     proj.add_col_certain_matches(column_matches)
@@ -984,6 +1074,17 @@ def add_column_certain_matches(project_id):
 @app.route('/api/link/add_columns_to_return/<project_id>/<file_role>/', methods=['POST'])
 @cross_origin()
 def add_columns_to_return(project_id, file_role):
+    '''
+    Specify columns to be included in download version of file. For link project 
+    
+    # TODO: shouldn't this be for normalize also ?
+    
+    wrapper around UserLinker.add_cols_to_return
+    
+    GET:
+        project_id: ID for "link" project
+        file_role: "ref" or "source"
+    '''
     columns_to_return = request.json
     proj = UserLinker(project_id=project_id)
     proj.add_cols_to_return(file_role, columns_to_return)    
@@ -993,22 +1094,29 @@ def add_columns_to_return(project_id, file_role):
 # MODULES
 #==============================================================================
 
-@app.route('/api/list_modules/', methods=['GET', 'POST'])
-@cross_origin()
-def list_modules():
-    '''List available modules'''
-    return jsonify(error=True,
-                   message='This should list the available modules') #TODO: <--
-
-
-@app.route('/api/normalize/infer_mvs/<project_id>/<file_name>/', methods=['GET', 'POST'])
+@app.route('/api/normalize/infer_mvs/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
 def infer_mvs(project_id):
-    '''Runs the infer_mvs module'''
-    proj = _init_project(project_id=project_id)
+    '''
+    Runs the infer_mvs module
+    
+    wrapper around UserNormalizer.infer ?
+    
+    GET:
+        project_id: ID for "normalize" project
+
+    POST:
+        - data: {
+                "module_name": module to fetch from
+                "file_name": file to fetch
+                }
+        - params: parameters for the inference
+    
+    '''
+    proj = UserNormalizer(project_id=project_id)
     data_params, module_params = _parse_normalize_request()    
     
-    _load_from_params(proj, data_params)
+    proj.load_data(data_params['module_name'], data_params['file_name'])    
     
     result = proj.infer('infer_mvs', module_params)
         
@@ -1026,7 +1134,8 @@ def replace_mvs(project_id):
     proj = UserNormalizer(project_id=project_id)
     data_params, module_params = _parse_normalize_request()
     
-    _load_from_params(proj, data_params)
+    proj.load_data(data_params['module_name'], data_params['file_name'])
+    
     proj.transform('replace_mvs', module_params)
     # Write transformations and log
     proj.write_data()    
@@ -1050,15 +1159,15 @@ def linker(project_id):
     }
     
     '''
-    proj = _init_project(project_id=project_id)
+    proj = UserLinker(project_id=project_id) # Ref and source are loaded by default
     data_params, module_params = _parse_linking_request()
     
     # Set paths
-    (file_role, module_name, file_name) = _parse_data_params(proj, data_params.get('source'), file_role='source')
-    source_path = proj.path_to(file_role='source', module_name=module_name, file_name=file_name)
+    (module_name, file_name) = (data_params['source']['module_name'], data_params['source']['file_name'])
+    source_path = proj.source.path_to(module_name=module_name, file_name=file_name)
 
-    (file_role, module_name, file_name) = _parse_data_params(proj, data_params.get('ref'), file_role='ref')
-    ref_path = proj.path_to(file_role='ref', module_name=module_name, file_name=file_name)
+    (module_name, file_name) = (data_params['ref']['module_name'], data_params['ref']['file_name'])
+    ref_path = proj.ref.path_to(file_role='ref', module_name=module_name, file_name=file_name)
     
     paths = {'ref': ref_path, 'source': source_path}
     
@@ -1079,12 +1188,13 @@ def linker(project_id):
 
 @app.route('/api/projects/<project_type>', methods=['GET'])
 def list_projects(project_type):
+    '''
+    TODO: TEMPORARY !! DELETE FOR PROD !!!
+    '''
     admin = Admin()
     list_of_projects = admin.list_project_ids(project_type)
     return jsonify(list_of_projects)
 
-
-def bthisISprobablyNotpep_8(var): print(var); print('TEsting hound'); return 4  +3
 
 #@app.route('/api/list_normalize_projects/', methods=['GET', 'POST'])
 #@cross_origin()

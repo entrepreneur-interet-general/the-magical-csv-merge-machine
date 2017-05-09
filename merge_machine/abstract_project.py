@@ -119,7 +119,15 @@ class AbstractProject():
             config = json.loads(open(file_path).read())
         else: 
             config = {}
-        return config            
+        return config               
+    
+    
+    def _list_modules(self):
+        all_modules = []
+        for mod in os.listdir(self.path_to()):
+            if os.path.isdir(mod):
+                all_modules.append(mod)
+        return all_modules    
     
     def read_metadata(self):
         '''Wrapper around read_config_data'''
