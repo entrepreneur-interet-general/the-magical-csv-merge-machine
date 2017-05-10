@@ -419,8 +419,12 @@ class TypeMatcher(object):
 		return '{}<{}>'.format(self.__class__.__name__, self.t)
 	def registerFullMatch(self, c, t, ms, hit = None): 
 		c.registerFullMatch(t, self.t == t, ms, hit)
+		self.updateDiversity(hit)
 	def registerPartialMatch(self, c, t, ms, hit, span): 
 		c.registerPartialMatch(t, self.t == t, ms, hit, span)
+		self.updateDiversity(hit)
+	def updateDiversity(self, hit):
+		self.diversion |= set(hit if isinstance(hit, list) else [hit])
 	def checkDiversity(self, cells):
 		div = len(self.diversion)
 		if div <= 0: return
@@ -507,24 +511,24 @@ class TokenizedMatcher(TypeMatcher):
 		super(TokenizedMatcher, self).__init__(t)
 		currentMax = maxTokens
 		self.scorer = scorer
-		self.phrases = validatedLexicon(lexicon)
+		self.phrasesMap = validatedLexiconMap(lexicon)
 		self.tokenIdx = dict()
 		self.distinctCount = distinctCount
-		for phrase in self.phrases:
-			tokens = normalizeAndValidateTokens(phrase)
+		for np in self.phrasesMap.keys():
+			tokens = np.split(' ')
 			if len(tokens) < 1: continue
 			if maxTokens < 1 and len(tokens) > currentMax:
 				currentMax = len(tokens)
 				if currentMax > DTC:
 					logging.warning('Full tokenization of lexicon: encountered token of length {}, above DTC!'.format(currentMax))
 			matchedRefPhrase = ' '.join(tokens[:currentMax])
-			if matchedRefPhrase not in self.tokenIdx or len(self.tokenIdx[matchedRefPhrase]) < len(phrase):
-				self.tokenIdx[matchedRefPhrase] = phrase
+			if matchedRefPhrase not in self.tokenIdx or len(self.tokenIdx[matchedRefPhrase]) < len(np):
+				self.tokenIdx[matchedRefPhrase] = np
 		self.maxTokens = currentMax
 		logging.info('SET UP %d-token matcher (%s-defined length) for <%s> with lexicon of size %d, total variants %d', 
-			self.maxTokens, 'user' if maxTokens > 0 else 'data', self.t, len(self.phrases), len(self.tokenIdx))
+			self.maxTokens, 'user' if maxTokens > 0 else 'data', self.t, len(self.phrasesMap), len(self.tokenIdx))
 	def diversity(self): 
-		return self.distinctCount if self.distinctCount > 0 else math.log(len(self.phrases), 1.5)
+		return self.distinctCount if self.distinctCount > 0 else math.log(len(self.phrasesMap), 1.5)
 	@timed
 	def match(self, c):
 		tokens = normalizeAndValidateTokens(c.value)
@@ -534,7 +538,12 @@ class TokenizedMatcher(TypeMatcher):
 					matchSrcTokens = tokens[k1:k1 + k2]
 					matchRefPhrase = ' '.join(matchSrcTokens)
 					if matchRefPhrase in self.tokenIdx: 
-						score = self.scorer(matchSrcTokens, tokens, matchRefPhrase, self.tokenIdx[matchRefPhrase])
+						nm = self.tokenIdx[matchRefPhrase]
+						score = self.scorer(matchSrcTokens, tokens, matchRefPhrase, nm)
+						if nm not in self.phrasesMap:
+							raise RuntimeError('Normalized phrase {} not found in phrases map'.format(nm))
+							continue
+						hit = self.phrasesMap[nm]
 						v = justCase(c.value)
 						# The next line joins on '' and not on ' ' because non-pure space chars might have been transformed
 						# during tokenization (hyphens, punctuation, etc.)
@@ -543,7 +552,7 @@ class TokenizedMatcher(TypeMatcher):
 						if span is None:
 							logging.warning('%s could not find tokens "%s" in original "%s"', self, matchRefPhrase, v)
 							span = (0, len(c.value))
-						self.registerPartialMatch(c, self.t, score, self.tokenIdx[matchRefPhrase], span)
+						self.registerPartialMatch(c, self.t, score, hit, span)
 
 # Label-based matcher-normalizer class and its underlying FSS structure
 
@@ -694,7 +703,7 @@ class CompositeRegexMatcher(TypeMatcher):
 # Object model representing our inference process
 
 # Drop inferred types falling below this column-wide threshold:
-COLUMN_SCORE_THRESHOLD = 40 
+COLUMN_SCORE_THRESHOLD = 10 
 # For both supertype and composite-type relationships, switch from parent to child type when: 
 #   parent's score < this ratio * child's score
 PARENT_CHILD_RATIO = 2
@@ -820,6 +829,7 @@ class Fields(object):
 			logging.info('Likeliest type for %s header: %s', fieldName, lht)
 			if lht is not None: types[fieldName] = lht
 			for (t, s) in f.scoredTypes().items():
+				print('ICI', t, s)
 				if s < COLUMN_SCORE_THRESHOLD: continue
 				f2t[fieldName].append((t, s))
 				t2f[t].append((fieldName, s))
@@ -1173,7 +1183,6 @@ PN_TITLE_VARIANTS = {
 	'Pr': ['pr', 'professeur', 'prof', 'professor']
 }
 def customParsePersonNames(l):
-	print('list ' + l)
 	s = DELIMITER_TOKENS_RE.sub(PN_DELIMITERS[0], l)
 	s0 = s.translate({ PN_STRIP_CHARS: None }) # re.sub(PN_STRIP_CHARS, '', s)
 	for d in PN_DELIMITERS:
@@ -1181,11 +1190,9 @@ def customParsePersonNames(l):
 		if len(s2) == 1: return customParsePersonNames(s1) + customParsePersonNames(s3)
 	return personNameSingleton(s0)
 def personNameSingleton(s): 
-	print('singleton ' + s)
 	d = extractPersonName(s)
 	return [] if d is None else [d]
 def extractPersonName(s):
-	print('name  ' + s)
 	tokens = s.split()
 	d = defaultdict(set)
 	for token in tokens:
@@ -1498,6 +1505,10 @@ def generateValueMatchers(lvl = 0):
 		Parameter:
 		lvl 0 for lightweight matching, 2 for the heaviest variants, 1 as an intermediate level
 		'''
+
+	yield LabelMatcher(F_APB_MENTION, fileToSet('mention_licence_sise'), MATCH_MODE_CLOSE)
+	yield TokenizedMatcher(F_APB_MENTION, fileToSet('mention_licence_apb2017.col'), maxTokens = 5)
+	return
 
 	# Identifiers (typically but not necessarily unique)
 	# yield TemplateMatcher('Identifiant', 90) # TODO distinguish unique vs. non-unique
