@@ -20,6 +20,7 @@ Given a dedupe formated training set, perform linking between source and referen
 import copy
 import dedupe
 import gc
+import json
 import os
 import re
 from string import punctuation
@@ -162,8 +163,10 @@ def format_for_dedupe(tab, my_variable_definition, file_role):
     return data
 
 
-def load_deduper(data_ref, data_source, my_variable_definition):
-    '''Load the dedupe object'''
+
+def old_load_deduper(data_ref, data_source, my_variable_definition):
+    '''Load the dedupe object; TODO: duplicate with code in main dedupe'''
+    
     SAMPLE_SIZE = 5000
     
     # Get columns for match and change to standard dedupe variable definition
@@ -185,14 +188,31 @@ def load_deduper(data_ref, data_source, my_variable_definition):
     return gazetteer
 
 
+
 def main_dedupe(data_ref, 
                 data_source, 
                 my_variable_definition, 
                 train_path, 
                 learned_settings_path):
     '''Computes matches between records'''
-    # TODO: remove load from main? Pass as variable
-    gazetteer = load_deduper(data_ref, data_source, my_variable_definition)
+    
+    
+    SAMPLE_SIZE = 5000
+    
+    # Get columns for match and change to standard dedupe variable definition
+    cols_for_match = get_cols_for_match(my_variable_definition)
+    variable_definition = copy.deepcopy(my_variable_definition)
+    for var in variable_definition:
+        var['field'] = var['field']['ref']    
+    
+    (nonexact_1,
+     nonexact_2,
+     exact_pairs) = exact_matches(data_ref, data_source, cols_for_match)
+
+    num_cores = 2
+    gazetteer = dedupe.Gazetteer(variable_definition=variable_definition, 
+                                 num_cores=num_cores)    
+
     
     # Read training
     use_training_cache = True
@@ -221,11 +241,20 @@ def main_dedupe(data_ref,
      
     # Train on labelled data
     # TODO: Load train data
-    gazetteer.train(index_predicates=True) # TODO: look into memory usage of index_predicates
+    all_predicates = []
+    for _ in range(1):
+        gazetteer.sample(data_1=nonexact_1, data_2=nonexact_2, sample_size=SAMPLE_SIZE)
+        gazetteer.train(recall=0.95, index_predicates=True) # TODO: look into memory usage of index_predicates
+        all_predicates.extend(list(gazetteer.predicates))
+        
+    import dedupe.blocking as blocking
+    gazetteer.blocker = blocking.Blocker(all_predicates)
+    gazetteer.predicates = tuple(all_predicates)
+        #all_predicates.extend(gazetteer.predicates)
+
     # Write settings    
     with open(learned_settings_path, 'wb') as f: # TODO: replaced 'wb' by 'w'
         gazetteer.writeSettings(f, index=False)    
-    
     
     # Index reference
     gazetteer.index(data=data_ref)
@@ -233,10 +262,13 @@ def main_dedupe(data_ref,
     # Compute threshold
     recall_weight = 2.5
     threshold = gazetteer.threshold(data_source, recall_weight=recall_weight)
+    print('Threshold', threshold)
 
     matched_records = gazetteer.match(data_source, threshold=threshold)
     return matched_records, threshold
     
+
+# TODO: use trainingDataLink for automatic labelling when a common key is available
  
 def dedupe_linker(paths, params):
     '''
@@ -256,6 +288,7 @@ def dedupe_linker(paths, params):
     train_path = paths['train']   
     learned_settings_path = paths['learned_settings']
     my_variable_definition = params['variable_definition']
+    add_labels = params.get('add_labels', True)
     
     # Put to dedupe input format
     ref = pd.read_csv(ref_path, encoding='utf-8', dtype=str)
@@ -280,27 +313,40 @@ def dedupe_linker(paths, params):
     
     # Generate out file
     source = merge_results(ref, source, matched_records)
+    
+    # Add  results of manual labelling
+    #    if add_labels:
+    #        labels = json.load(open(train_path))
+    #        
+    #        import pdb
+    #        pdb.set_trace()
+    
     return source, threshold
 
 
 if __name__ == '__main__':
     
     import json
-    with open('local_test_data/rnsr/my_dedupe_rnsr_config.json') as f:
-       my_config = json.load(f)    
-    paths = my_config['paths']
-    params = my_config['params']
     
-    source, threshold = dedupe_linker(paths, params)
-
-    source.to_csv('local_test_data/rnsr/res.csv', encoding='utf-8', index=False)
-
-    # Explore results
-    match_rate = source.numero_uai.notnull().mean()
-    print(threshold, '-->', match_rate)
-
-    source.sort_values(by='__CONFIDENCE', inplace=True)
-    cols = ['commune', 'localite_acheminement_uai', 'lycees_sources', 
-            'patronyme_uai', '__CONFIDENCE']
+    match_rates = []
+    for i in range(4):
+        with open('local_test_data/lycees/config.json') as f:
+           my_config = json.load(f)    
+        paths = my_config['paths']
+        params = my_config['params']
+        
+        source, threshold = dedupe_linker(paths, params)
+    
+        source.to_csv('local_test_data/rnsr/res.csv', encoding='utf-8', index=False)
+    
+        # Explore results
+        match_rate = source.__CONFIDENCE.notnull().mean()
+        match_num = source.__CONFIDENCE.notnull().sum()
+        print('\n', i, '', threshold, '-->', match_rate, ' / ', match_num)
+        match_rates.append(match_rate)
+    
+        source.sort_values(by='__CONFIDENCE', inplace=True)
+        cols = ['commune', 'localite_acheminement_uai', 'lycees_sources', 
+                'patronyme_uai', '__CONFIDENCE']
         
 #    cProfile.run('main()')

@@ -11,7 +11,7 @@ import time
 import pandas as pd
 
 from abstract_data_project import AbstractDataProject
-from dedupe_linker import format_for_dedupe, load_deduper
+from dedupe_linker import format_for_dedupe, old_load_deduper
 from labeller import Labeller, DummyLabeller
 from normalizer import InternalNormalizer, UserNormalizer
 
@@ -266,7 +266,7 @@ class Linker(AbstractDataProject):
         #==========================================================================
         # Should really start here
         #==========================================================================
-        deduper = load_deduper(data_ref, data_source, my_variable_definition)
+        deduper = old_load_deduper(data_ref, data_source, my_variable_definition)
         
         return Labeller(deduper, 
                         training_path=paths['train'], 

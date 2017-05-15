@@ -71,7 +71,6 @@ def exact_linker(paths, params):
 
     print('Loading done')
     
-    
     # source: Create new columns to match on if necessary (columns concatenation)
     cols_to_match_on = {'source': [], 'ref': []}
     for pair in params['columns']:

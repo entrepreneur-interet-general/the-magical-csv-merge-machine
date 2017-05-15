@@ -123,6 +123,7 @@ from admin import Admin
 from normalizer import UserNormalizer
 from linker import UserLinker
 
+
 #==============================================================================
 # INITIATE APPLICATION
 #==============================================================================
@@ -164,7 +165,7 @@ def _check_request():
 
 
 
-def _parse_normalize_request():
+def _parse_request():
     '''
     Separates data information from parameters and assures that values in data
     parameters are safe
@@ -298,7 +299,9 @@ def web_normalize_select_file():
 @app.route('/web/link/select_files/<project_id>', methods=['GET']) # (Actually select_projects)
 @cross_origin()
 def web_link_select_files(project_id):
-    '''View to create or join 1 or 2 normalization projects (1 for norm, 2 for link)'''
+    '''View to create or join 1 or 2 normalization projects (1 for norm, 2 for link)
+    
+    # TODO: Cannot select twice the same file'''
     MAX_FILE_SIZE = 1048576
     
     next_url = url_for('web_mvs_link', project_id=project_id, file_role='source')
@@ -618,7 +621,14 @@ def web_download_normalize(project_id, file_name):
 
 
 @app.route('/web/download/<project_type>/<project_id>/', methods=['GET'])
-def web_download(project_type, project_id):    
+def web_download(project_type, project_id):  
+    
+    
+    # Seed test
+    import random
+    random.seed(1)
+    import numpy as np
+    np.random.seed(1)
     
     if project_type == 'normalize':
         raise NotImplementedError
@@ -630,7 +640,7 @@ def web_download(project_type, project_id):
     file_path = proj.path_to('dedupe_linker', res_file_name)    
     
     if False or (not os.path.isfile(file_path)):        
-        paths = proj.gen_paths_dedupe()
+        paths = proj._gen_paths_dedupe()
         
         col_matches = proj.read_col_matches()
         my_variable_definition = proj._gen_dedupe_variable_definition(col_matches)
@@ -710,7 +720,8 @@ def web_download(project_type, project_id):
     # Generate display sample
     sample_params = {
                     'sample_ilocs': rows_to_display,
-                    'drop_duplicates': True
+                    'drop_duplicates': True,
+                    'cols_to_display': cols_to_display_match
                      }
     match_sample = proj.get_sample(None, None, sample_params)
     
@@ -766,6 +777,11 @@ def new_project(project_type):
         
     GET:
         - project_type: "link" or "normalize"
+        
+    POST:
+        - description: project description
+        - display_name: name to show to user
+        - internal: (synonymous public)
     
     '''
     _check_project_type(project_type)
@@ -870,7 +886,7 @@ def download(project_type, project_id):
     project_id = secure_filename(project_id)
 
     proj = _init_project(project_id=project_id)
-    data_params, _ = _parse_normalize_request()
+    data_params, _ = _parse_request()
     
     if data_params is None:
         data_params = {}
@@ -967,11 +983,31 @@ def upload(project_id):
 @app.route('/api/upload_config/<project_type>/<project_id>/', methods=['POST'])
 @cross_origin()
 def upload_config(project_type, project_id):
+    """
+    Writes the content of params
+    
+    GET:
+        - project_type: "link" or "normalize"
+        - project_id
+        
+    POST:
+        - data: {
+                "module_name": module to fetch from
+                "file_name": file to fetch
+                }
+        - params: parameters to write
+    
+    """
     # TODO: do not expose ?
     proj = _init_project(project_type=project_type, project_id=project_id)    
-    paths = request.json['data']
-    params = request.json['params']
-    proj.upload_config_data(params, paths['module_name'], paths['file_name'])
+    data_params, params = _parse_request() # TODO: add size limit on params
+    
+    file_name = data_params['file_name']
+    
+    # Check that the file_name is allowed:
+    assert file_name in ['training.json', 'config.json']
+    
+    proj.upload_config_data(params, data_params['module_name'], file_name)
     return jsonify(error=False)
 
 # TODO: get_config if module_name is specified specific module, otherwise, entire project
@@ -1065,7 +1101,7 @@ def infer_mvs(project_id):
     
     '''
     proj = UserNormalizer(project_id=project_id)
-    data_params, module_params = _parse_normalize_request()    
+    data_params, module_params = _parse_request()    
     
     proj.load_data(data_params['module_name'], data_params['file_name'])    
     
@@ -1083,7 +1119,7 @@ def infer_mvs(project_id):
 def replace_mvs(project_id):
     '''Runs the mvs replacement module'''
     proj = UserNormalizer(project_id=project_id)
-    data_params, module_params = _parse_normalize_request()
+    data_params, module_params = _parse_request()
     
     proj.load_data(data_params['module_name'], data_params['file_name'])
     
@@ -1149,4 +1185,7 @@ def list_projects(project_type):
 
 
 if __name__ == '__main__':
+    
+
+
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)

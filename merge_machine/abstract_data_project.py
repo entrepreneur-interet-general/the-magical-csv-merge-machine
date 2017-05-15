@@ -122,15 +122,14 @@ class AbstractDataProject(AbstractProject):
         else:
             sample_ilocs = sample_params.get('sample_ilocs', range(5))
             
-        try:
-            sub_tab = self.mem_data.iloc[sample_ilocs, :]
-        except:
-            import pdb
-            pdb.set_trace()
+
+        cols_to_display = sample_params.get('cols_to_display', self.mem_data.columns)
+        sub_tab = self.mem_data.iloc[sample_ilocs].loc[:, cols_to_display]
+
         
         if sample_params.get('drop_duplicates', True):
             sub_tab.drop_duplicates(inplace=True)
-        
+
         # Replace missing values
         sub_tab.fillna('', inplace=True)
         
