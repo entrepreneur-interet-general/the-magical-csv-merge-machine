@@ -331,8 +331,82 @@ def web_link_select_files(project_id):
                            next_url=next_url,
                            MAX_FILE_SIZE=MAX_FILE_SIZE)
 
+# Three methods for type inference (i.e. try to guess the likeliest type for each CSV column)
+
+@app.route('/web/infer_types/normalize/<project_id>/', methods=['GET'])
+@app.route('/web/infer_types/normalize/<project_id>/<file_name>/', methods=['GET'])
+@cross_origin()
+def web_infertypes_normalize(project_id, file_name=None):
+    # TODO: remove hack with file_name=None
+    if file_name is None:
+        proj = UserNormalizer(project_id)
+        (_, file_name) = proj.get_last_written()
+    
+    next_url = url_for('web_download_normalize', 
+                       project_id=project_id, 
+                       file_name=file_name)   
+    return _web_infertypes_normalize(project_id, file_name, next_url)
+    
+@app.route('/web/infer_types/link/<project_id>/<file_role>/', methods=['GET'])
+@cross_origin()   
+def web_infertypes_link(project_id, file_role):
+    _check_file_role(file_role)
+    
+    proj = UserLinker(project_id)
+    normalize_project_id = proj.metadata['current'][file_role]['project_id']
+    normalize_file_name = proj.metadata['current'][file_role]['file_name']
+    
+    if file_role == 'source':
+        next_url = url_for('_web_infertypes_link', project_id=project_id, file_role='ref')
+    else:
+        next_url = url_for('web_mvs', project_id=project_id)
+    return _web_infertypes_normalize(normalize_project_id, normalize_file_name, next_url)
 
 
+def _web_infertypes_normalize(project_id, file_name, next_url):
+    NUM_ROWS_TO_DISPLAY = 30
+    # Show the same number of cell values (per column) as for missing values
+    NUM_PER_COLUMN_TO_DISPLAY = 4          
+    
+    # Act on last file 
+    proj = UserNormalizer(project_id)
+    (module_name, file_name) = proj.get_last_written(None, file_name, before_module='normalize_types') 
+    
+    # Read config or perform inference for project
+    proj.load_data(module_name, file_name)
+    types_config = proj.read_config_data('normalizeTypes', 'config.json')
+    if not types_config:
+      # Infer data types and save
+      inferredTypes = proj.infer('inferTypes', params = None)
+    
+    # Generate sample to display
+    sample_params = {
+                    'num_rows_to_display': NUM_ROWS_TO_DISPLAY,
+                    'num_per_column_to_display': NUM_PER_COLUMN_TO_DISPLAY,
+                    'drop_duplicates': True
+                     }
+    sample = proj.get_sample('sample_types', types_config, sample_params)
+    
+    formatted_inferred_types = dict()
+    # An (input field name, likeliest type) dictionary
+    formatted_inferred_types['columns'] = inferredTypes['dataTypes']
+    # The list of all available types so the user can override any automatically inferred type
+    formatted_inferred_types['all'] = list(preprocess_fields_v3.allDatatypes()) 
+    
+    data_params = {'module_name': module_name, 'file_name': file_name}
+
+    return render_template('infer_types.html',
+                           project_id = project_id, 
+                           formatted_inferred_types = formatted_inferred_types,
+                           index=list(sample[0].keys()),
+                           sample=sample,                           
+                           data_params=data_params,
+                           add_config_api_url=url_for('upload_config', 
+                                                      project_type='normalize',
+                                                      project_id=project_id),
+                           recode_missing_values_api_url=url_for('normalizeTypes', 
+                                                      project_id=project_id),
+                           next_url=next_url)
 
 #def _next_url(project_type=None, project_id=None, var=None):
 #    # Order if project_type is normalise

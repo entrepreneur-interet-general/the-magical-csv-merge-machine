@@ -1506,10 +1506,6 @@ def generateValueMatchers(lvl = 0):
 		lvl 0 for lightweight matching, 2 for the heaviest variants, 1 as an intermediate level
 		'''
 
-	yield LabelMatcher(F_APB_MENTION, fileToSet('mention_licence_sise'), MATCH_MODE_CLOSE)
-	yield TokenizedMatcher(F_APB_MENTION, fileToSet('mention_licence_apb2017.col'), maxTokens = 5)
-	return
-
 	# Identifiers (typically but not necessarily unique)
 	# yield TemplateMatcher('Identifiant', 90) # TODO distinguish unique vs. non-unique
 
@@ -1733,6 +1729,18 @@ def normalizeValues (tab, params):
 	for (of, vs) in fields.normalizeValues(types):
 		tab[of] = vs
 	return tab
+
+
+def sample_types_ilocs(tab, params, sample_params):
+
+	num_rows_to_display = sample_params.get('num_rows_to_display', 30)
+	num_per_column_to_display = sample_params.get('num_per_column_to_display', 4)
+	
+	# row_idxs = []
+	# for fieldName, likeliestType in params['columns'].items():
+	row_idxs = range(num_rows_to_display)
+
+	return row_idxs    
 
 ### Main method
 
