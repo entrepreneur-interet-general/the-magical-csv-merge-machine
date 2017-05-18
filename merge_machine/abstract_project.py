@@ -4,6 +4,19 @@
 Created on Fri Apr 21 19:48:22 2017
 
 @author: leo
+
+Abstract project
+
+METHODS:
+    - gen_id()
+    - _path_to(self, data_path, module_name='', file_name='')
+    - upload_config_data(self, config_dict, module_name, file_name)
+    - read_config_data(self, module_name, file_name)    
+    - read_metadata(self)
+    - write_metadata(self)
+    - remove(self, module_name='', file_name='')
+    - delete_project(self)
+
 """
 
 import hashlib
@@ -14,19 +27,10 @@ import shutil
 import time
 
 
-def gen_id():
-    '''Generate unique non-guessable string for project ID'''
-    unique_string = str(time.time()) + '_' + str(random.random())
-    h = hashlib.md5()
-    h.update(unique_string.encode('utf-8'))
-    project_id = h.hexdigest()
-    return project_id
 
 NOT_IMPLEMENTED_MESSAGE = 'NOT IMPLEMENTED in abstract class'
 
 class AbstractProject():
-    def path_to(self, module_name='', file_name=''):
-        raise Exception(NOT_IMPLEMENTED_MESSAGE)
 
     def __init__(self, 
                  project_id=None, 
@@ -42,12 +46,11 @@ class AbstractProject():
         if create_new: 
             # Generate project id if none is passed
             if project_id is None:
-                self.project_id = gen_id()
+                self.project_id = self.gen_id()
             else:
                 self.project_id = project_id
             
             path_to_proj = self.path_to()
-            
             if os.path.isdir(path_to_proj):
                 raise Exception('Project already exists. Choose a new path or \
                                 delete the existing: {}'.format(path_to_proj))
@@ -67,6 +70,15 @@ class AbstractProject():
         self.mem_data_info = {} # Information on data in memory
         self.log_buffer = [] # List of logs not yet written to metadata.json    
 
+    @staticmethod
+    def gen_id():
+        '''Generate unique non-guessable string for project ID'''
+        unique_string = str(time.time()) + '_' + str(random.random())
+        h = hashlib.md5()
+        h.update(unique_string.encode('utf-8'))
+        project_id = h.hexdigest()
+        return project_id
+
     def create_metadata(self, description=None, display_name=None):
         '''Core metadatas'''
         metadata = dict()
@@ -83,14 +95,12 @@ class AbstractProject():
         Return path to directory that stores specific information for a project 
         module
         '''
-        
         if module_name is None:
             module_name = ''
         if file_name is None:
             file_name = ''
         
         path = os.path.join(data_path, self.project_id, module_name, file_name)
-
         return os.path.abspath(path)    
         
     def upload_config_data(self, config_dict, module_name, file_name):
@@ -120,14 +130,6 @@ class AbstractProject():
         else: 
             config = {}
         return config               
-    
-    
-    def _list_modules(self):
-        all_modules = []
-        for mod in os.listdir(self.path_to()):
-            if os.path.isdir(mod):
-                all_modules.append(mod)
-        return all_modules    
     
     def read_metadata(self):
         '''Wrapper around read_config_data'''

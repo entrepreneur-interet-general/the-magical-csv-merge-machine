@@ -242,10 +242,9 @@ def main_dedupe(data_ref,
     # Train on labelled data
     # TODO: Load train data
     all_predicates = []
-    for _ in range(1):
-        gazetteer.sample(data_1=nonexact_1, data_2=nonexact_2, sample_size=SAMPLE_SIZE)
-        gazetteer.train(recall=0.95, index_predicates=True) # TODO: look into memory usage of index_predicates
-        all_predicates.extend(list(gazetteer.predicates))
+    gazetteer.sample(data_1=nonexact_1, data_2=nonexact_2, sample_size=SAMPLE_SIZE, new_param=new_param)
+    gazetteer.train(recall=0.95, index_predicates=True) # TODO: look into memory usage of index_predicates
+    all_predicates.extend(list(gazetteer.predicates))
         
     import dedupe.blocking as blocking
     gazetteer.blocker = blocking.Blocker(all_predicates)
@@ -257,7 +256,9 @@ def main_dedupe(data_ref,
         gazetteer.writeSettings(f, index=False)    
     
     # Index reference
+    print('indexing')
     gazetteer.index(data=data_ref)
+    print('done indexing')
     
     # Compute threshold
     recall_weight = 2.5
@@ -329,7 +330,9 @@ if __name__ == '__main__':
     import json
     
     match_rates = []
-    for i in range(4):
+#    for i in range(5):
+    new_param = 200
+    for i in range(5):
         with open('local_test_data/lycees/config.json') as f:
            my_config = json.load(f)    
         paths = my_config['paths']
@@ -340,10 +343,12 @@ if __name__ == '__main__':
         source.to_csv('local_test_data/rnsr/res.csv', encoding='utf-8', index=False)
     
         # Explore results
-        match_rate = source.__CONFIDENCE.notnull().mean()
-        match_num = source.__CONFIDENCE.notnull().sum()
-        print('\n', i, '', threshold, '-->', match_rate, ' / ', match_num)
-        match_rates.append(match_rate)
+        sel = source.__CONFIDENCE.notnull()
+        match_rate = sel.mean()
+        match_num = sel.sum()
+        prec = (source.loc[sel, :].uai.str.upper() == source.loc[sel, :].numero_uai.str.upper()).mean()
+        print('\n', i, '', threshold, '-->', match_rate, ' / ', match_num, ' / prec: ', prec)
+        match_rates.append((match_rate, prec))
     
         source.sort_values(by='__CONFIDENCE', inplace=True)
         cols = ['commune', 'localite_acheminement_uai', 'lycees_sources', 

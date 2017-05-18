@@ -853,9 +853,9 @@ def new_project(project_type):
         - project_type: "link" or "normalize"
         
     POST:
-        - description: project description
-        - display_name: name to show to user
-        - internal: (synonymous public)
+        - (description): project description
+        - (display_name): name to show to user
+        - (internal): (synonymous public)
     
     '''
     _check_project_type(project_type)
@@ -976,7 +976,7 @@ def download(project_type, project_id):
     if file_name is not None:
         file_name = secure_filename(file_name)
 
-    (file_role, module_name, file_name) = proj.get_last_written(file_role, module_name, file_name)
+    (file_role, module_name, file_name) = proj.get_last_written(module_name, file_name)
 
     if module_name == 'INIT':
         return jsonify(error=True,
@@ -1050,8 +1050,8 @@ def upload(project_id):
         raise Exception('Empty file')
     
     return jsonify(error=False,
-               metadata=proj.metadata,
-               project_id=proj.project_id)
+                   metadata=proj.metadata,
+                   project_id=proj.project_id)
 
 
 @app.route('/api/upload_config/<project_type>/<project_id>/', methods=['POST'])

@@ -4,6 +4,23 @@
 Created on Mon Apr 24 19:18:44 2017
 
 @author: leo
+
+AbstractDataProject
+
+METHODS:
+    
+    - init_log(self, module_name, module_type)
+    - end_log(self, log, error=False)
+    - check_mem_data(self)
+    - load_data(self, module_name, file_name, nrows=None)
+    - get_header(self, module_name, file_name)
+    - _get_sample(self, module_name, file_name, row_idxs=range(5), columns=None, drop_duplicates=True)
+    - get_sample(self, sampler_module_name, params, sample_params)
+    - write_log_buffer(self, written)
+    - write_data(self)
+    - clear_memory(self)
+    - infer(self, module_name, params)
+
 """
 
 import csv
@@ -50,11 +67,7 @@ class AbstractDataProject(AbstractProject):
             self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str)
         self.mem_data_info = {'file_name': file_name,
                               'module_name': module_name}
-        
-    def get_header(self, module_name, file_name):
-        file_path = self.path_to(module_name, file_name)
-        header = list(pd.read_csv(file_path, encoding='utf-8', nrows=0).columns)
-        return header
+
     
     def _get_sample(self, module_name, file_name, row_idxs=range(5), 
                    columns=None, drop_duplicates=True):
