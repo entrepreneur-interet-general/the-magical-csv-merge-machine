@@ -7,6 +7,7 @@ flask-cors
 flask-session
 flask-socketio
 python-memcached
+redis
 
 fuzzywuzzy
 python-Levenshtein

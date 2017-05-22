@@ -111,6 +111,7 @@ import os
 curdir = os.path.dirname(os.path.realpath(__file__))
 os.chdir(curdir)
 
+# Flask imports
 import flask
 from flask import Flask, jsonify, render_template, request, send_file, url_for
 from flask_session import Session
@@ -118,8 +119,13 @@ from flask_socketio import disconnect, emit, SocketIO
 from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
 
-from admin import Admin
+# Redis imports
+from rq import Queue
+from rq.job import Job
+from worker import conn
 
+
+from admin import Admin
 from normalizer import UserNormalizer
 from linker import UserLinker
 
@@ -143,6 +149,9 @@ app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024 # Check that files are
           
 socketio = SocketIO(app)       
 
+# Redis connection
+q = Queue(connection=conn)
+
 #==============================================================================
 # HELPER FUNCTIONS
 #==============================================================================
@@ -162,8 +171,6 @@ def _check_file_role(file_role):
 def _check_request():
     '''Check that input request is valid'''
     pass
-
-
 
 def _parse_request():
     '''
@@ -686,22 +693,30 @@ def web_select_return(project_type, project_id):
 
                            select_return_api_urls=select_return_api_urls,
                            next_url=next_url)
-    
+
+
 @app.route('/web/download/normalize/<project_id>/<file_name>', methods=['GET'])
 def web_download_normalize(project_id, file_name):
     return '<a href="{0}">Home</a>'.format(url_for('web_index'))
 
 
 @app.route('/web/download/<project_type>/<project_id>/', methods=['GET'])
-def web_download(project_type, project_id):  
+def web_download(project_type, project_id):
+    if project_type == 'normalize':
+        raise NotImplementedError
     
+    proj = _init_project(project_type, project_id=project_id)
     
-    # Seed test
-    import random
-    random.seed(1)
-    import numpy as np
-    np.random.seed(1)
+    return render_template('last_page.html', 
+                           project_id=project_id,
+                           linker_api_url=url_for('linker', project_id=project_id),
+                           download_api_url=url_for('download', 
+                                project_type=project_type, project_id=project_id))
+  
     
+
+@app.route('/web/download_old/<project_type>/<project_id>/', methods=['GET'])
+def web_download_old(project_type, project_id):      
     if project_type == 'normalize':
         raise NotImplementedError
     
@@ -724,7 +739,7 @@ def web_download(project_type, project_id):
                         }  
         
         # TODO: This should probably be moved
-        print('Performing deduplication')    
+        print('Performing deduplication')           
         
         # Perform linking
         proj.linker('dedupe_linker', paths, module_params)
@@ -822,7 +837,7 @@ def web_download(project_type, project_id):
     #ref_sample = proj.get_sample('ref', 'INIT', proj.metadata['current']['ref']['file_name'],
     #                            row_idxs=rows_to_display, columns=cols_to_display_ref)
 
-    return render_template('last_page.html', 
+    return render_template('last_page_old.html', 
                            project_id=project_id,
                            
                            match_index=cols_to_display_match,
@@ -892,7 +907,6 @@ def delete_project(project_type, project_id):
         proj = UserLinker(project_id=project_id)
     proj.delete_project()
     return jsonify(error=False)
-    
 
 
 @app.route('/api/metadata/<project_type>/<project_id>', methods=['GET'])
@@ -937,8 +951,7 @@ def get_last_written(project_type, project_id):
                    project_id=project_id, 
                    module_name=module_name, 
                    file_name=file_name)
-    
-    
+
 
 @app.route('/api/download/<project_type>/<project_id>', methods=['GET', 'POST'])
 @cross_origin()
@@ -1203,9 +1216,21 @@ def replace_mvs(project_id):
     return jsonify(error=False)
 
 
-@app.route('/api/link/dedupe_linker/<project_id>/', methods=['POST'])
+@app.route('/api/link/dedupe_linker/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
 def linker(project_id):
+    #data_params, module_params = _parse_linking_request()
+    
+    job = q.enqueue_call(
+            func='api._linker', args=(project_id,), result_ttl=5000
+    )
+    job_id = job.get_id()
+    print(job_id)
+    return jsonify(job_id=job_id)
+    
+
+# In test_linker
+def _linker(project_id):
     '''
     Runs deduper module. Contrary to other modules, linker modules, take
     paths as input (in addition to module parameters)
@@ -1216,29 +1241,45 @@ def linker(project_id):
         'params': {'variable_definition': {...},
                    'columns_to_keep': [...]}
     }
-    
     '''
     proj = UserLinker(project_id=project_id) # Ref and source are loaded by default
-    data_params, module_params = _parse_linking_request()
     
-    # Set paths
-    (module_name, file_name) = (data_params['source']['module_name'], data_params['source']['file_name'])
-    source_path = proj.source.path_to(module_name=module_name, file_name=file_name)
-
-    (module_name, file_name) = (data_params['ref']['module_name'], data_params['ref']['file_name'])
-    ref_path = proj.ref.path_to(file_role='ref', module_name=module_name, file_name=file_name)
+    paths = proj._gen_paths_dedupe()
     
-    paths = {'ref': ref_path, 'source': source_path}
+    col_matches = proj.read_col_matches()
+    my_variable_definition = proj._gen_dedupe_variable_definition(col_matches)
+    
+    module_params = {
+                    'variable_definition': my_variable_definition,
+                    'selected_columns_from_source': None,
+                    'selected_columns_from_ref': None
+                    }  
+    
+    # TODO: This should probably be moved
+    print('Performing deduplication')           
     
     # Perform linking
     proj.linker('dedupe_linker', paths, module_params)
 
+    print('Writing data')
     # Write transformations and log
     proj.write_data()    
     proj.write_log_buffer(True)
+    
+    file_path = proj.path_to(proj.mem_data_info['module_name'], 
+                             proj.mem_data_info['file_name'])
+    print('Wrote data to: ', file_path)
 
     return jsonify(error=False)    
-    
+
+@app.route("/api/results/<job_key>", methods=['GET'])
+def get_results(job_key):
+    job = Job.fetch(job_key, connection=conn)
+
+    if job.is_finished:
+        return str(job.result), 200
+    else:
+        return "No results yet...", 202
 
 #==============================================================================
     # Admin
