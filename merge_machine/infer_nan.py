@@ -53,10 +53,11 @@ def mv_from_len_diff(top_values, score=1):
     # Compute lengths of values
     lengths = pd.Series([len(x) for x in top_values.index], index=top_values.index)
     # Check if all values have the same length except one:
-    if lengths.nunique() == 2 & (len(top_values) >= 4):
+    if (lengths.nunique() == 2) & (len(top_values) >= 4):
         
         if lengths.value_counts().iloc[-1] == 1:
-            mv_value = lengths.value_counts().index[-1]
+            abnormal_length = lengths.value_counts().index[-1]
+            mv_value = lengths[lengths == abnormal_length].index[0]
             return [(mv_value, score, 'diff')]
     return []
 
