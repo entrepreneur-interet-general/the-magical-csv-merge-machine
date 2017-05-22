@@ -295,7 +295,6 @@ def web_normalize_select_file():
     
 
 # TODO: look into use of sessions for url generation
-
 @app.route('/web/link/select_files/<project_id>', methods=['GET']) # (Actually select_projects)
 @cross_origin()
 def web_link_select_files(project_id):
@@ -310,7 +309,6 @@ def web_link_select_files(project_id):
     delete_normalize_project_api_url_partial=url_for('delete_project', 
                                                      project_type='normalize', 
                                                      project_id='')
-    
     # Generate Next URLs
     
     # Do what you fina do
@@ -1259,7 +1257,4 @@ def list_projects(project_type):
 
 
 if __name__ == '__main__':
-    
-
-
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)

@@ -242,7 +242,7 @@ def main_dedupe(data_ref,
     # Train on labelled data
     # TODO: Load train data
     all_predicates = []
-    gazetteer.sample(data_1=nonexact_1, data_2=nonexact_2, sample_size=SAMPLE_SIZE, new_param=new_param)
+    gazetteer.sample(data_1=nonexact_1, data_2=nonexact_2, sample_size=SAMPLE_SIZE)
     gazetteer.train(recall=0.95, index_predicates=True) # TODO: look into memory usage of index_predicates
     all_predicates.extend(list(gazetteer.predicates))
         
