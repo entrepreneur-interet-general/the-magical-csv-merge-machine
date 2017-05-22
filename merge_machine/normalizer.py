@@ -241,7 +241,7 @@ class Normalizer(AbstractDataProject):
                         'nrows': self.mem_data.shape[0], 
                         'ncols': self.mem_data.shape[1]
                     }
-        proj.upload_config_data(config_dict, 'INIT', 'infered_config.json')
+        self.upload_config_data(config_dict, 'INIT', 'infered_config.json')
 
         self.clear_memory()    
 
@@ -298,16 +298,15 @@ class InternalNormalizer(Normalizer):
 
 
 if __name__ == '__main__':
-    import json
     import logging
 
-    source_file_name = 'source.csv' # 'SIREN_FUI.col' # 'abes.csv'
-    user_given_name = 'first_file.csv'
+    source_file_name = 'ref.csv' # 'SIREN_FUI.col' # 'abes.csv'
+    user_given_name = 'second_file.csv'
 
     logging.basicConfig(filename = 'log/preprocess_fields.log', level = logging.DEBUG)
     
     # Create/Load a project
-    project_id = "4e8286f034eef40e89dd99ebe6d87f21"
+    #project_id = "4e8286f034eef40e89dd99ebe6d87f21"
     proj = UserNormalizer(None, create_new=True)
     
     # Upload file to normalize
