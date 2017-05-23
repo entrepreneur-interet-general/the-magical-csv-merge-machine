@@ -19,7 +19,7 @@
 	        	$('#run_linking').on('click', function(){
 	        		console.log('Launching new job')
 	        		// Display div
-	        		//$('#no_results').hide()
+	        		$('#no_results').hide()
 	        		$('#processing').show()
 
 	        		// Start job
@@ -42,7 +42,8 @@
 									console.log(JSON.stringify(json))
 									// Display results div
 				        			$("#to_results").show()
-				        			$("#run_linking").text('Re-Run Linking')
+				        			$('#processing').hide() 	
+				        			$("#run_linking").text('Re-Run Linking (this will overwrite your previous file)')
 								} else {
 									console.log('Waiting to complete')
 								}
@@ -114,7 +115,7 @@
 
 
         <div id='processing' style="display: none;">
-        	Processing (still <span id="num_jobs"></span> jobs to process)
+        	Processing (still <span id="num_jobs"> a few</span> jobs to process)
         	<div class="loader"></div>
 			<button id="stop_linking"> Interrupt </a>
         </div>

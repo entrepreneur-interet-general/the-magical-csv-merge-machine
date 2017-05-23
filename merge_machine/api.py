@@ -1273,6 +1273,7 @@ def get_job_result(job_id):
 @app.route("/queue/num_jobs/", methods=['GET'])
 def count_jobs_in_queue():
     '''Returns the number of jobs enqueued'''
+    # TODO: change for position in queue
     num_jobs = len(q.job_ids)
     return jsonify(num_jobs=num_jobs)
 
