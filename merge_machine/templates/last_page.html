@@ -4,18 +4,61 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap-theme.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/rainbow/1.2.0/themes/github.css">
-    
+     
         <title>Results of matchining</title>
         <!--<link rel="stylesheet" type="text/css" href="http://www.csszengarden.com/219/219.css?v=8may2013">-->
         <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
-        <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.4.9/angular.min.js"></script>
         <script type="text/javascript" charset="utf-8">
+        	$(document).ready(function(){ 
 
-		<html ng-app="WordcountApp">
-		<body ng-controller="WordcountController">
-		<form role="form" ng-submit="getResults()">
+        		{% if has_results %}
+        			$("#to_results").show()
+        			$("#run_linking").text('Re-Run Linking')
+        		{% endif %}
 
+	        	$('#run_linking').on('click', function(){
+	        		console.log('Launching new job')
+	        		// Display div
+	        		//$('#no_results').hide()
+	        		$('#processing').show()
 
+	        		// Start job
+	        		$.getJSON("{{ linker_api_url }}", function(json){
+	        			job_result_api_url = json['job_result_api_url']
+			        	var result_fetcher = window.setInterval(function(){	
+			        		// Fetch the total number of jobs for display
+			        		$.getJSON("{{ count_jobs_in_queue_api_url }}", function(json){
+			        			var num_jobs = json['num_jobs']
+			        			console.log(json['num_jobs'])
+			        			$('#num_jobs').text(num_jobs)
+			        		});
+
+							// Check if job has completed
+							$.getJSON(job_result_api_url, function(json){
+								// If YES: return
+								if (json['completed']) {
+									window.clearInterval(result_fetcher)
+									console.log('Linking was done')
+									console.log(JSON.stringify(json))
+									// Display results div
+				        			$("#to_results").show()
+				        			$("#run_linking").text('Re-Run Linking')
+								} else {
+									console.log('Waiting to complete')
+								}
+
+								// If NO: do nothing
+
+								// TODO: check if job exists
+							});
+						}, 5000);
+	        		})
+	        		// TODO: Query for position in Queue
+
+	        		// Check for results every five seconds
+	             	
+	        	})
+        	})
         </script>
 
 
@@ -39,69 +82,47 @@
 			#ref_table  { 
 				background: #e7e5ff;
 			}
-		</style>
 
+			.loader {
+			  border: 16px solid #f3f3f3;
+			  border-radius: 50%;
+			  border-top: 16px solid #3498db;
+			  width: 120px;
+			  height: 120px;
+			  -webkit-animation: spin 2s linear infinite;
+			  animation: spin 2s linear infinite;
+			}
+
+			@-webkit-keyframes spin {
+			  0% { -webkit-transform: rotate(0deg); }
+			  100% { -webkit-transform: rotate(360deg); }
+			}
+
+			@keyframes spin {
+			  0% { transform: rotate(0deg); }
+			  100% { transform: rotate(360deg); }
+			}
+		</style>
     </head>
+
     <body>
         <h1 id='title'>Results of matching</h1>
 
         <div id='no_results'>
-        	<a href="{{ linker_api_url }}" style="display: none;"> (Re)run linking </a>
+        	<button id="run_linking">Run linking</button>
         </div>
 
-        <div id='with_results' display=none>
-	        <h2> Matches found ({{ metrics['num_match'] }} - {{ metrics['perc_match'] }}%) </h2>
 
-	        {% if metrics['num_verif_samples'] > 0 %}
-	        	<h3> Precision: {{ metrics['perc_precision'] }}% on {{ metrics['num_verif_samples'] }} samples </h3>
-	        {% endif %}
-
-	        <!-- Display results -->
-	        <div style="overflow: auto; max-height: 400px;">
-				<table class="match_table" style="font-size: 75%; ">
-					<tr>
-					    {% for col in match_index %}
-					        <th class="{{ col }}">{{ col }}</th>
-					    {% endfor %}
-					</tr>
-
-					{% for row in match_sample %}
-					    <tr>
-					    {% for col in match_index %}
-					        <td class="{{ col }}">{{ row[col] }}</td>
-					    {% endfor %}
-					    </tr>
-					{% endfor %}
-				 </table>
-			</div>
+        <div id='processing' style="display: none;">
+        	Processing (still <span id="num_jobs"></span> jobs to process)
+        	<div class="loader"></div>
+			<button id="stop_linking"> Interrupt </a>
+        </div>
 
 
-			{% if match_error_samples %}
-				<h3> Errors in matches found (using validation subset) </h3>
-		        <!-- Display results -->
-		        <div style="overflow: auto; max-height: 400px;">
-					<table class="match_table" style="font-size: 75%; ">
-						<tr>
-						    {% for col in match_index %}
-						        <th class="{{ col }}">{{ col }}</th>
-						    {% endfor %}
-						</tr>
-
-						{% for row in match_error_samples %}
-						    <tr>
-						    {% for col in match_index %}
-						        <td class="{{ col }}">{{ row[col] }}</td>
-						    {% endfor %}
-						    </tr>
-						{% endfor %}
-					 </table>
-				</div>
-			{% endif %}
-
-			<div> </div>
-	        <a href="{{ download_api_url }}"> Download result </a>
-	        <!--<button id="downloadBtn"> Download result </button>-->
-	    </div>>
+        <div id='to_results' style="display: none;">
+        	<a href="{{ next_url }}">Go to results</a>
+        </div>
 
 
     </body>

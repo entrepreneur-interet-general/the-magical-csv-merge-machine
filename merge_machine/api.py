@@ -124,11 +124,9 @@ from rq import Queue
 from rq.job import Job
 from worker import conn
 
-
 from admin import Admin
 from normalizer import UserNormalizer
 from linker import UserLinker
-
 
 #==============================================================================
 # INITIATE APPLICATION
@@ -706,17 +704,24 @@ def web_download(project_type, project_id):
         raise NotImplementedError
     
     proj = _init_project(project_type, project_id=project_id)
+    res_file_name = 'm3_result.csv'
+    file_path = proj.path_to('dedupe_linker', res_file_name)    
+    has_results =  os.path.isfile(file_path) 
     
+    next_url = url_for('web_view_results', project_type='link', project_id=project_id)
     return render_template('last_page.html', 
+                           has_results=has_results,
                            project_id=project_id,
+                           count_jobs_in_queue_api_url=url_for('count_jobs_in_queue'),
                            linker_api_url=url_for('linker', project_id=project_id),
                            download_api_url=url_for('download', 
-                                project_type=project_type, project_id=project_id))
+                                project_type=project_type, project_id=project_id),
+                           next_url=next_url)
   
     
 
-@app.route('/web/download_old/<project_type>/<project_id>/', methods=['GET'])
-def web_download_old(project_type, project_id):      
+@app.route('/web/view_results/<project_type>/<project_id>/', methods=['GET'])
+def web_view_results(project_type, project_id):      
     if project_type == 'normalize':
         raise NotImplementedError
     
@@ -725,34 +730,8 @@ def web_download_old(project_type, project_id):
     res_file_name = 'm3_result.csv'
     
     file_path = proj.path_to('dedupe_linker', res_file_name)    
+    # os.path.isfile(file_path)
     
-    if False or (not os.path.isfile(file_path)):        
-        paths = proj._gen_paths_dedupe()
-        
-        col_matches = proj.read_col_matches()
-        my_variable_definition = proj._gen_dedupe_variable_definition(col_matches)
-        
-        module_params = {
-                        'variable_definition': my_variable_definition,
-                        'selected_columns_from_source': None,
-                        'selected_columns_from_ref': None
-                        }  
-        
-        # TODO: This should probably be moved
-        print('Performing deduplication')           
-        
-        # Perform linking
-        proj.linker('dedupe_linker', paths, module_params)
-    
-        print('Writing data')
-        # Write transformations and log
-        proj.write_data()    
-        proj.write_log_buffer(True)
-        
-        file_path = proj.path_to(proj.mem_data_info['module_name'], 
-                                 proj.mem_data_info['file_name'])
-        print('Wrote data to: ', file_path)
-
     # Identify rows to display
     proj.load_data('dedupe_linker', res_file_name)  
 
@@ -1226,7 +1205,8 @@ def linker(project_id):
     )
     job_id = job.get_id()
     print(job_id)
-    return jsonify(job_id=job_id)
+    return jsonify(job_id=job_id,
+                   job_result_api_url=url_for('get_job_result', job_id=job_id))
     
 
 # In test_linker
@@ -1241,7 +1221,8 @@ def _linker(project_id):
         'params': {'variable_definition': {...},
                    'columns_to_keep': [...]}
     }
-    '''
+    '''  
+    
     proj = UserLinker(project_id=project_id) # Ref and source are loaded by default
     
     paths = proj._gen_paths_dedupe()
@@ -1270,21 +1251,34 @@ def _linker(project_id):
                              proj.mem_data_info['file_name'])
     print('Wrote data to: ', file_path)
 
-    return jsonify(error=False)    
 
-@app.route("/api/results/<job_key>", methods=['GET'])
-def get_results(job_key):
-    job = Job.fetch(job_key, connection=conn)
+    
 
+    return
+
+#==============================================================================
+# API Queue
+#==============================================================================
+
+@app.route("/queue/result/<job_id>", methods=['GET'])
+def get_job_result(job_id):
+    job = Job.fetch(job_id, connection=conn)
+    
     if job.is_finished:
-        return str(job.result), 200
+        #return str(job.result), 200
+        return jsonify(error=False, completed=True)
     else:
-        return "No results yet...", 202
+        return jsonify(error=False, completed=False), 202
+
+@app.route("/queue/num_jobs/", methods=['GET'])
+def count_jobs_in_queue():
+    '''Returns the number of jobs enqueued'''
+    num_jobs = len(q.job_ids)
+    return jsonify(num_jobs=num_jobs)
 
 #==============================================================================
     # Admin
 #==============================================================================
-
 
 @app.route('/api/projects/<project_type>', methods=['GET'])
 def list_projects(project_type):
