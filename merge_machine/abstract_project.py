@@ -63,7 +63,10 @@ class AbstractProject():
             self.write_metadata()
         else:
             self.project_id = project_id
-            self.metadata = self.read_metadata()
+            try:
+                self.metadata = self.read_metadata()
+            except:
+                raise Exception('Project with id {0} could not be loaded'.format(project_id))
             
         # Initiate with no data in memory
         self.mem_data = None

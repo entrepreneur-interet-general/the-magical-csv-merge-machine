@@ -599,6 +599,8 @@ def web_terminate_labeller_load():
 def load_labeller():
     '''Loads labeller. Necessary to have a separate call to preload page'''    
     # assert flask.session.project_id == project_id   
+    import time
+    import pickle
     def load_dis_labeller():
         # TODO: put variables in memory
         project_id = flask._app_ctx_stack.project_id
@@ -608,7 +610,23 @@ def load_labeller():
         paths = proj._gen_paths_dedupe()  
         flask._app_ctx_stack.paths = paths       
         
+        a = time.time()
         flask._app_ctx_stack.labeller = proj._gen_dedupe_labeller()
+        b = time.time()
+        print('Loading labeller from scratch took {0} seconds'.format(b - a))
+        
+        a = time.time()
+        with open('temp_can_delete.pkl', 'wb') as w:
+            pickle.dump(flask._app_ctx_stack.labeller, w)
+        b = time.time()
+        print('Pickling labeller took {0} seconds'.format(b - a))
+        
+        a = time.time()
+        with open('temp_can_delete.pkl', 'rb') as r:
+            flask._app_ctx_stack.labeller = pickle.load(r)
+        b = time.time()
+        print('Reading pickle labeller took {0} seconds'.format(b - a))
+        
         flask._app_ctx_stack.labeller.new_label()
         
         emit('message', flask._app_ctx_stack.labeller.to_emit(message=''))
@@ -1177,14 +1195,30 @@ def infer_mvs(project_id):
     return jsonify(error=False,
                    response=result)
 
+# TODO: job_id does not allow to call all steps of a pipeline at once
     
 @app.route('/api/normalize/replace_mvs/<project_id>/', methods=['POST'])
 @cross_origin()
 def replace_mvs(project_id):
+    '''Schedule the mvs replacement module'''
+    data_params, module_params = _parse_request()
+    job = q.enqueue_call(
+            func='api._replace_mvs', 
+            args=(project_id, data_params, module_params), 
+            result_ttl=5000, 
+            job_id=project_id, 
+            depends_on=project_id
+    )    
+    job_id = job.get_id()
+    print(job_id)
+    return jsonify(job_id=job_id,
+                   job_result_api_url=url_for('get_job_result', job_id=job_id))
+    
+    
+def _replace_mvs(project_id, data_params, module_params):
     '''Runs the mvs replacement module'''
     proj = UserNormalizer(project_id=project_id)
-    data_params, module_params = _parse_request()
-    
+
     proj.load_data(data_params['module_name'], data_params['file_name'])
     
     proj.transform('replace_mvs', module_params)
@@ -1198,29 +1232,26 @@ def replace_mvs(project_id):
 @app.route('/api/link/dedupe_linker/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
 def linker(project_id):
+    '''Schedule the deduper module'''  
     #data_params, module_params = _parse_linking_request()
     
     job = q.enqueue_call(
-            func='api._linker', args=(project_id,), result_ttl=5000
+            func='api._linker', 
+            args=(project_id,), 
+            result_ttl=5000, 
+            job_id=project_id, 
+            depends_on=project_id
     )
     job_id = job.get_id()
     print(job_id)
     return jsonify(job_id=job_id,
                    job_result_api_url=url_for('get_job_result', job_id=job_id))
-    
 
 # In test_linker
 def _linker(project_id):
     '''
     Runs deduper module. Contrary to other modules, linker modules, take
     paths as input (in addition to module parameters)
-    
-    {
-        'data': {'source': {},  
-                'ref': {}}
-        'params': {'variable_definition': {...},
-                   'columns_to_keep': [...]}
-    }
     '''  
     
     proj = UserLinker(project_id=project_id) # Ref and source are loaded by default
@@ -1250,9 +1281,6 @@ def _linker(project_id):
     file_path = proj.path_to(proj.mem_data_info['module_name'], 
                              proj.mem_data_info['file_name'])
     print('Wrote data to: ', file_path)
-
-
-    
 
     return
 
