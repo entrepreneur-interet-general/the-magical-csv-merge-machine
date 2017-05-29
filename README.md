@@ -32,6 +32,17 @@ Le projet est encore en développement... Vous pouvez [faire des remarques (lais
 Ce projet est développé de Janvier à Novembre 2017 dans le cadre du [programme d'entrepreneur d'intérêt général](https://www.etalab.gouv.fr/decouvrez-la-1e-promotion-des-entrepreneurs-dinteret-general) au sein du département outils d'aide à la décision du Ministere de l'éducation nationale, de l'enseignement supérieur et de la recherche.
 
 -------------------------------------------
+# Faire tourner localement
+
+```
+$ python3 api.py
+# Puis dans un autre terminal
+$ python3 worker.py
+```
+
+- Après une minute, l'application devrait être disponible via: http://0.0.0.0:5000
+
+-------------------------------------------
 
 # Faire tourner l'application localement avec Docker [NON OPTIMISE, TRAVAIL EN COURS]
 Pour faire tourner l'application 
