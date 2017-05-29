@@ -322,7 +322,10 @@ def dedupe_linker(paths, params):
     #        import pdb
     #        pdb.set_trace()
     
-    return source, threshold
+    # Run info
+    run_info = {'threshold': threshold}
+    
+    return source, run_info
 
 
 if __name__ == '__main__':

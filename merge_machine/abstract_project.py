@@ -67,11 +67,7 @@ class AbstractProject():
                 self.metadata = self.read_metadata()
             except:
                 raise Exception('Project with id {0} could not be loaded'.format(project_id))
-            
-        # Initiate with no data in memory
-        self.mem_data = None
-        self.mem_data_info = {} # Information on data in memory
-        self.log_buffer = [] # List of logs not yet written to metadata.json    
+        
 
     @staticmethod
     def gen_id():
@@ -116,7 +112,7 @@ class AbstractProject():
         dir_path = self.path_to(module_name)
         if not os.path.isdir(dir_path):
             os.makedirs(dir_path)   
-        
+
         # Write file
         file_path = self.path_to(module_name, file_name)
         with open(file_path, 'w') as w:

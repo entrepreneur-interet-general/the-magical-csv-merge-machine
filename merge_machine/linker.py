@@ -180,15 +180,16 @@ class Linker(AbstractDataProject):
         
         log = self.init_log(module_name, 'link')
 
-        self.mem_data, thresh = MODULES['link'][module_name]['func'](paths, params)
+        self.mem_data, run_info = MODULES['link'][module_name]['func'](paths, params)
         
         self.mem_data_info['module_name'] = module_name
         
         # Complete log
         log = self.end_log(log, error=False)
                           
-        # Update log buffer
+        # Update buffers
         self.log_buffer.append(log)        
+        self.run_info_buffer.append(run_info)
         return 
 
     #==========================================================================
@@ -349,6 +350,7 @@ if __name__ == '__main__':
     proj.linker('dedupe_linker', paths, params)
     proj.write_data()
     proj.write_log_buffer(written=True)
+    proj.write_run_info_buffer()
     
     
     

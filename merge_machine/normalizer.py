@@ -6,11 +6,8 @@ Created on Fri Apr 21 19:39:45 2017
 @author: leo
 """
 
-import csv
-import gc
 import itertools
 import os
-import shutil
 import time
 
 import pandas as pd
@@ -29,8 +26,8 @@ class Normalizer(AbstractDataProject):
         memory as Pandas DataFrame. Transformations are only written to disk if
         write_data is called. A log that describes the changes made to the 
         data in memory is stored in log_buffer. Agter writing data, you should
-        also write the log_buffer (write_log_buffer) to log the changes that 
-        were performed.
+        also write the log_buffer (write_log_buffer) and run_info_buffer 
+        (write_log_info_buffer) to log the changes that were performed.
     
     In short: Objects stored in memory are:
         - TODO: write this
@@ -46,6 +43,9 @@ class Normalizer(AbstractDataProject):
     def create_metadata(self, description=None, display_name=None):
         metadata = super().create_metadata(description=description, 
                                             display_name=display_name)
+        # For dicts below, keys are file_names
+        metadata['complete'] = dict() # File is complete once final is reconstructed
+        metadata['column_tracker'] = dict() # {'original', 'selected', 'modified', 'created'}
         metadata['files'] = dict() # Contains single file metadata
         return metadata   
 
@@ -154,6 +154,7 @@ class Normalizer(AbstractDataProject):
         assert file_name[-len(ext):] == ext        
         return "".join([c for c in file_name[:-4] if c.isalpha() or c.isdigit() or c==' ']).rstrip() + ext
     
+
     def upload_init_data(self, file, file_name, user_given_name=None):
         # TODO: deal with og_file_name, file_id, display_name, user_given_name
         
@@ -222,6 +223,12 @@ class Normalizer(AbstractDataProject):
                                                 'display_name': display_name,
                                                 'upload_time': time.time()
                                             }
+        self.metadata['complete'][file_name] = False
+        self.metadata['column_tracker'][file_name] = {'original': list(self.mem_data.columns),
+                                                      'selected': list(self.mem_data.columns), 
+                                                      'modified': [], 
+                                                      'created': []}
+        
         self.write_metadata()
         
         # Complete log
@@ -233,6 +240,7 @@ class Normalizer(AbstractDataProject):
         # write data and log
         self.write_data()
         self.write_log_buffer(written=True)
+        self.write_run_info_buffer() # TODO: add run_info_buffer?
 
         # Write configuration (sep, encoding) to INIT dir
         config_dict = {
@@ -253,14 +261,13 @@ class Normalizer(AbstractDataProject):
         # TODO: deal with .csv dependency
         all_files = self._list_files(extensions=['.csv'])
     
-        for _file_name, module_name in all_files.items():
+        for _file_name, module_name in  all_files.items():
             if file_name == _file_name:
                 self.remove(module_name, file_name)
         
         self.metadata['log'] = filter(lambda x: (x['file_name']!=file_name), 
                                                  self.metadata['log'])     
         self.write_metadata()
-
 
     def transform(self, module_name, params):
         '''Run module on pandas DataFrame in memory and update memory state'''
@@ -271,19 +278,28 @@ class Normalizer(AbstractDataProject):
 
         # TODO: catch module errors and add to log
         # Run module on pandas DataFrame 
-        self.mem_data = MODULES['transform'][module_name]['func'](self.mem_data, params)
+        self.mem_data, run_info = MODULES['transform'][module_name]['func'](self.mem_data, params)
         self.mem_data_info['module_name'] = module_name
+        
+        # Transformation -> the project is still_not/ no_longer complete
+        self.metadata['complete'][self.mem_data_info['file_name']] = False
+        file_name = self.mem_data_info['file_name']
+ 
+        self.metadata['column_tracker'][file_name]['modified'].extend(run_info['modified_columns'])
+        self.metadata['column_tracker'][file_name]['modified'] = list(set(self.metadata['column_tracker'][file_name]['modified']))
+        # TODO: recompute modifications from all run_infos
         
         # Complete log
         log = self.end_log(log, error=False)
                           
-        # Update log buffer
+        # Update buffers
         self.log_buffer.append(log)
+        self.run_info_buffer[module_name] = run_info
+        
+
+        
         return log
     
-
-
-
 
 class UserNormalizer(Normalizer):
     def path_to(self, module_name='', file_name=''):
@@ -314,10 +330,8 @@ if __name__ == '__main__':
     with open(file_path) as f:
         proj.upload_init_data(f, source_file_name, user_given_name)
 
-
     # Load source data to memory
     proj.load_data(module_name='INIT' , file_name=user_given_name)
-    
     
     inferredTypes = proj.infer('inferTypes', params = None)
     
@@ -337,6 +351,7 @@ if __name__ == '__main__':
     # Write transformed file
     proj.write_data()
     proj.write_log_buffer(written=True)
+    proj.write_run_info_buffer(written=True)
     
     # Remove previously uploaded file
     # proj.remove_data('source', 'INIT', 'source.csv')    

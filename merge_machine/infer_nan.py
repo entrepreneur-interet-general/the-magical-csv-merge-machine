@@ -48,7 +48,7 @@ def mv_from_usual_forms(top_values, probable_missing_values, score=0.5):
     return to_return
     
 
-def mv_from_len_diff(top_values, score=1):
+def mv_from_len_diff(top_values, score=0.3):
     """Check if all values have the same length except one"""
     # Compute lengths of values
     lengths = pd.Series([len(x) for x in top_values.index], index=top_values.index)
@@ -250,7 +250,7 @@ def replace_mvs(tab, params):
     
     OUTPUT:
         tab: same table with values replaced by np.nan
-    
+        run_info    
     """
     DEFAULT_THRESH = 0.6
     
@@ -261,17 +261,46 @@ def replace_mvs(tab, params):
     # Replace
     assert sorted(list(mvs_dict.keys())) == ['all', 'columns']
 
+    # Run information
+    run_info = dict()
+    run_info['modified_columns'] = []
+    run_info['has_modifications'] = False
+    run_info['replace_num'] = {'all': dict(), 'columns': dict()}
+
     for mv in mvs_dict['all']:
         val, score = mv['val'], mv['score']
+        run_info['replace_num']['all'][val] = 0
         if score >= thresh:
+            # Metrics
+            col_count = (tab == val).sum()
+            run_info['modified_columns'] = run_info['modified_columns'].extend(list(col_count[col_count != 0].index))
+            run_info['has_modifications'] = run_info['has_modifications'] or (col_count.sum() >= 1)
+            run_info['replace_num']['all'][val] = int(col_count.sum())
+            
+            # Do transformation
             tab.replace(val, np.nan, inplace=True)
     
     for col, mv_values in mvs_dict['columns'].items():
+        run_info['replace_num']['columns'][col] = dict()
         for mv in mv_values:
+            print('qsdfqsdf here')
             val, score = mv['val'], mv['score']
+            run_info['replace_num']['columns'][col][val] = 0
             if score >= thresh:
+                print('qsdfqsfzqsd there')
+                # Metrics
+                count = (tab[col] == val).sum()
+                if count:
+                    run_info['modified_columns'].append(col)
+                    run_info['has_modifications'] = run_info['has_modifications'] or (col_count.sum() >= 1)
+                run_info['replace_num']['columns'][col][val] = int(count)      
+                
+                # Do transformation
                 tab[col].replace(val, np.nan, inplace=True)
-    return tab
+
+    run_info['modified_columns'] = list(set(run_info['modified_columns']))
+    
+    return tab, run_info
 
 
 def sample_mvs_ilocs(tab, params, sample_params):

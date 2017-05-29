@@ -17,6 +17,7 @@ METHODS:
     - _get_sample(self, module_name, file_name, row_idxs=range(5), columns=None, drop_duplicates=True)
     - get_sample(self, sampler_module_name, params, sample_params)
     - write_log_buffer(self, written)
+    - write_run_info_buffer(self)
     - write_data(self)
     - clear_memory(self)
     - infer(self, module_name, params)
@@ -39,6 +40,22 @@ class AbstractDataProject(AbstractProject):
     Allows loading and writing of data objects (pandas DataFrames) and 
     anticipates usage of transformations and writing them to log
     '''
+    
+    def __init__(self, 
+                 project_id=None, 
+                 create_new=False, 
+                 description=None,
+                 display_name=None):
+        super().__init__(project_id=project_id, 
+                          create_new=create_new, 
+                          description=description,
+                          display_name=display_name)
+        # Initiate with no data in memory
+        self.mem_data = None
+        self.mem_data_info =  dict() # Information on data in memory
+        self.run_info_buffer = dict()
+        self.log_buffer = [] # List of logs not yet written to metadata.json    
+    
     
     def init_log(self, module_name, module_type):
         raise Exception(NOT_IMPLEMENTED_MESSAGE)
@@ -96,11 +113,8 @@ class AbstractDataProject(AbstractProject):
                               usecols=columns, nrows=max_rows)
             
             # row_idxs counts lines in csv including header --> de-increment
-            try:
-                tab = tab.iloc[[x - 1 for x in row_idxs[1:]], :]
-            except:
-                import pdb
-                pdb.set_trace()
+            tab = tab.iloc[[x - 1 for x in row_idxs[1:]], :]
+
         else:
             tab = pd.read_csv(file_path, encoding='utf-8', dtype=str, usecols=columns)
         
@@ -179,6 +193,16 @@ class AbstractDataProject(AbstractProject):
         self.write_metadata()
         self.log_buffer = []
 
+    def write_run_info_buffer(self):
+        '''
+        Appends run info buffer to metadata, writes metadata and clears run_info_buffer.        
+        '''
+        # TODO: run_info should be file_name aware
+        for module_name, run_info in self.run_info_buffer.items():
+            self.upload_config_data(run_info, module_name, 'run_info.json')
+        self.run_info_buffer = dict()
+        
+        
 
     def write_data(self):
         '''Write data stored in memory to proper module'''
