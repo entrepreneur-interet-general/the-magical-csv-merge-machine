@@ -17,7 +17,7 @@ import unittest
 
 import pandas as pd
 
-from infer_nan import infer_mvs, compute_all_top_values
+from infer_nan import infer_mvs
 
 class InferMvsTest(unittest.TestCase) :
 
