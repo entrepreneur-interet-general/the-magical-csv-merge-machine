@@ -1,0 +1,119 @@
+<html>
+    <head>
+        <title>Select return</title>
+
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap.min.css">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap-theme.min.css">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/rainbow/1.2.0/themes/github.css">
+		 
+        <!--<link rel="stylesheet" type="text/css" href="http://www.csszengarden.com/219/219.css?v=8may2013">-->
+        <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+        <script type="text/javascript" charset="utf-8">
+
+	        var orig_color = '#ffffff'
+	        var color_selected = '#5697ff'
+
+
+	       	$(document).ready(function() {
+	       		label = {}
+       			// Initiate label variable
+		        label = {
+				    {% for col in index %}
+				    		"{{ col }}": false,
+				    {% endfor %}
+				}
+
+	       		// Change initial background color in table and fill label
+				{% for col in selected_columns %}
+					label["{{ col }}"] = true
+					$("#table .{{ col }}").css('background-color', color_selected) 
+				{% endfor %}
+
+
+			    // On click behavior for each row in table
+				$("#table").ready(function() {
+					{% for col in index %}
+				        $("#table .{{ col }}").on("click", function() {
+				        	update_color_and_label("{{ col }}")
+				        });
+				        $("#table .ALL_XYZ").on("click", function() {
+				        	update_color_and_label("{{ col }}")
+				        });
+			        {% endfor %}
+		    	});
+
+
+				// Submit forms and go to following page
+				$("#submitBtn").on("click", function() {
+
+					// Add columns to return
+		        	json_to_send = []
+		        	for (var col in label) {
+		        		if (label[col]) {
+		        			json_to_send.push(col)
+		        		}
+		        	}
+
+		        	// Send selected columns
+		    		$.ajax({
+		            type: 'post',
+			            url: "{{ select_columns_normalize_api_url }}",
+			            data: JSON.stringify(json_to_send),
+			            contentType: "application/json; charset=utf-8",
+			            traditional: true,
+			            async: false,
+			            success: function (data) {
+			            	alert('Sent' + JSON.stringify(json_to_send))
+				            window.location = "{{ next_url }}"
+			            	},
+			            error: function(error_msg) {
+			            	alert(JSON.stringify(error_msg))
+			            	return false
+			            }
+		        	});
+            	});
+			});
+
+
+			function update_color_and_label(col) {
+	        	label[col] = !label[col] 
+		        // Change color
+	        	if (label[col]){
+	        		$("#table .".concat(col)).css('background-color', color_selected)
+	        	} else {
+	        		$("#table .".concat(col)).css('background-color', orig_color)
+	        	}				
+			}
+        </script>
+    </head>
+
+
+    <body>
+        <h1 id='title'>Select columns to return: {{ project_id }}</h1>
+
+
+	 	<h2 id='title'>Table</h2>
+
+		<table id="table" style="font-size: 75%;">
+			{% for col in index %}
+				<tr>
+					<th class="{{ col }}">{{ col }}</th>
+					{% for row in samples %}
+						<td class="{{ col }}">{{ row[col] }}</td>
+					{% endfor %}
+				</tr>
+			{% endfor %}
+			<tr>
+				<th class="ALL_XYZ">ALL</th>
+			</tr>	 
+		 </table>
+
+
+
+		</br>
+		<button type="button" id="submitBtn" >Next Step...</button>
+	
+    </body>
+</html>
+
+

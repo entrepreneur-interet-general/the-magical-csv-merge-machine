@@ -14,7 +14,7 @@ import pandas as pd
 
 from abstract_data_project import AbstractDataProject
 from CONFIG import NORMALIZE_DATA_PATH
-from MODULES import MODULES, MODULE_ORDER
+from MODULES import MODULES, NORMALIZE_MODULE_ORDER
 
 class Normalizer(AbstractDataProject):
     """
@@ -45,7 +45,7 @@ class Normalizer(AbstractDataProject):
                                             display_name=display_name)
         # For dicts below, keys are file_names
         metadata['complete'] = dict() # File is complete once final is reconstructed
-        metadata['column_tracker'] = dict() # {'original', 'selected', 'modified', 'created'}
+        metadata['column_tracker'] = None
         metadata['files'] = dict() # Contains single file metadata
         return metadata   
 
@@ -67,6 +67,13 @@ class Normalizer(AbstractDataProject):
                }
         return log
         
+    def load_data(self, module_name, file_name, nrows=None, columns=None):
+        if columns is None:
+            columns = self.metadata['column_tracker']['selected']
+        super().load_data(module_name=module_name, 
+                         file_name=file_name, 
+                         nrows=nrows, 
+                         columns=columns)
     
     def time_since_created(self):
         return time.time() - float(self.metadata['timestamp'])
@@ -119,7 +126,7 @@ class Normalizer(AbstractDataProject):
             - file_name: filter on file_name
             - before_module: (string with module name) Looks for file that was 
                               written in a module previous to before_module 
-                              (in the order defined by MODULE_ORDER)
+                              (in the order defined by NORMALIZE_MODULE_ORDER)
             
         OUTPUT:
             - (module_name, file_name)
@@ -128,7 +135,7 @@ class Normalizer(AbstractDataProject):
             raise Exception('Variables module_name and before_module cannot be \
                             set simultaneously')
         
-        previous_modules = {MODULE_ORDER[i]: MODULE_ORDER[:i] for i in range(len(MODULE_ORDER))}
+        previous_modules = {NORMALIZE_MODULE_ORDER[i]: NORMALIZE_MODULE_ORDER[:i] for i in range(len(NORMALIZE_MODULE_ORDER))}
     
         for log in self.metadata['log'][::-1]:
             if (not log['error']) and log['written'] \
@@ -224,10 +231,13 @@ class Normalizer(AbstractDataProject):
                                                 'upload_time': time.time()
                                             }
         self.metadata['complete'][file_name] = False
-        self.metadata['column_tracker'][file_name] = {'original': list(self.mem_data.columns),
-                                                      'selected': list(self.mem_data.columns), 
-                                                      'modified': [], 
-                                                      'created': []}
+        
+        if self.metadata['column_tracker'] is None:
+            self.metadata['column_tracker'] = {'original': list(self.mem_data.columns),
+                                              'selected': list(self.mem_data.columns), 
+                                              'created': []}
+        else:
+            assert list(self.mem_data.columns) == self.metadata['column_tracker']['original']
         
         self.write_metadata()
         
@@ -252,7 +262,36 @@ class Normalizer(AbstractDataProject):
         self.upload_config_data(config_dict, 'INIT', 'infered_config.json')
 
         self.clear_memory()    
+        
+    def add_selected_columns(self, columns):
+        '''
+        Select the columns to normalize on. Will clear all changes if more columns 
+        are selected than previously
+        '''
+        # Check that columns were selected
+        if not columns:
+            raise ValueError('Select at least one column')
+        
+        # Check that selected columns are in the original header
+        for col in columns:
+            if col not in self.metadata['column_tracker']['original']:
+                raise ValueError('Selected column {0} is not in original header ({1})'.format(\
+                                col, self.metadata['column_tracker']['original']))
+        
+        # If a selected column was not previously selected, delete all 
+        # pre-existing files. Because we will have to re-run processing 
+        if any(col not in self.metadata['column_tracker']['selected'] for col in columns):
+            for file_name in self.metadata['files']:
+                self.clean_after('INIT', file_name, include_current_module=False)
 
+        
+        # Add selected columns to metadata
+        self.metadata['column_tracker']['selected'] = columns
+        self.write_metadata()   
+
+    def read_selected_columns(self):
+        return self.metadata['column_tracker']['selected']
+        
     def remove_all(self, file_name):
         '''
         Remove all occurences of files with a given file_name from the project
@@ -269,9 +308,27 @@ class Normalizer(AbstractDataProject):
                                                  self.metadata['log'])     
         self.write_metadata()
 
+    def clean_after(self, module_name, file_name, include_current_module=True):
+        '''
+        Removes all occurences of file and transformations
+        at and after the given module (NORMALIZE_MODULE_ORDER)
+        '''
+        start_idx = NORMALIZE_MODULE_ORDER.index(module_name) + int(not include_current_module)
+        for iter_module_name in NORMALIZE_MODULE_ORDER[start_idx:]:
+            file_path = self.path_to(iter_module_name, file_name)
+            try:
+                os.remove(file_path)
+            except:
+                pass
+        
+
     def transform(self, module_name, params):
-        '''Run module on pandas DataFrame in memory and update memory state'''
+        '''
+        Run module on pandas DataFrame in memory and update memory state.
+        /!\ DATA IS CLEANED WHEN transform IS CALLED
+        '''
         self.check_mem_data()        
+        self.clean_after(module_name, self.mem_data_info['file_name'])
         
         # Initiate log
         log = self.init_log(module_name, 'transform')
@@ -283,12 +340,7 @@ class Normalizer(AbstractDataProject):
         
         # Transformation -> the project is still_not/ no_longer complete
         self.metadata['complete'][self.mem_data_info['file_name']] = False
-        file_name = self.mem_data_info['file_name']
- 
-        self.metadata['column_tracker'][file_name]['modified'].extend(run_info['modified_columns'])
-        self.metadata['column_tracker'][file_name]['modified'] = list(set(self.metadata['column_tracker'][file_name]['modified']))
-        # TODO: recompute modifications from all run_infos
-        
+
         # Complete log
         log = self.end_log(log, error=False)
                           
@@ -296,10 +348,10 @@ class Normalizer(AbstractDataProject):
         self.log_buffer.append(log)
         self.run_info_buffer[module_name] = run_info
         
-
-        
         return log
     
+#    def concat_with_init(self, )
+
 
 class UserNormalizer(Normalizer):
     def path_to(self, module_name='', file_name=''):

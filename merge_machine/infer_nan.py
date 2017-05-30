@@ -283,11 +283,9 @@ def replace_mvs(tab, params):
     for col, mv_values in mvs_dict['columns'].items():
         run_info['replace_num']['columns'][col] = dict()
         for mv in mv_values:
-            print('qsdfqsdf here')
             val, score = mv['val'], mv['score']
             run_info['replace_num']['columns'][col][val] = 0
             if score >= thresh:
-                print('qsdfqsfzqsd there')
                 # Metrics
                 count = (tab[col] == val).sum()
                 if count:

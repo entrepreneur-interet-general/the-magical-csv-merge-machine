@@ -282,7 +282,7 @@ def web_select_link_project():
 def web_normalize_select_file():
     MAX_FILE_SIZE = 1048576
     
-    next_url_partial = '/web/missing_values/normalize/' #url_for('web_mvs_normalize', file_name='') # Missing project_id and file_name    
+    next_url_partial = '/web/select_columns/normalize/' #url_for('web_mvs_normalize', file_name='') # Missing project_id and file_name    
     
     new_normalize_project_api_url = url_for('new_project', project_type='normalize')
     delete_normalize_project_api_url_partial=url_for('delete_project', 
@@ -335,6 +335,45 @@ def web_link_select_files(project_id):
                            select_file_api_url=url_for('select_file', project_id=project_id),
                            next_url=next_url,
                            MAX_FILE_SIZE=MAX_FILE_SIZE)
+
+@app.route('/web/select_columns/normalize/<project_id>/', methods=['GET']) # (Actually select_project)
+@app.route('/web/select_columns/normalize/<project_id>/<file_name>/', methods=['GET']) # (Actually select_project)
+@cross_origin()
+def web_normalize_select_columns(project_id, file_name=None):
+    '''
+    Configurate file to return for ref and source in same page as well as columns
+    that are supposed to match to test results (ex: Siren, SIRENE)
+    '''
+    # TODO: default to matching columns
+
+
+    if file_name is None:
+        proj = UserNormalizer(project_id)
+        (_, file_name) = proj.get_last_written()
+
+    ROWS_TO_DISPLAY = range(3)
+
+    proj = UserNormalizer(project_id)
+
+    proj.load_data('INIT', file_name)
+    samples = proj.get_sample(None, None, {'sample_ilocs':ROWS_TO_DISPLAY})
+    
+    selected_columns = proj.read_selected_columns()
+    
+    index = list(samples[0].keys())
+    
+    select_columns_normalize_api_url = url_for('add_selected_columns', 
+                                          project_id=project_id)
+    
+    next_url = url_for('web_mvs_normalize', project_id=project_id, file_name=file_name)
+    return render_template('select_columns_normalize.html', 
+                           index=index,                           
+                           samples=samples,
+                           selected_columns=selected_columns,
+                           select_columns_normalize_api_url=select_columns_normalize_api_url,
+                           next_url=next_url)
+    
+
 
 # Three methods for type inference (i.e. try to guess the likeliest type for each CSV column)
 
@@ -888,6 +927,14 @@ def new_project(project_type):
     return jsonify(error=False, 
                    project_id=proj.project_id)
 
+@app.route('/api/normalize/select_columns/<project_id>', methods=['POST'])
+def add_selected_columns(project_id):
+    # TODO: add doc
+    selected_columns = request.json
+    proj = UserNormalizer(project_id=project_id)
+    proj.add_selected_columns(selected_columns)    
+    return jsonify(error=False)
+    
 
 @app.route('/api/delete/<project_type>/<project_id>', methods=['GET'])
 def delete_project(project_type, project_id):
@@ -1016,6 +1063,9 @@ def select_file(project_id):
                            internal=params.get('internal', False), # TODO: remove internal
                            project_id=params['project_id'])
     return jsonify(error=False)
+
+
+
 
 
 @app.route('/api/exists/<project_type>/<project_id>', methods=['GET'])

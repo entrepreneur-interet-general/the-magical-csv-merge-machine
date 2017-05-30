@@ -58,8 +58,11 @@ class AbstractDataProject(AbstractProject):
     
     
     def init_log(self, module_name, module_type):
-        raise Exception(NOT_IMPLEMENTED_MESSAGE)
+        raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
         
+    def upload_init_data(self, file, file_name, user_given_name=None):
+        raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
+
     def end_log(self, log, error=False):
         '''
         Close a log mesage started with init_log (right after module call)
@@ -74,14 +77,14 @@ class AbstractDataProject(AbstractProject):
             raise Exception('No data in memory: use `load_data` (reload is \
                         mandatory after dedupe)')
         
-    def load_data(self, module_name, file_name, nrows=None):
+    def load_data(self, module_name, file_name, nrows=None, columns=None):
         '''Load data as pandas DataFrame to memory'''
         file_path = self.path_to(module_name, file_name)
         if nrows is not None:
             print('Nrows is : ', nrows)
-            self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, nrows=nrows)
+            self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, nrows=nrows, usecols=columns)
         else:
-            self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str)
+            self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, usecols=columns)
         self.mem_data_info = {'file_name': file_name,
                               'module_name': module_name}
 
