@@ -51,6 +51,9 @@ TODO:
     - Choose btw add/select/upload and read/load/get
     
     - Catch exceptions. Never redirect if server error
+    
+    - Re-Run inference if selecting more columns
+    
 
 DEV GUIDELINES:
     - By default the API will use the file with the same name in the last 
@@ -355,7 +358,7 @@ def web_normalize_select_columns(project_id, file_name=None):
 
     proj = UserNormalizer(project_id)
 
-    proj.load_data('INIT', file_name)
+    proj.load_data('INIT', file_name, restrict_to_selected=False)
     samples = proj.get_sample(None, None, {'sample_ilocs':ROWS_TO_DISPLAY})
     
     selected_columns = proj.read_selected_columns()

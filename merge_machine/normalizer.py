@@ -67,8 +67,9 @@ class Normalizer(AbstractDataProject):
                }
         return log
         
-    def load_data(self, module_name, file_name, nrows=None, columns=None):
-        if columns is None:
+    def load_data(self, module_name, file_name, nrows=None, columns=None, restrict_to_selected=True):
+        assert (columns is None) or (not restrict_to_selected)
+        if restrict_to_selected:
             columns = self.metadata['column_tracker']['selected']
         super().load_data(module_name=module_name, 
                          file_name=file_name, 
@@ -318,7 +319,7 @@ class Normalizer(AbstractDataProject):
             file_path = self.path_to(iter_module_name, file_name)
             try:
                 os.remove(file_path)
-            except:
+            except FileNotFoundError:
                 pass
         
 
@@ -350,7 +351,36 @@ class Normalizer(AbstractDataProject):
         
         return log
     
-#    def concat_with_init(self, )
+    def concat_with_init(self):
+        '''
+        Concatenates original table to data in memory (changes column names as well)
+        
+        TODO: merge with transform
+        '''
+        
+        self.check_mem_data()
+        
+        # Initiate log
+        log = self.init_log('concat_with_init', 'transform')
+    
+        og_file_path = self.path_to('INIT', self.mem_data_info['file_name'])
+        og_tab = pd.read_csv(og_file_path, encoding='utf-8')
+        assert len(og_tab) == len(self.mem_data)
+        self.mem_data.columns = [x + '__MMM_NORMALIZED' for x in self.mem_data.columns]
+        self.mem_data = pd.concat([og_tab, self.mem_data], 1)
+        
+        run_info = {} # TODO: check specifications for run_info
+        
+        # Project is complete at that stage
+        self.metadata['complete'][self.mem_data_info['file_name']] = False
+
+        # Complete log
+        log = self.end_log(log, error=False)
+                          
+        # Update buffers
+        self.log_buffer.append(log)
+        self.run_info_buffer['concat_with_init'] = run_info
+        
 
 
 class UserNormalizer(Normalizer):
@@ -398,12 +428,12 @@ if __name__ == '__main__':
     'VILLE': 'Commune',
     'CDPOSTAL': 'Code Postal',
     'PAYS': 'Pays' } }
-    proj.transform('normalize', params)
+    proj.transform('normalizeValues', params)
     
     # Write transformed file
     proj.write_data()
     proj.write_log_buffer(written=True)
-    proj.write_run_info_buffer(written=True)
+    proj.write_run_info_buffer()
     
     # Remove previously uploaded file
     # proj.remove_data('source', 'INIT', 'source.csv')    

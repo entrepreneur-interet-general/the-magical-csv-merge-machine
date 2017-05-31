@@ -205,8 +205,6 @@ class AbstractDataProject(AbstractProject):
             self.upload_config_data(run_info, module_name, 'run_info.json')
         self.run_info_buffer = dict()
         
-        
-
     def write_data(self):
         '''Write data stored in memory to proper module'''
         self.check_mem_data()

@@ -38,7 +38,7 @@ MODULES = {
                             },
               'inferTypes': {
                                'func': inferTypes,
-                               'write_to': 'normalize',
+                               'write_to': 'normalizeValues',
                                'desc': inferTypes.__doc__
                            },
               'results_analysis': {
