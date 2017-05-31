@@ -109,7 +109,7 @@ curl -i http://127.0.0.1:5000/metadata/ -X POST -F "request_json=@sample_downloa
 USES: /python-memcached
 
 """
-
+import json
 import os
 
 # Change current path to path of api.py
@@ -308,9 +308,9 @@ def web_normalize_select_file():
 @app.route('/web/link/select_files/<project_id>', methods=['GET']) # (Actually select_projects)
 @cross_origin()
 def web_link_select_files(project_id):
-    '''View to create or join 1 or 2 normalization projects (1 for norm, 2 for link)
+    '''View to create or join 1 or 2 normalization projects (1 for norm, 2 for link)'''
     
-    # TODO: Cannot select twice the same file'''
+    # TODO: Cannot select twice the same file
     MAX_FILE_SIZE = 1048576
     
     next_url = url_for('web_mvs_link', project_id=project_id, file_role='source')
@@ -319,8 +319,7 @@ def web_link_select_files(project_id):
     delete_normalize_project_api_url_partial=url_for('delete_project', 
                                                      project_type='normalize', 
                                                      project_id='')
-    # Generate Next URLs
-    
+
     # Do what you fina do
     admin = Admin()
     all_user_projects = admin.list_projects('normalize') # TODO: take care of this
@@ -565,8 +564,7 @@ def web_match_columns(project_id):
     for file_role in ['ref', 'source']:
         proj.load_project_to_merge(file_role)
         (_, file_name) = proj.__dict__[file_role].get_last_written(module_name=None, 
-                                                      file_name=None, 
-                                                      before_module='dedupe_linker')
+                                                      file_name=None)
         proj.__dict__[file_role].load_data('INIT', file_name, nrows=max(ROWS_TO_DISPLAY)+1)
         samples[file_role] = proj.__dict__[file_role].get_sample(None, None, sample_params)
         proj.__dict__[file_role].clear_memory()
@@ -608,30 +606,33 @@ def web_match_columns(project_id):
 
     
 @socketio.on('answer', namespace='/')
-def web_get_answer(user_input):
+def web_get_answer(message_received):
     # TODO: avoid multiple click (front)
     # TODO: add safeguards  if not enough train (front)
+
+    message_received = json.loads(message_received)
+    print(message_received)
+    project_id = message_received['project_id']
+    user_input = message_received['user_input']
+    
+    
     message = ''
     #message = 'Expect to have about 50% of good proposals in this phase. The more you label, the better...'
-    if 'labeller' not in dir(flask._app_ctx_stack):
-        emit('redirect', {'url': url_for('web_download', project_id=flask._app_ctx_stack.project_id)})
-        disconnect
-    else:
-        if flask._app_ctx_stack.labeller.answer_is_valid(user_input):
-            flask._app_ctx_stack.labeller.parse_valid_answer(user_input)
-            if flask._app_ctx_stack.labeller.finished:
-                print('Writing train')
-                flask._app_ctx_stack.labeller.write_training(flask._app_ctx_stack.paths['train'])
-                print('Wrote train')
-    
-                # TODO: Do dedupe
-                next_url = url_for('web_select_return', project_type='link', project_id=flask._app_ctx_stack.project_id)
-                emit('redirect', {'url': next_url})
-            else:
-                flask._app_ctx_stack.labeller.new_label()
+    if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].answer_is_valid(user_input):
+        flask._app_ctx_stack.labeller_mem[project_id]['labeller'].parse_valid_answer(user_input)
+        if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].finished:
+            print('Writing train')
+            flask._app_ctx_stack.labeller_mem[project_id]['labeller'].write_training(flask._app_ctx_stack.labeller_mem[project_id]['paths']['train'])
+            print('Wrote train')
+
+            # TODO: Do dedupe
+            next_url = url_for('web_select_return', project_type='link', project_id=project_id)
+            emit('redirect', {'url': next_url})
         else:
-            message = 'Sent an invalid answer'
-        emit('message', flask._app_ctx_stack.labeller.to_emit(message=message))
+            flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
+    else:
+        message = 'Sent an invalid answer'
+    emit('message', flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=message))
     
 
 @socketio.on('skip', namespace='/terminate')
@@ -640,42 +641,49 @@ def web_terminate_labeller_load():
 
 
 @socketio.on('load_labeller', namespace='/')
-def load_labeller():
+def load_labeller(message_received):
     '''Loads labeller. Necessary to have a separate call to preload page'''    
-    # assert flask.session.project_id == project_id   
+    message_received = json.loads(message_received)
+    project_id = message_received['project_id']
+
     import time
     import pickle
-    def load_dis_labeller():
+    def load_dis_labeller(project_id):
         # TODO: put variables in memory
-        project_id = flask._app_ctx_stack.project_id
+        # TODO: remove from memory at the end
         proj = UserLinker(project_id=project_id)
-        flask._app_ctx_stack.proj = proj
-
-        paths = proj._gen_paths_dedupe()  
-        flask._app_ctx_stack.paths = paths       
+        paths = proj._gen_paths_dedupe() 
         
+        try:
+            flask._app_ctx_stack.labeller_mem[project_id] = dict()
+        except:
+            flask._app_ctx_stack.labeller_mem = {project_id: dict()}
+        
+        flask._app_ctx_stack.labeller_mem[project_id]['proj'] = proj
+        flask._app_ctx_stack.labeller_mem[project_id]['paths'] = paths
+
         a = time.time()
-        flask._app_ctx_stack.labeller = proj._gen_dedupe_labeller()
+        flask._app_ctx_stack.labeller_mem[project_id]['labeller'] = proj._gen_dedupe_labeller()
         b = time.time()
         print('Loading labeller from scratch took {0} seconds'.format(b - a))
         
         a = time.time()
         with open('temp_can_delete.pkl', 'wb') as w:
-            pickle.dump(flask._app_ctx_stack.labeller, w)
+            pickle.dump(flask._app_ctx_stack.labeller_mem[project_id]['labeller'], w)
         b = time.time()
         print('Pickling labeller took {0} seconds'.format(b - a))
         
         a = time.time()
         with open('temp_can_delete.pkl', 'rb') as r:
-            flask._app_ctx_stack.labeller = pickle.load(r)
+            flask._app_ctx_stack.labeller_mem[project_id]['labeller']  = pickle.load(r)
         b = time.time()
         print('Reading pickle labeller took {0} seconds'.format(b - a))
         
-        flask._app_ctx_stack.labeller.new_label()
+        flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
         
-        emit('message', flask._app_ctx_stack.labeller.to_emit(message=''))
+        emit('message', flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=''))
     
-    load_dis_labeller()
+    load_dis_labeller(project_id)
     # socketio.start_background_task(load_dis_labeller)
 
 
@@ -683,17 +691,13 @@ def load_labeller():
 @cross_origin()    
 def web_dedupe(project_id):
     '''Labelling / training and matching using dedupe'''
-    
-    # Set project ID in session
-    flask.session.project_id = project_id
-    flask._app_ctx_stack.project_id = project_id
-    
     proj = UserLinker(project_id)
     
     dummy_labeller = proj._gen_dedupe_dummy_labeller()
     
-    return render_template('dedupe_training.html', 
-                           **dummy_labeller.to_emit(''))
+    return render_template('dedupe_training.html',
+                           **dummy_labeller.to_emit(''),
+                           project_id=project_id)
 
 
 @app.route('/web/select_return/<project_type>/<project_id>', methods=['GET'])
@@ -940,7 +944,7 @@ def add_selected_columns(project_id):
     proj = UserNormalizer(project_id=project_id)
     proj.add_selected_columns(selected_columns)    
     return jsonify(error=False)
-    
+
 
 @app.route('/api/delete/<project_type>/<project_id>', methods=['GET'])
 def delete_project(project_type, project_id):
@@ -976,6 +980,7 @@ def metadata(project_type, project_id):
                    metadata=proj.metadata, 
                    project_id=proj.project_id)
     return resp
+
 
 @app.route('/api/last_written/<project_type>/<project_id>', methods=['POST'])
 def get_last_written(project_type, project_id):

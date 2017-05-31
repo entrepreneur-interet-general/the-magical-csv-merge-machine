@@ -69,6 +69,40 @@ class AbstractProject():
                 raise Exception('Project with id {0} could not be loaded'.format(project_id))
         
 
+    def read_full_config(self, exclude_modules=['INIT'], exclude_files=['run_info.json']):
+        '''Put all json files in a single dictionnary (for export)'''
+        all_dirs = [x for x in os.listdir(self.path_to()) if os.path.isdir(self.path_to(x))]
+        
+        full_config = dict()
+        
+        for module in all_dirs:
+            all_json_files = [x for x in os.listdir(self.path_to(module)) \
+                if (x[-5:]=='.json') and (x not in exclude_files) and (module not in exclude_modules)]
+            for file_name in all_json_files:
+                file_path = self.path_to(module, file_name)
+                with open(file_path) as f:
+                    config = json.load(f)
+                    if module not in full_config:
+                        full_config[module] = {file_name: config}
+                    else:
+                        full_config[module][file_name] = config
+        return full_config
+    
+    def upload_full_config(self, full_config):
+        '''Writes result of full_config to restore the project'''
+        
+        for module_name, multi_config in full_config.items():
+            for file_name, config in multi_config.items():
+                # Create directory if not existent
+                dir_path = self.path_to(module_name)
+                if not os.path.isdir(dir_path):
+                    os.makedirs(dir_path)   
+                
+                file_path = self.path_to(module_name, file_name)
+                with open(file_path, 'w') as w:
+                    json.dump(config, w) 
+
+      
     @staticmethod
     def gen_id():
         '''Generate unique non-guessable string for project ID'''
@@ -140,7 +174,6 @@ class AbstractProject():
     def write_metadata(self):
         path_to_metadata = self.path_to(file_name='metadata.json')
         json.dump(self.metadata, open(path_to_metadata, 'w'))
-        
         
     def remove(self, module_name='', file_name=''):
         '''Removes a file from the project'''

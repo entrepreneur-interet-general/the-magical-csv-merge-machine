@@ -47,19 +47,16 @@
 
 	    	// Send answer to server
             function send_answer() {
-				answer_to_send = $("input[name='possible_answer']:checked").val();
-
+				user_input = $("input[name='possible_answer']:checked").val();
+				answer_to_send = {'user_input': user_input, 'project_id': "{{ project_id }}" }
 				// To uncheck checkboxes
 				//$("input[name='possible_answer']").attr('checked',false);
-		        socket.emit('answer', answer_to_send);
+		        socket.emit('answer', JSON.stringify(answer_to_send));
             }
 
             function finished() {
-				answer_to_send = $("input[name='possible_answer']:checked").val();
-
-				// To uncheck checkboxes
-				//$("input[name='possible_answer']").attr('checked',false);
-		        socket.emit('answer', 'f');
+            	answer_to_send = {'user_input': 'f', 'project_id': "{{ project_id }}" }
+		        socket.emit('answer', JSON.stringify(answer_to_send));
             }
 
 
@@ -69,7 +66,8 @@
                 //socket.on('connect', function() {
             	//	qsdfqsdf  
                 //});
-                socket.emit('load_labeller');
+                answer_to_send = {'project_id': "{{ project_id }}"}
+                socket.emit('load_labeller', JSON.stringify(answer_to_send));
 
 				// Redirect when done
 				socket.on('redirect', function(data) {

@@ -203,15 +203,17 @@ class Linker(AbstractDataProject):
         training_path = self.path_to('dedupe_linker', 'training.json')
         learned_settings_path = self.path_to('dedupe_linker', 'learned_settings')
         
+        # TODO: check that normalization projects are complete ?
+        
         # Get path to source
         file_name = self.metadata['current']['source']['file_name']
         source_path = self.source.path_to_last_written(module_name=None, 
-                    file_name=file_name, before_module='dedupe_linker')
+                    file_name=file_name)
         
         # Get path to ref
         file_name = self.metadata['current']['ref']['file_name']
         ref_path = self.ref.path_to_last_written(module_name=None, 
-                    file_name=file_name, before_module='dedupe_linker')
+                    file_name=file_name)
         
         # Add paths
         paths = {
