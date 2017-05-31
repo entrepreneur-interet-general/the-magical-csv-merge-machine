@@ -756,8 +756,11 @@ def web_select_return(project_type, project_id):
 
 
 @app.route('/web/download/normalize/<project_id>/<file_name>', methods=['GET'])
-def web_download_normalize(project_id, file_name):
-    return '<a href="{0}">Home</a>'.format(url_for('web_index'))
+def web_launch_normalize(project_id, file_name):
+    
+    return render_template('last_page_normalize.html',
+                           concat_with_init_api_url=url_for('concat_with_init', project_id=project_id),
+                           home_url=url_for('web_index'))
 
 
 @app.route('/web/download/<project_type>/<project_id>/', methods=['GET'])
@@ -771,7 +774,7 @@ def web_download(project_type, project_id):
     has_results =  os.path.isfile(file_path) 
     
     next_url = url_for('web_view_results', project_type='link', project_id=project_id)
-    return render_template('last_page.html', 
+    return render_template('last_page_link.html', 
                            has_results=has_results,
                            project_id=project_id,
                            count_jobs_in_queue_api_url=url_for('count_jobs_in_queue'),
@@ -1284,7 +1287,38 @@ def _replace_mvs(project_id, data_params, module_params):
     proj.write_run_info_buffer()
     return
 
+@app.route('/api/normalize/concat_with_init/<project_id>/', methods=['POST'])
+@cross_origin()
+def concat_with_init(project_id):
+    '''Schedule the mvs replacement module'''
+    data_params, module_params = _parse_request()
+    #TODO: remove and de-comment unfer
+    job = q.enqueue_call(
+            func='api._concat_with_init', 
+            args=(project_id, data_params, module_params), 
+            result_ttl=5000, 
+            job_id=project_id, 
+            #depends_on=project_id
+    )    
+    job_id = job.get_id()
+    print(job_id)
+    return jsonify(job_id=job_id,
+                   job_result_api_url=url_for('get_job_result', job_id=job_id))
 
+
+def _concat_with_init(project_id, data_params):
+    '''Re-creates original file from '''
+    proj = UserNormalizer(project_id=project_id)
+
+    proj.load_data(data_params['module_name'], data_params['file_name'])
+    
+    proj.concat_with_init()
+    # Write transformations and log
+    proj.write_data()    
+    proj.write_log_buffer(True)
+    proj.write_run_info_buffer()
+    return
+    
 @app.route('/api/link/dedupe_linker/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
 def linker(project_id):

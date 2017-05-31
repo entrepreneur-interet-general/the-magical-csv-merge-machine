@@ -1,0 +1,132 @@
+<html>
+    <head>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap-theme.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/rainbow/1.2.0/themes/github.css">
+     
+        <title>Results of matchining</title>
+        <!--<link rel="stylesheet" type="text/css" href="http://www.csszengarden.com/219/219.css?v=8may2013">-->
+        <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+        <script type="text/javascript" charset="utf-8">
+        	$(document).ready(function(){ 
+
+        		{% if has_results %}
+        			$("#to_results").show()
+        			$("#run_concat").text('Re-Run concat')
+        		{% endif %}
+
+	        	$('#run_concat').on('click', function(){
+	        		console.log('Launching new job')
+	        		// Display div
+	        		$('#no_results').hide()
+	        		$('#processing').show()
+
+	        		// Start job
+	        		$.getJSON("{{ concat_with_init_api_url }}", function(json){
+	        			job_result_api_url = json['job_result_api_url']
+			        	var result_fetcher = window.setInterval(function(){	
+			        		// Fetch the total number of jobs for display
+			        		$.getJSON("{{ count_jobs_in_queue_api_url }}", function(json){
+			        			var num_jobs = json['num_jobs']
+			        			console.log(json['num_jobs'])
+			        			$('#num_jobs').text(num_jobs)
+			        		});
+
+							// Check if job has completed
+							$.getJSON(job_result_api_url, function(json){
+								// If YES: return
+								if (json['completed']) {
+									window.clearInterval(result_fetcher)
+									console.log('Concat was done')
+									console.log(JSON.stringify(json))
+									// Display results div
+				        			$("#to_results").show()
+				        			$('#processing').hide() 	
+				        			$("#run_concat").text('Re-Run Concat (this will overwrite your previous file)')
+								} else {
+									console.log('Waiting to complete')
+								}
+
+								// If NO: do nothing
+
+								// TODO: check if job exists
+							});
+						}, 5000);
+	        		})
+	        		// TODO: Query for position in Queue
+
+	        		// Check for results every five seconds
+	             	
+	        	})
+        	})
+        </script>
+
+
+		<style type="text/css">
+			table.match_table{
+				border-collapse:collapse; 
+			}
+			/*  Define the background color for all the ODD table columns  */
+			table.match_table tr td:nth-child(odd){ 
+				background: #d4d3e5;
+			}
+			/*  Define the background color for all the EVEN table columns  */
+			table.match_table tr td:nth-child(even){
+				background: #e7e5ff;
+			}
+
+			#source_table  { 
+				background: #d4d3e5;
+			}
+
+			#ref_table  { 
+				background: #e7e5ff;
+			}
+
+			.loader {
+			  border: 16px solid #f3f3f3;
+			  border-radius: 50%;
+			  border-top: 16px solid #3498db;
+			  width: 120px;
+			  height: 120px;
+			  -webkit-animation: spin 2s linear infinite;
+			  animation: spin 2s linear infinite;
+			}
+
+			@-webkit-keyframes spin {
+			  0% { -webkit-transform: rotate(0deg); }
+			  100% { -webkit-transform: rotate(360deg); }
+			}
+
+			@keyframes spin {
+			  0% { transform: rotate(0deg); }
+			  100% { transform: rotate(360deg); }
+			}
+		</style>
+    </head>
+
+    <body>
+        <h1 id='title'>Results of matching</h1>
+
+        <div id='no_results'>
+        	<button id="run_concat">Run concat</button>
+        </div>
+
+
+        <div id='processing' style="display: none;">
+        	Processing (still <span id="num_jobs"> a few</span> jobs to process)
+        	<div class="loader"></div>
+			<button id="stop_concat"> Interrupt </a>
+        </div>
+
+
+        <div id='to_results' style="display: none;">
+        	<a href="{{ next_url }}">Go to results</a>
+        </div>
+
+
+    </body>
+</html>
+
+

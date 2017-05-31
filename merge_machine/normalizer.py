@@ -369,6 +369,8 @@ class Normalizer(AbstractDataProject):
         self.mem_data.columns = [x + '__MMM_NORMALIZED' for x in self.mem_data.columns]
         self.mem_data = pd.concat([og_tab, self.mem_data], 1)
         
+        self.mem_data_info['module_name'] = 'concat_with_init'
+        
         run_info = {} # TODO: check specifications for run_info
         
         # Project is complete at that stage
@@ -412,6 +414,12 @@ if __name__ == '__main__':
     with open(file_path) as f:
         proj.upload_init_data(f, source_file_name, user_given_name)
 
+    # Select only interesting columns
+    proj.add_selected_columns([
+                                'numero_uai', 'patronyme_uai',
+                               'localite_acheminement_uai', 'departement',
+                               'code_postal_uai'])
+
     # Load source data to memory
     proj.load_data(module_name='INIT' , file_name=user_given_name)
     
@@ -435,7 +443,12 @@ if __name__ == '__main__':
     proj.write_log_buffer(written=True)
     proj.write_run_info_buffer()
     
+    # Concat with init
+    proj.concat_with_init()
+    proj.write_data()
+    proj.write_log_buffer(written=True)
+    proj.write_run_info_buffer()
+    
     # Remove previously uploaded file
     # proj.remove_data('source', 'INIT', 'source.csv')    
 
-    assert False
