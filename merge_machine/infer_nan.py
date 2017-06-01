@@ -290,7 +290,7 @@ def replace_mvs(tab, params):
                 count = (tab[col] == val).sum()
                 if count:
                     run_info['modified_columns'].append(col)
-                    run_info['has_modifications'] = run_info['has_modifications'] or (col_count.sum() >= 1)
+                    run_info['has_modifications'] = run_info['has_modifications'] or (count >= 1)
                 run_info['replace_num']['columns'][col][val] = int(count)      
                 
                 # Do transformation
