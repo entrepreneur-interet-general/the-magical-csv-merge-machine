@@ -293,7 +293,6 @@ class Linker(AbstractDataProject):
 
 class UserLinker(Linker):
     def path_to(self, module_name='', file_name=''):
-        print('path_to is', LINK_DATA_PATH)
         return self._path_to(LINK_DATA_PATH, module_name, file_name)
     
 
