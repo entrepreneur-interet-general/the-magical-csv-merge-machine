@@ -1067,10 +1067,6 @@ def select_file(project_id):
                            project_id=params['project_id'])
     return jsonify(error=False)
 
-
-
-
-
 @app.route('/api/exists/<project_type>/<project_id>', methods=['GET'])
 @cross_origin()
 def project_exists(project_type, project_id):
