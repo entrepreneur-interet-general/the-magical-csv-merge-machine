@@ -652,24 +652,6 @@ def web_terminate_labeller_load(message_received):
         print('Could not delete paths')
             
 
-@app.route('/api/link/create_labeller/<project_id>/', methods=['GET'])
-@cross_origin()
-def create_labeller(project_id):
-    '''Schedule the mvs replacement module'''
-    #TODO: remove and de-comment unfer
-    job = q.enqueue_call(
-            func='api._create_labeller', 
-            args=(project_id,), 
-            result_ttl=5000, 
-            job_id=project_id, 
-            #depends_on=project_id
-    )    
-    job_id = job.get_id()
-    print(job_id)
-    return jsonify(job_id=job_id,
-                   job_result_api_url=url_for('get_job_result', job_id=job_id))
-
-
 def _create_labeller(project_id, *argv):
     # TODO: data input in gen_dedupe_labeller ?
     proj = UserLinker(project_id=project_id)
@@ -1275,25 +1257,8 @@ def infer_mvs(project_id):
 # TODO: job_id does not allow to call all steps of a pipeline at once
 # TODO: put all job schedulers in single api (assert to show possible methods) or use @job   
 
-@app.route('/api/normalize/replace_mvs/<project_id>/', methods=['POST'])
-@cross_origin()
-def replace_mvs(project_id):
-    '''Schedule the mvs replacement module'''
-    data_params, module_params = _parse_request()
-    #TODO: remove and de-comment unfer
-    job = q.enqueue_call(
-            func='api._replace_mvs', 
-            args=(project_id, data_params, module_params), 
-            result_ttl=5000, 
-            job_id=project_id, 
-            #depends_on=project_id
-    )    
-    job_id = job.get_id()
-    print(job_id)
-    return jsonify(job_id=job_id,
-                   job_result_api_url=url_for('get_job_result', job_id=job_id))
 
-@app.route('/api/normalize/<job_name>/<project_id>/', methods=['POST'])
+@app.route('/api/schedule/<job_name>/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
 def schedule_job(job_name, project_id):    
     '''Schedule module runs'''
@@ -1326,24 +1291,6 @@ def _replace_mvs(project_id, data_params, module_params):
     proj.write_run_info_buffer()
     return
 
-@app.route('/api/normalize/concat_with_init/<project_id>/', methods=['POST'])
-@cross_origin()
-def concat_with_init(project_id):
-    '''Schedule the mvs replacement module'''
-    data_params, module_params = _parse_request()
-    #TODO: remove and de-comment unfer
-    job = q.enqueue_call(
-            func='api._concat_with_init', 
-            args=(project_id, data_params, module_params), 
-            result_ttl=5000, 
-            job_id=project_id, 
-            #depends_on=project_id
-    )    
-    job_id = job.get_id()
-    print(job_id)
-    return jsonify(job_id=job_id,
-                   job_result_api_url=url_for('get_job_result', job_id=job_id))
-
 
 def _concat_with_init(project_id, data_params):
     '''Re-creates original file from '''
@@ -1357,23 +1304,6 @@ def _concat_with_init(project_id, data_params):
     proj.write_log_buffer(True)
     proj.write_run_info_buffer()
     return
-    
-@app.route('/api/link/dedupe_linker/<project_id>/', methods=['GET', 'POST'])
-@cross_origin()
-def linker(project_id):
-    '''Schedule the dedupe_linker to run'''  
-    #data_params, module_params = _parse_linking_request()
-    
-    job = q.enqueue_call(
-            func='api._linker', 
-            args=(project_id,), 
-            result_ttl=5000, 
-            job_id=project_id
-    )
-    job_id = job.get_id()
-    print(job_id)
-    return jsonify(job_id=job_id,
-                   job_result_api_url=url_for('get_job_result', job_id=job_id))
 
 # In test_linker
 def _linker(project_id, *argv):

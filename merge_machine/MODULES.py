@@ -12,6 +12,8 @@ from infer_nan import infer_mvs, replace_mvs, sample_mvs_ilocs
 #from preprocess_fields_v3 import inferTypes, normalizeValues, sample_types_ilocs
 
 NORMALIZE_MODULE_ORDER = ['INIT', 'replace_mvs', 'normalizeValues', 'concat_with_init']
+NORMALIZE_MODULE_ORDER = ['INIT', 'replace_mvs', 'concat_with_init']
+
 
 MODULES = {
         'transform':{
@@ -58,10 +60,10 @@ MODULES = {
                         'func': sample_mvs_ilocs,
                         'desc': sample_mvs_ilocs.__doc__
                         },
-                'sample_types': {
-                        'func': sample_types_ilocs,
-                        'desc': sample_types_ilocs.__doc__
-                        }
+#                'sample_types': {
+#                        'func': sample_types_ilocs,
+#                        'desc': sample_types_ilocs.__doc__
+#                        }
                 }
         }
                 
