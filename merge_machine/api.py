@@ -544,7 +544,8 @@ def _web_mvs_normalize(project_id, file_name, next_url):
                            add_config_api_url=url_for('upload_config', 
                                                       project_type='normalize',
                                                       project_id=project_id),
-                           recode_missing_values_api_url=url_for('replace_mvs', 
+                           recode_missing_values_api_url=url_for('schedule_job',
+                                                      job_name='replace_mvs',
                                                       project_id=project_id),
                            next_url=next_url)
 
@@ -616,7 +617,7 @@ def web_get_answer(message_received):
     user_input = message_received['user_input']
     
     
-    message = ''
+    message_to_display = ''
     #message = 'Expect to have about 50% of good proposals in this phase. The more you label, the better...'
     if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].answer_is_valid(user_input):
         flask._app_ctx_stack.labeller_mem[project_id]['labeller'].parse_valid_answer(user_input)
@@ -631,60 +632,73 @@ def web_get_answer(message_received):
         else:
             flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
     else:
-        message = 'Sent an invalid answer'
-    emit('message', flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=message))
+        message_to_display = 'Sent an invalid answer'
+    emit('message', flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=message_to_display))
     
 
-@socketio.on('skip', namespace='/terminate')
-def web_terminate_labeller_load():
-    pass
+@socketio.on('terminate', namespace='/')
+def web_terminate_labeller_load(message_received):
+    '''Clear memory in application for selected project'''
+    message_received = json.loads(message_received)
+    project_id = message_received['project_id']
+    
+    try:
+        del flask._app_ctx_stack.labeller_mem[project_id]['labeller']
+    except:
+        print('Could not delete labeller')
+    try:
+        del flask._app_ctx_stack.labeller_mem[project_id]['paths']
+    except:
+        print('Could not delete paths')
+            
+
+@app.route('/api/link/create_labeller/<project_id>/', methods=['GET'])
+@cross_origin()
+def create_labeller(project_id):
+    '''Schedule the mvs replacement module'''
+    #TODO: remove and de-comment unfer
+    job = q.enqueue_call(
+            func='api._create_labeller', 
+            args=(project_id,), 
+            result_ttl=5000, 
+            job_id=project_id, 
+            #depends_on=project_id
+    )    
+    job_id = job.get_id()
+    print(job_id)
+    return jsonify(job_id=job_id,
+                   job_result_api_url=url_for('get_job_result', job_id=job_id))
 
 
+def _create_labeller(project_id, *argv):
+    # TODO: data input in gen_dedupe_labeller ?
+    proj = UserLinker(project_id=project_id)
+    labeller = proj._gen_dedupe_labeller()
+    proj.write_labeller(labeller)
+    
 @socketio.on('load_labeller', namespace='/')
 def load_labeller(message_received):
     '''Loads labeller. Necessary to have a separate call to preload page'''    
     message_received = json.loads(message_received)
     project_id = message_received['project_id']
-
-    import time
-    import pickle
-    def load_dis_labeller(project_id):
-        # TODO: put variables in memory
-        # TODO: remove from memory at the end
-        proj = UserLinker(project_id=project_id)
-        paths = proj._gen_paths_dedupe() 
-        
-        try:
-            flask._app_ctx_stack.labeller_mem[project_id] = dict()
-        except:
-            flask._app_ctx_stack.labeller_mem = {project_id: dict()}
-        
-        flask._app_ctx_stack.labeller_mem[project_id]['proj'] = proj
-        flask._app_ctx_stack.labeller_mem[project_id]['paths'] = paths
-
-        a = time.time()
-        flask._app_ctx_stack.labeller_mem[project_id]['labeller'] = proj._gen_dedupe_labeller()
-        b = time.time()
-        print('Loading labeller from scratch took {0} seconds'.format(b - a))
-        
-        a = time.time()
-        with open('temp_can_delete.pkl', 'wb') as w:
-            pickle.dump(flask._app_ctx_stack.labeller_mem[project_id]['labeller'], w)
-        b = time.time()
-        print('Pickling labeller took {0} seconds'.format(b - a))
-        
-        a = time.time()
-        with open('temp_can_delete.pkl', 'rb') as r:
-            flask._app_ctx_stack.labeller_mem[project_id]['labeller']  = pickle.load(r)
-        b = time.time()
-        print('Reading pickle labeller took {0} seconds'.format(b - a))
-        
-        flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
-        
-        emit('message', flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=''))
     
-    load_dis_labeller(project_id)
-    # socketio.start_background_task(load_dis_labeller)
+    # TODO: put variables in memory
+    # TODO: remove from memory at the end
+    proj = UserLinker(project_id=project_id)
+    paths = proj._gen_paths_dedupe() 
+    
+    # Create flaske labeleller memory if necessary and add current labeller
+    try:
+        flask._app_ctx_stack.labeller_mem[project_id] = dict()
+    except:
+        flask._app_ctx_stack.labeller_mem = {project_id: dict()}
+    
+    # Generate dedupe paths and create labeller
+    flask._app_ctx_stack.labeller_mem[project_id]['paths'] = paths
+    flask._app_ctx_stack.labeller_mem[project_id]['labeller'] = proj._read_labeller()
+    
+    flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
+    emit('message', flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=''))
 
 
 @app.route('/web/link/dedupe_linker/<project_id>/', methods=['GET'])
@@ -697,6 +711,7 @@ def web_dedupe(project_id):
     
     return render_template('dedupe_training.html',
                            **dummy_labeller.to_emit(''),
+                           create_labeller_api_url=url_for('schedule_job', job_name='create_labeller', project_id=project_id),
                            project_id=project_id)
 
 
@@ -726,8 +741,7 @@ def web_select_return(project_type, project_id):
         
         proj.load_project_to_merge(file_role)
         (module_name, file_name) = proj.__dict__[file_role].get_last_written(None, 
-                                                    data['file_name'], 
-                                                    before_module='dedupe_linker')
+                                                    data['file_name'])
         proj.__dict__[file_role].load_data(module_name, file_name, nrows=max(ROWS_TO_DISPLAY)+1)
         samples[file_role] = proj.__dict__[file_role].get_sample(None, None, {'sample_ilocs':ROWS_TO_DISPLAY})
         
@@ -763,7 +777,7 @@ def web_select_return(project_type, project_id):
 def web_launch_normalize(project_id, file_name):
     
     return render_template('last_page_normalize.html',
-                           concat_with_init_api_url=url_for('concat_with_init', project_id=project_id),
+                           concat_with_init_api_url=url_for('schedule_job', job_name='concat_with_init', project_id=project_id),
                            home_url=url_for('web_index'))
 
 
@@ -782,7 +796,7 @@ def web_download(project_type, project_id):
                            has_results=has_results,
                            project_id=project_id,
                            count_jobs_in_queue_api_url=url_for('count_jobs_in_queue'),
-                           linker_api_url=url_for('linker', project_id=project_id),
+                           linker_api_url=url_for('schedule_job', job_name='linker', project_id=project_id),
                            download_api_url=url_for('download', 
                                 project_type=project_type, project_id=project_id),
                            next_url=next_url)
@@ -1259,7 +1273,8 @@ def infer_mvs(project_id):
                    response=result)
 
 # TODO: job_id does not allow to call all steps of a pipeline at once
-    
+# TODO: put all job schedulers in single api (assert to show possible methods) or use @job   
+
 @app.route('/api/normalize/replace_mvs/<project_id>/', methods=['POST'])
 @cross_origin()
 def replace_mvs(project_id):
@@ -1278,6 +1293,25 @@ def replace_mvs(project_id):
     return jsonify(job_id=job_id,
                    job_result_api_url=url_for('get_job_result', job_id=job_id))
 
+@app.route('/api/normalize/<job_name>/<project_id>/', methods=['POST'])
+@cross_origin()
+def schedule_job(job_name, project_id):    
+    '''Schedule module runs'''
+    assert job_name in ['infer_mvs', 'replace_mvs', 'concat_with_init', 'linker', 'create_labeller']
+    data_params, module_params = _parse_request()
+    #TODO: remove and de-comment unfer
+    job = q.enqueue_call(
+            func='api._' + job_name,
+            args=(project_id, data_params, module_params), 
+            result_ttl=5000, 
+            job_id=project_id, 
+            #depends_on=project_id
+    )    
+    job_id = job.get_id()
+    print(job_id)
+    return jsonify(job_id=job_id,
+                   job_result_api_url=url_for('get_job_result', job_id=job_id))    
+    
     
 def _replace_mvs(project_id, data_params, module_params):
     '''Runs the mvs replacement module'''
@@ -1327,15 +1361,14 @@ def _concat_with_init(project_id, data_params):
 @app.route('/api/link/dedupe_linker/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
 def linker(project_id):
-    '''Schedule the deduper module'''  
+    '''Schedule the dedupe_linker to run'''  
     #data_params, module_params = _parse_linking_request()
     
     job = q.enqueue_call(
             func='api._linker', 
             args=(project_id,), 
             result_ttl=5000, 
-            job_id=project_id, 
-            depends_on=project_id
+            job_id=project_id
     )
     job_id = job.get_id()
     print(job_id)
@@ -1343,7 +1376,7 @@ def linker(project_id):
                    job_result_api_url=url_for('get_job_result', job_id=job_id))
 
 # In test_linker
-def _linker(project_id):
+def _linker(project_id, *argv):
     '''
     Runs deduper module. Contrary to other modules, linker modules, take
     paths as input (in addition to module parameters)

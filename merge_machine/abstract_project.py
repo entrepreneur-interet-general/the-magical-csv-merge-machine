@@ -26,6 +26,18 @@ import random
 import shutil
 import time
 
+import numpy as np
+
+class MyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return super(MyEncoder, self).default(obj)
 
 
 NOT_IMPLEMENTED_MESSAGE = 'NOT IMPLEMENTED in abstract class'
@@ -100,7 +112,7 @@ class AbstractProject():
                 
                 file_path = self.path_to(module_name, file_name)
                 with open(file_path, 'w') as w:
-                    json.dump(config, w) 
+                    json.dump(config, w, cls=MyEncoder)
 
       
     @staticmethod
@@ -150,7 +162,7 @@ class AbstractProject():
         # Write file
         file_path = self.path_to(module_name, file_name)
         with open(file_path, 'w') as w:
-            json.dump(config_dict, w)
+            json.dump(config_dict, w, cls=MyEncoder)
 
     def read_config_data(self, module_name, file_name):
         '''
@@ -173,7 +185,7 @@ class AbstractProject():
     
     def write_metadata(self):
         path_to_metadata = self.path_to(file_name='metadata.json')
-        json.dump(self.metadata, open(path_to_metadata, 'w'))
+        json.dump(self.metadata, open(path_to_metadata, 'w'), cls=MyEncoder)
         
     def remove(self, module_name='', file_name=''):
         '''Removes a file from the project'''

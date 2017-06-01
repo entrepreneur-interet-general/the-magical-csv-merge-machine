@@ -6,6 +6,7 @@ Created on Mon Apr 24 15:46:00 2017
 @author: leo
 """
 import gc
+import pickle
 import time
 
 import pandas as pd
@@ -189,7 +190,7 @@ class Linker(AbstractDataProject):
                           
         # Update buffers
         self.log_buffer.append(log)        
-        self.run_info_buffer.append(run_info)
+        self.run_info_buffer[module_name] = run_info
         return 
 
     #==========================================================================
@@ -275,6 +276,20 @@ class Linker(AbstractDataProject):
                         training_path=paths['train'], 
                         use_previous=True)
 
+    def write_labeller(self, labeller):
+        '''Pickles the labeller object in project'''
+        # TODO: Add isinstance(labeller, Labeller)        
+        pickle_path = self.path_to('dedupe_linker', 'labeller.pkl')
+        with open(pickle_path, 'wb') as w:
+            pickle.dump(labeller, w)
+    
+    def _read_labeller(self):
+        '''Reads labeller stored in pickle'''
+        pickle_path = self.path_to('dedupe_linker', 'labeller.pkl')
+        with open(pickle_path, 'rb') as r:
+            labeller  = pickle.load(r)
+            
+        return labeller
 
 class UserLinker(Linker):
     def path_to(self, module_name='', file_name=''):
