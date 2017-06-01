@@ -1222,47 +1222,16 @@ def add_columns_to_return(project_id, file_role):
 # MODULES
 #==============================================================================
 
-@app.route('/api/normalize/infer_mvs/<project_id>/', methods=['GET', 'POST'])
-@cross_origin()
-def infer_mvs(project_id):
-    '''
-    Runs the infer_mvs module
-    
-    wrapper around UserNormalizer.infer ?
-    
-    GET:
-        project_id: ID for "normalize" project
-
-    POST:
-        - data: {
-                "module_name": module to fetch from
-                "file_name": file to fetch
-                }
-        - params: parameters for the inference
-    
-    '''
-    proj = UserNormalizer(project_id=project_id)
-    data_params, module_params = _parse_request()    
-    
-    proj.load_data(data_params['module_name'], data_params['file_name'])    
-    
-    result = proj.infer('infer_mvs', module_params)
-        
-    # Write log
-    proj.write_log_buffer(False)
-    
-    return jsonify(error=False,
-                   response=result)
-
 # TODO: job_id does not allow to call all steps of a pipeline at once
 # TODO: put all job schedulers in single api (assert to show possible methods) or use @job   
 
+API_MODULE_NAMES = ['infer_mvs', 'replace_mvs', 'concat_with_init', 'linker', 'create_labeller']
 
 @app.route('/api/schedule/<job_name>/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
 def schedule_job(job_name, project_id):    
     '''Schedule module runs'''
-    assert job_name in ['infer_mvs', 'replace_mvs', 'concat_with_init', 'linker', 'create_labeller']
+    assert job_name in API_MODULE_NAMES
     data_params, module_params = _parse_request()
     #TODO: remove and de-comment unfer
     job = q.enqueue_call(
@@ -1342,6 +1311,36 @@ def _linker(project_id, *argv):
     print('Wrote data to: ', file_path)
 
     return
+
+
+def _infer_mvs(project_id, data_params, module_params):
+    '''
+    Runs the infer_mvs module
+    
+    wrapper around UserNormalizer.infer ?
+    
+    GET:
+        project_id: ID for "normalize" project
+
+    POST:
+        - data: {
+                "module_name": module to fetch from
+                "file_name": file to fetch
+                }
+        - params: parameters for the inference
+    
+    '''
+    proj = UserNormalizer(project_id=project_id)
+    
+    proj.load_data(data_params['module_name'], data_params['file_name'])    
+    
+    result = proj.infer('infer_mvs', module_params)
+        
+    # Write log
+    proj.write_log_buffer(False)
+    return jsonify(error=False,
+                   response=result)
+
 
 #==============================================================================
 # API Queue
