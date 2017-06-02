@@ -1107,10 +1107,10 @@ def upload(project_id):
         proj.upload_init_data(file.stream, file.filename)
     else:
         raise Exception('Empty file')
+        
+    run_info = proj.read_config_data('INIT', 'run_info.json')
     
-    return jsonify(error=False,
-                   metadata=proj.metadata,
-                   project_id=proj.project_id)
+    return jsonify(run_info=run_info, project_id=proj.project_id)
 
 
 @app.route('/api/upload_config/<project_type>/<project_id>/', methods=['POST'])
@@ -1142,6 +1142,7 @@ def upload_config(project_type, project_id):
     
     proj.upload_config_data(params, data_params['module_name'], file_name)
     return jsonify(error=False)
+
 
 # TODO: get_config if module_name is specified specific module, otherwise, entire project
 #@app.route('/api/<project_type>/<project_id>/<module_name>/<file_name>/')

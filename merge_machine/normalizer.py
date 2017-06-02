@@ -248,11 +248,6 @@ class Normalizer(AbstractDataProject):
         # Update log buffer
         self.log_buffer.append(log)
         
-        # write data and log
-        self.write_data()
-        self.write_log_buffer(written=True)
-        self.write_run_info_buffer() # TODO: add run_info_buffer?
-
         # Write configuration (sep, encoding) to INIT dir
         config_dict = {
                         'sep': sep, 
@@ -260,6 +255,16 @@ class Normalizer(AbstractDataProject):
                         'nrows': self.mem_data.shape[0], 
                         'ncols': self.mem_data.shape[1]
                     }
+        self.run_info_buffer['INIT'] = config_dict
+        # TODO: duplicate with run_info and infered_config.json        
+        
+        
+        # write data and log
+        self.write_data()
+        self.write_log_buffer(written=True)
+        self.write_run_info_buffer() # TODO: add run_info_buffer?
+
+
         self.upload_config_data(config_dict, 'INIT', 'infered_config.json')
 
         self.clear_memory()    
@@ -267,7 +272,7 @@ class Normalizer(AbstractDataProject):
     def add_selected_columns(self, columns):
         '''
         Select the columns to normalize on. Will clear all changes if more columns 
-        are selected than previously
+        are selected than previously (clean_after)
         '''
         # Check that columns were selected
         if not columns:
@@ -321,7 +326,6 @@ class Normalizer(AbstractDataProject):
                 os.remove(file_path)
             except FileNotFoundError:
                 pass
-        
 
     def transform(self, module_name, params):
         '''

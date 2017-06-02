@@ -223,7 +223,6 @@ class Linker(AbstractDataProject):
                 'train': training_path,
                 'learned_settings': learned_settings_path            
                 }
-        
         return paths
 
     @staticmethod
