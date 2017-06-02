@@ -68,8 +68,13 @@
                 //});
 
 
-                // Create labeller
+                
+				$.getJSON("{{ ref_cat_api_url }}")
+                $.getJSON("{{ source_cat_api_url }}")
 
+
+
+                // Create labeller
             	console.log('Launching new job')
 
         		// Start job

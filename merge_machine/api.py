@@ -54,6 +54,8 @@ TODO:
     
     - Re-Run inference if selecting more columns
     
+    - Look into weird behavior in upload getting departement == 8.0 for 555306266e797ea0571822462f1a794b
+
 
 DEV GUIDELINES:
     - By default the API will use the file with the same name in the last 
@@ -501,8 +503,9 @@ def web_mvs_link(project_id, file_role):
         next_url = url_for('web_mvs_link', project_id=project_id, file_role='ref')
     else:
         next_url = url_for('web_dedupe', project_id=project_id)
-    return _web_mvs_normalize(normalize_project_id, normalize_file_name, next_url)
-
+    return _web_mvs_normalize(normalize_project_id, 
+                              normalize_file_name, 
+                              next_url)
 
 def _web_mvs_normalize(project_id, file_name, next_url):
     NUM_ROWS_TO_DISPLAY = 30
@@ -568,7 +571,10 @@ def web_match_columns(project_id):
         proj.load_project_to_merge(file_role)
         (_, file_name) = proj.__dict__[file_role].get_last_written(module_name=None, 
                                                       file_name=None)
-        proj.__dict__[file_role].load_data('INIT', file_name, nrows=max(ROWS_TO_DISPLAY)+1)
+        proj.__dict__[file_role].load_data('INIT', 
+                                         file_name, 
+                                         nrows=max(ROWS_TO_DISPLAY)+1,
+                                         restrict_to_selected=False)
         samples[file_role] = proj.__dict__[file_role].get_sample(None, None, sample_params)
         proj.__dict__[file_role].clear_memory()
 
@@ -685,11 +691,22 @@ def web_dedupe(project_id):
     '''Labelling / training and matching using dedupe'''
     proj = UserLinker(project_id)
     
+    source_id = proj.metadata['current']['source']['project_id']
+    ref_id = proj.metadata['current']['source']['project_id']
+    
+    source_cat_api_url = url_for('schedule_job',
+                                    job_name='concat_with_init', 
+                                    project_id=source_id)
+    ref_cat_api_url = url_for('schedule_job',
+                                    job_name='concat_with_init', 
+                                    project_id=ref_id)
     dummy_labeller = proj._gen_dedupe_dummy_labeller()
     
     return render_template('dedupe_training.html',
                            **dummy_labeller.to_emit(''),
                            create_labeller_api_url=url_for('schedule_job', job_name='create_labeller', project_id=project_id),
+                           source_cat_api_url=source_cat_api_url,
+                           ref_cat_api_url=ref_cat_api_url,
                            project_id=project_id)
 
 
@@ -931,6 +948,16 @@ def new_project(project_type):
 
 @app.route('/api/normalize/select_columns/<project_id>', methods=['POST'])
 def add_selected_columns(project_id):
+    """
+    Delete an existing project (including all configuration, data and metadata)
+    
+    GET:
+        - project_id
+
+    POST: 
+        [list of columns]
+        
+    """
     # TODO: add doc
     selected_columns = request.json
     proj = UserNormalizer(project_id=project_id)

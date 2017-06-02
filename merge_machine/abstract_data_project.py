@@ -78,7 +78,7 @@ class AbstractDataProject(AbstractProject):
                         mandatory after dedupe)')
         
     def load_data(self, module_name, file_name, nrows=None, columns=None):
-        '''Load data as pandas DataFrame to memory'''
+        '''Load data as pandas DataFrame to memory. Overwritten in normalize'''
         file_path = self.path_to(module_name, file_name)
         if nrows is not None:
             print('Nrows is : ', nrows)

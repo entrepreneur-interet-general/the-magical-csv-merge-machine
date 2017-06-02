@@ -80,11 +80,23 @@ class Linker(AbstractDataProject):
 
         ref_cols = list(set(y for x in column_matches for y in x['ref']))
         self.ref.add_selected_columns(ref_cols) 
-
-    def read_col_matches(self):
+        
+    def read_col_matches(self, add_created=True):
         config = self.read_config_data('dedupe_linker', 'column_matches.json')
+        
         if not config:
             config = []
+        #        
+        #        def expand(cols_to_expand, ref_cols, sep='___'):
+        #            new_cols = []
+        #            for col in cols_to_expand:
+        #                expanded_ver
+        #        
+        #        # If ___ is found (transformed columns: use that instead)
+        #        new_config = []
+        #        for match in config:
+            
+
         return config
 
     def add_col_certain_matches(self, column_matches):
@@ -103,6 +115,14 @@ class Linker(AbstractDataProject):
         columns is a list of columns in the referential that we want to 
         return during download
         '''
+        # Check that both projects are finished
+        for file_role in ['source', 'ref']:
+            file_name = self.metadata['current'][file_role]['file_name']
+            if not self.__dict__[file_role].metadata['completed'][file_name]:
+                raise Exception('Cannot select columns: complete {0} project \
+                                ({1}) before...'.format(file_role, self.__dict__[file_role].project_id))
+        
+        # Write columns to return to config
         config_file_name = 'columns_to_return_{0}.json'.format(file_role)
         self.upload_config_data(columns, 'dedupe_linker', config_file_name)
         

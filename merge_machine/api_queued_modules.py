@@ -16,11 +16,19 @@ from normalizer import UserNormalizer
 from linker import UserLinker
 
 
-def _concat_with_init(project_id, data_params):
+def _concat_with_init(project_id, data_params, *argv):
     '''Re-creates original file from '''
     proj = UserNormalizer(project_id=project_id)
 
-    proj.load_data(data_params['module_name'], data_params['file_name'])
+
+    # TODO: not clean
+    if data_params is None:
+        (module_name, file_name) = proj.get_last_written()
+    else:
+        module_name = data_params['module_name']
+        file_name = data_params['file_name']
+
+    proj.load_data(module_name, file_name)
     
     proj.concat_with_init()
     # Write transformations and log
