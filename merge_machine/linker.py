@@ -70,7 +70,16 @@ class Linker(AbstractDataProject):
     def add_col_matches(self, column_matches):
         '''column_matches is a json file as list of dict of list'''
         # TODO: add checks on file
+        
+        # Add matches
         self.upload_config_data(column_matches, 'dedupe_linker', 'column_matches.json')
+        
+        # Select these columns for normalization in source and ref
+        source_cols = list(set(y for x in column_matches for y in x['source']))
+        self.source.add_selected_columns(source_cols)
+
+        ref_cols = list(set(y for x in column_matches for y in x['ref']))
+        self.ref.add_selected_columns(ref_cols) 
 
     def read_col_matches(self):
         config = self.read_config_data('dedupe_linker', 'column_matches.json')

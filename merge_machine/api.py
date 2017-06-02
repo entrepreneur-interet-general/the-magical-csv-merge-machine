@@ -315,7 +315,7 @@ def web_link_select_files(project_id):
     # TODO: Cannot select twice the same file
     MAX_FILE_SIZE = 1048576
     
-    next_url = url_for('web_mvs_link', project_id=project_id, file_role='source')
+    next_url = url_for('web_match_columns', project_id=project_id, file_role='source')
     
     new_normalize_project_api_url = url_for('new_project', project_type='normalize')
     delete_normalize_project_api_url_partial=url_for('delete_project', 
@@ -500,7 +500,7 @@ def web_mvs_link(project_id, file_role):
     if file_role == 'source':
         next_url = url_for('web_mvs_link', project_id=project_id, file_role='ref')
     else:
-        next_url = url_for('web_match_columns', project_id=project_id)
+        next_url = url_for('web_dedupe', project_id=project_id)
     return _web_mvs_normalize(normalize_project_id, normalize_file_name, next_url)
 
 
@@ -605,7 +605,7 @@ def web_match_columns(project_id):
                            ref_sample=samples['ref'],
                                                       
                            add_column_matches_api_url=url_for('add_column_matches', project_id=project_id),
-                           next_url=url_for('web_dedupe', project_id=project_id))
+                           next_url=url_for('web_mvs_link', project_id=project_id, file_role='source'))
 
     
 @socketio.on('answer', namespace='/')
