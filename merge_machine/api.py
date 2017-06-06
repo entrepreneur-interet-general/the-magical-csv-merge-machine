@@ -160,18 +160,6 @@ socketio = SocketIO(app)
 # Redis connection
 q = Queue(connection=conn, default_timeout=1800)
 
-for i in range(10):
-    project_id='79ac07d6cc6c204a83a9695a70b9e87e'
-    data_params=None
-    module_params=None
-    job = q.enqueue_call(
-            func='api_queued_modules._concat_with_init',
-            args=(project_id, data_params, module_params), 
-            result_ttl=5000, 
-            job_id=str(i), 
-    ) 
-    print(q.job_ids)
-
 #==============================================================================
 # HELPER FUNCTIONS
 #==============================================================================
@@ -1294,13 +1282,16 @@ def schedule_job(job_name, project_id):
 
 @app.route("/queue/result/<job_id>", methods=['GET'])
 def get_job_result(job_id):
-    job = Job.fetch(job_id, connection=conn)
+    try:
+        job = Job.fetch(job_id, connection=conn)
+    except:
+        return jsonify(error=True, message='job_id could not be found', completed=False), 404
     
     if job.is_finished:
         #return str(job.result), 200
-        return jsonify(error=False, completed=True)
+        return jsonify(completed=True)
     else:
-        return jsonify(error=False, completed=False), 202
+        return jsonify(completed=False), 202
 
 @app.route("/queue/num_jobs/<job_id>", methods=['GET'])
 def count_jobs_in_queue_before(job_id):
