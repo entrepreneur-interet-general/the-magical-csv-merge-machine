@@ -30,6 +30,8 @@ def _concat_with_init(project_id, data_params, *argv):
 
     proj.load_data(module_name, file_name)
     
+    import pdb; pdb.set_trace()
+    
     proj.concat_with_init()
     # Write transformations and log
     proj.write_data()    

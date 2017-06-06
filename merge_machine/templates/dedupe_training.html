@@ -69,45 +69,45 @@
 
 
                 
-				$.getJSON("{{ ref_cat_api_url }}")
-                $.getJSON("{{ source_cat_api_url }}")
+				$.getJSON("{{ ref_cat_api_url }}", function(){
+					$.getJSON("{{ source_cat_api_url }}", function(){
 
+		                // Create labeller
+		            	console.log('Launching new job')
 
+		        		// Start job
+		        		$.getJSON("{{ create_labeller_api_url }}", function(json){
+		        			job_result_api_url = json['job_result_api_url']
+				        	var result_fetcher = window.setInterval(function(){	
+				        		// Fetch the total number of jobs for display
+				        		$.getJSON("{{ count_jobs_in_queue_api_url }}", function(json){
+				        			var num_jobs = json['num_jobs']
+				        			console.log(json['num_jobs'])
+				        			$('#num_jobs').text(num_jobs)
+				        		});
 
-                // Create labeller
-            	console.log('Launching new job')
+								// Check if job has completed
+								$.getJSON(job_result_api_url, function(json){
+									// If YES: return
+									if (json['completed']) {
+										window.clearInterval(result_fetcher)
+										console.log('Linking was done')
+										console.log(JSON.stringify(json))
+										// Display results div
+						                answer_to_send = {'project_id': "{{ project_id }}"}
+						                socket.emit('load_labeller', JSON.stringify(answer_to_send));
+									} else {
+										console.log('Waiting to complete')
+									}
+									// TODO: check if job exists
+								});
+							}, 5000);
+						})
 
-        		// Start job
-        		$.getJSON("{{ create_labeller_api_url }}", function(json){
-        			job_result_api_url = json['job_result_api_url']
-		        	var result_fetcher = window.setInterval(function(){	
-		        		// Fetch the total number of jobs for display
-		        		$.getJSON("{{ count_jobs_in_queue_api_url }}", function(json){
-		        			var num_jobs = json['num_jobs']
-		        			console.log(json['num_jobs'])
-		        			$('#num_jobs').text(num_jobs)
-		        		});
+					})
 
-						// Check if job has completed
-						$.getJSON(job_result_api_url, function(json){
-							// If YES: return
-							if (json['completed']) {
-								window.clearInterval(result_fetcher)
-								console.log('Linking was done')
-								console.log(JSON.stringify(json))
-								// Display results div
-				                answer_to_send = {'project_id': "{{ project_id }}"}
-				                socket.emit('load_labeller', JSON.stringify(answer_to_send));
-							} else {
-								console.log('Waiting to complete')
-							}
-
-
-							// TODO: check if job exists
-						});
-					}, 5000);
 				})
-
+         
 
 
 				// Redirect when done

@@ -47,10 +47,10 @@
 				$("#submitBtn").on("click", function() {
 
 					// Add columns to return
-		        	json_to_send = []
+		        	json_to_send = {'columns': []}
 		        	for (var col in label) {
 		        		if (label[col]) {
-		        			json_to_send.push(col)
+		        			json_to_send['columns'].push(col)
 		        		}
 		        	}
 

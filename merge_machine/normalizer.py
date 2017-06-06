@@ -377,6 +377,8 @@ class Normalizer(AbstractDataProject):
         
         run_info = {} # TODO: check specifications for run_info
         
+        
+        print('here')
         # Project is complete at that stage
         self.metadata['complete'][self.mem_data_info['file_name']] = True
 

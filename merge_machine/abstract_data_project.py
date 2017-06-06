@@ -12,7 +12,7 @@ METHODS:
     - init_log(self, module_name, module_type)
     - end_log(self, log, error=False)
     - check_mem_data(self)
-    - load_data(self, module_name, file_name, nrows=None, columns)
+    - load_data(self, module_name, file_name, nrows=None, columns=None)
     - get_header(self, module_name, file_name)
     - _get_sample(self, module_name, file_name, row_idxs=range(5), columns=None, drop_duplicates=True)
     - get_sample(self, sampler_module_name, params, sample_params)
@@ -129,7 +129,7 @@ class AbstractDataProject(AbstractProject):
         
         return tab.to_dict('records')
         
-    def get_sample(self, sampler_module_name, params, sample_params):
+    def get_sample(self, sampler_module_name, module_params, sample_params):
         '''
         Returns an interesting sample for the data and config at hand.
         
@@ -138,7 +138,7 @@ class AbstractDataProject(AbstractProject):
         INPUT:
             - sampler_module_name: name of sampler function (None for first N
                                                              rows)
-            - params: inference params to send to sampler to help with selection
+            - module_params: inference params to send to sampler to help with selection
             - sample_params: parameters concerning the size of output etc.
         OUTPUT:
             - sample
@@ -148,7 +148,7 @@ class AbstractDataProject(AbstractProject):
         
         if sampler_module_name is not None:
             sample_ilocs = MODULES['sample'][sampler_module_name]['func'](self.mem_data, 
-                                                              params, sample_params)
+                                                              module_params, sample_params)
         else:
             sample_ilocs = sample_params.get('sample_ilocs', range(5))
             

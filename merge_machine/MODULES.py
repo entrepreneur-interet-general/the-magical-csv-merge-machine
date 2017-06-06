@@ -11,7 +11,7 @@ from performance import results_analysis
 from infer_nan import infer_mvs, replace_mvs, sample_mvs_ilocs
 #from preprocess_fields_v3 import inferTypes, normalizeValues, sample_types_ilocs
 
-NORMALIZE_MODULE_ORDER = ['INIT', 'replace_mvs', 'normalizeValues', 'concat_with_init']
+#NORMALIZE_MODULE_ORDER = ['INIT', 'replace_mvs', 'normalizeValues', 'concat_with_init']
 NORMALIZE_MODULE_ORDER = ['INIT', 'replace_mvs', 'concat_with_init']
 
 
