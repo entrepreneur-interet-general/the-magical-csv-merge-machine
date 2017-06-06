@@ -368,7 +368,7 @@ class Normalizer(AbstractDataProject):
         log = self.init_log('concat_with_init', 'transform')
     
         og_file_path = self.path_to('INIT', self.mem_data_info['file_name'])
-        og_tab = pd.read_csv(og_file_path, encoding='utf-8')
+        og_tab = pd.read_csv(og_file_path, encoding='utf-8', dtype=str)
         assert len(og_tab) == len(self.mem_data)
         self.mem_data.columns = [x + '__MMM_NORMALIZED' for x in self.mem_data.columns]
         self.mem_data = pd.concat([og_tab, self.mem_data], 1)
@@ -378,7 +378,7 @@ class Normalizer(AbstractDataProject):
         run_info = {} # TODO: check specifications for run_info
         
         # Project is complete at that stage
-        self.metadata['complete'][self.mem_data_info['file_name']] = False
+        self.metadata['complete'][self.mem_data_info['file_name']] = True
 
         # Complete log
         log = self.end_log(log, error=False)

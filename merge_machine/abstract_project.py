@@ -36,6 +36,8 @@ class MyEncoder(json.JSONEncoder):
             return float(obj)
         elif isinstance(obj, np.ndarray):
             return obj.tolist()
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
         else:
             return super(MyEncoder, self).default(obj)
 
@@ -108,11 +110,8 @@ class AbstractProject():
                 # Create directory if not existent
                 dir_path = self.path_to(module_name)
                 if not os.path.isdir(dir_path):
-                    os.makedirs(dir_path)   
-                
-                file_path = self.path_to(module_name, file_name)
-                with open(file_path, 'w') as w:
-                    json.dump(config, w, cls=MyEncoder)
+                    os.makedirs(dir_path)
+                self.upload_config_data(config, module_name, file_name)
 
       
     @staticmethod
@@ -156,7 +155,7 @@ class AbstractProject():
 
         # Create directories
         dir_path = self.path_to(module_name)
-        if not os.path.isdir(dir_path):
+        if (not os.path.isdir(dir_path)) and module_name:
             os.makedirs(dir_path)   
 
         # Write file
@@ -184,8 +183,9 @@ class AbstractProject():
         return metadata
     
     def write_metadata(self):
-        path_to_metadata = self.path_to(file_name='metadata.json')
-        json.dump(self.metadata, open(path_to_metadata, 'w'), cls=MyEncoder)
+        self.upload_config_data(self.metadata, 
+                                module_name='', 
+                                file_name='metadata.json')
         
     def remove(self, module_name='', file_name=''):
         '''Removes a file from the project'''

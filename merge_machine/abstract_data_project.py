@@ -12,7 +12,7 @@ METHODS:
     - init_log(self, module_name, module_type)
     - end_log(self, log, error=False)
     - check_mem_data(self)
-    - load_data(self, module_name, file_name, nrows=None)
+    - load_data(self, module_name, file_name, nrows=None, columns)
     - get_header(self, module_name, file_name)
     - _get_sample(self, module_name, file_name, row_idxs=range(5), columns=None, drop_duplicates=True)
     - get_sample(self, sampler_module_name, params, sample_params)

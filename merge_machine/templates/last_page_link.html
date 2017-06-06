@@ -25,9 +25,10 @@
 	        		// Start job
 	        		$.getJSON("{{ linker_api_url }}", function(json){
 	        			job_result_api_url = json['job_result_api_url']
+	        			count_url = count_jobs_in_queue_before_api_url_partial + job_result_api_url
 			        	var result_fetcher = window.setInterval(function(){	
 			        		// Fetch the total number of jobs for display
-			        		$.getJSON("{{ count_jobs_in_queue_api_url }}", function(json){
+			        		$.getJSON("{{ count_url }}", function(json){
 			        			var num_jobs = json['num_jobs']
 			        			console.log(json['num_jobs'])
 			        			$('#num_jobs').text(num_jobs)

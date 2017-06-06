@@ -118,7 +118,7 @@ class Linker(AbstractDataProject):
         # Check that both projects are finished
         for file_role in ['source', 'ref']:
             file_name = self.metadata['current'][file_role]['file_name']
-            if not self.__dict__[file_role].metadata['completed'][file_name]:
+            if not self.__dict__[file_role].metadata['complete'][file_name]:
                 raise Exception('Cannot select columns: complete {0} project \
                                 ({1}) before...'.format(file_role, self.__dict__[file_role].project_id))
         

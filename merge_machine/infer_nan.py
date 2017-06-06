@@ -309,10 +309,14 @@ def sample_mvs_ilocs(tab, params, sample_params):
     
     row_idxs = []
     for col, mvs in params['mvs_dict']['columns'].items():
-        for mv in mvs:
-            sel = (tab[col] == mv['val']).diff().fillna(True)
-            sel.index = range(len(sel))
-            row_idxs.extend(list(sel[sel].index)[:num_per_missing_val_to_display])
+        if col in tab.columns:
+            for mv in mvs:
+                try:
+                    sel = (tab[col] == mv['val']).diff().fillna(True)
+                except:
+                    import pdb; pdb.set_trace()
+                sel.index = range(len(sel))
+                row_idxs.extend(list(sel[sel].index)[:num_per_missing_val_to_display])
             
     if not row_idxs:
         row_idxs = range(num_rows_to_display)

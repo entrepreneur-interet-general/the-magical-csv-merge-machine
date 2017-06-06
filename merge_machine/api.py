@@ -56,6 +56,7 @@ TODO:
     
     - Look into weird behavior in upload getting departement == 8.0 for 555306266e797ea0571822462f1a794b
 
+    - Dealing with inference parameters when columns change...
 
 DEV GUIDELINES:
     - By default the API will use the file with the same name in the last 
@@ -157,7 +158,19 @@ app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024 # Check that files are
 socketio = SocketIO(app)       
 
 # Redis connection
-q = Queue(connection=conn)
+q = Queue(connection=conn, default_timeout=1800)
+
+for i in range(10):
+    project_id='79ac07d6cc6c204a83a9695a70b9e87e'
+    data_params=None
+    module_params=None
+    job = q.enqueue_call(
+            func='api_queued_modules._concat_with_init',
+            args=(project_id, data_params, module_params), 
+            result_ttl=5000, 
+            job_id=str(i), 
+    ) 
+    print(q.job_ids)
 
 #==============================================================================
 # HELPER FUNCTIONS
@@ -392,7 +405,7 @@ def web_infertypes_normalize(project_id, file_name=None):
         proj = UserNormalizer(project_id)
         (_, file_name) = proj.get_last_written()
     
-    next_url = url_for('web_download_normalize', 
+    next_url = url_for('web_launch_normalize', 
                        project_id=project_id, 
                        file_name=file_name)   
     return _web_infertypes_normalize(project_id, file_name, next_url)
@@ -485,7 +498,7 @@ def web_mvs_normalize(project_id, file_name=None):
         proj = UserNormalizer(project_id)
         (_, file_name) = proj.get_last_written()
     
-    next_url = url_for('web_download_normalize', 
+    next_url = url_for('web_launch_normalize', 
                        project_id=project_id, 
                        file_name=file_name)   
     return _web_mvs_normalize(project_id, file_name, next_url)
@@ -734,10 +747,17 @@ def web_select_return(project_type, project_id):
         # Load sample
         data = proj.metadata['current'][file_role]
         
-        proj.load_project_to_merge(file_role)
+        proj.load_project_to_merge(file_role)       
         (module_name, file_name) = proj.__dict__[file_role].get_last_written(None, 
                                                     data['file_name'])
-        proj.__dict__[file_role].load_data(module_name, file_name, nrows=max(ROWS_TO_DISPLAY)+1)
+
+        # TODO: temporary solution here
+        from api_queued_modules import _concat_with_init
+        import pdb
+        pdb.set_trace()
+        _concat_with_init(proj.__dict__[file_role].project_id, {'module_name': module_name, 'file_name': file_name})        
+        
+        proj.__dict__[file_role].load_data(module_name, file_name, nrows=max(ROWS_TO_DISPLAY)+1, restrict_to_selected=False)
         samples[file_role] = proj.__dict__[file_role].get_sample(None, None, {'sample_ilocs':ROWS_TO_DISPLAY})
         
         selected_columns_to_return[file_role] = proj.read_cols_to_return(file_role) 
@@ -790,7 +810,7 @@ def web_download(project_type, project_id):
     return render_template('last_page_link.html', 
                            has_results=has_results,
                            project_id=project_id,
-                           count_jobs_in_queue_api_url=url_for('count_jobs_in_queue'),
+                           count_jobs_in_queue_before_api_url_partial=url_for('count_jobs_in_queue'),
                            linker_api_url=url_for('schedule_job', job_name='linker', project_id=project_id),
                            download_api_url=url_for('download', 
                                 project_type=project_type, project_id=project_id),
@@ -955,11 +975,11 @@ def add_selected_columns(project_id):
         - project_id
 
     POST: 
-        [list of columns]
+        - columns: [list of columns]
         
     """
     # TODO: add doc
-    selected_columns = request.json
+    selected_columns = request.json['columns']
     proj = UserNormalizer(project_id=project_id)
     proj.add_selected_columns(selected_columns)    
     return jsonify(error=False)
@@ -1282,6 +1302,17 @@ def get_job_result(job_id):
     else:
         return jsonify(error=False, completed=False), 202
 
+@app.route("/queue/num_jobs/<job_id>", methods=['GET'])
+def count_jobs_in_queue_before(job_id):
+    '''Returns the number of jobs preceding job_id or -1 if job is no longer in queue'''
+    job_ids = q.job_ids
+    if job_id in job_ids:
+        return jsonify(num_jobs=job_ids.index(job_id))
+    else:
+        return jsonify(num_jobs=-1)
+        
+    # TODO: check if better to return error
+    
 @app.route("/queue/num_jobs/", methods=['GET'])
 def count_jobs_in_queue():
     '''Returns the number of jobs enqueued'''
