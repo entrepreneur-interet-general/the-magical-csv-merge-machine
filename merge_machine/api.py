@@ -181,15 +181,15 @@ def _parse_request():
         req = request.json
         assert isinstance(req, dict)
     
-        if 'data' in req:
-            data_params = req['data']
+        if 'data_params' in req:
+            data_params = req['data_params']
             
             # Make paths secure
             for key, value in data_params.items():
                 data_params[key] = secure_filename(value)
             
-        if 'params' in req:
-            module_params = req['params']
+        if 'module_params' in req:
+            module_params = req['module_params']
     
     return data_params, module_params
     
@@ -200,15 +200,15 @@ def _parse_linking_request():
         params = request.json
         assert isinstance(params, dict)
     
-        if 'data' in params:
-            data_params = params['data']
+        if 'data_params' in params:
+            data_params = params['data_params']
             for file_role in ['ref', 'source']:
                 # Make paths secure
                 for key, value in data_params[file_role].items():
                     data_params[file_role][key] = secure_filename(value)
                 
-        if 'params' in params:
-            module_params = params['params']
+        if 'module_params' in params:
+            module_params = params['module_params']
     
     return data_params, module_params    
 
@@ -893,17 +893,12 @@ def web_view_results(project_type, project_id):
 
 
 
-
-
-
 # TODO: get_config if module_name is specified specific module, otherwise, entire project
 #@app.route('/api/<project_type>/<project_id>/<module_name>/<file_name>/')
 #def get_config(project_type, project_id, module_name=None, file_name=None):
 #    '''See docs in abstract_project'''
 #    proj = _init_project(project_type, project_id)
 #    return proj.get_config(module_name, file_name)
-
-
 
 
 
