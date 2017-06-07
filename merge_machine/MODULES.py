@@ -8,7 +8,7 @@ Created on Mon Apr 24 17:18:28 2017
 
 from dedupe_linker import dedupe_linker
 from performance import results_analysis
-from infer_nan import infer_mvs, replace_mvs, sample_mvs_ilocs
+from missing_values import infer_mvs, replace_mvs, sample_mvs_ilocs
 #from preprocess_fields_v3 import inferTypes, normalizeValues, sample_types_ilocs
 
 #NORMALIZE_MODULE_ORDER = ['INIT', 'replace_mvs', 'normalizeValues', 'concat_with_init']
@@ -56,11 +56,14 @@ MODULES = {
                             }
                 },
         'sample': {
+                'standard': {
+                        'desc': 'Standard N-line sampler'
+                        },                
                 'sample_mvs': {
                         'func': sample_mvs_ilocs,
                         'desc': sample_mvs_ilocs.__doc__
                         },
-#                'sample_types': {
+#               'sample_types': {
 #                        'func': sample_types_ilocs,
 #                        'desc': sample_types_ilocs.__doc__
 #                        }

@@ -8,6 +8,7 @@ flask-session
 flask-socketio
 python-memcached
 redis
+rq
 
 fuzzywuzzy
 python-Levenshtein
