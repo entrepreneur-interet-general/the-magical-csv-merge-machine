@@ -77,10 +77,13 @@
 			            	alert('You selected only one column for validation. Either select one in both the source and the referential or select none at all')
 			            	return false
 			            case 2: 
-			             	json_to_send = {
-			             		'source': $("input.source[type=checkbox]:checked").val(),
-			             		'ref': $("input.ref[type=checkbox]:checked").val()
-			             	}
+			             	json_to_send = 
+							             	{
+								             	'column_certain_matches': {
+								             		'source': $("input.source[type=checkbox]:checked").val(),
+								             		'ref': $("input.ref[type=checkbox]:checked").val()
+								             	}
+							             	}
 				    		$.ajax({
 				            type: 'post',
 					            url: "{{ add_column_certain_matches_api_url }}",

@@ -302,10 +302,20 @@ def replace_mvs(tab, params):
 
 
 def sample_mvs_ilocs(tab, params, sample_params):
-    '''Displays interesting rows following inference'''
+    '''
+    Displays interesting rows following inference
+    
+    INPUT:
+        - tab: the pandas DataFrame on which inference was performed
+        - params: the result of infer_mvs
+        - sample_params:
+            - num_rows_to_display: 
+            - num_per_missing_val_to_display: for each missing value found, 
+                                              how many examples to display
+    '''
     # Select rows to display based on result
     num_rows_to_display = sample_params.get('num_rows_to_display', 30)
-    num_per_missing_val_to_display = sample_params.get('sample_params', 4)
+    num_per_missing_val_to_display = sample_params.get('num_per_missing_val_to_display', 4)
     
     row_idxs = []
     for col, mvs in params['mvs_dict']['columns'].items():
