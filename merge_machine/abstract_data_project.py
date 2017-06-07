@@ -146,6 +146,11 @@ class AbstractDataProject(AbstractProject):
         '''
         self.check_mem_data()
         
+        if module_params is None:
+            module_params = {}
+        if sample_params is None:
+            sample_params = {'sample_ilocs':range(3)}
+        
         if sampler_module_name is not None:
             sample_ilocs = MODULES['sample'][sampler_module_name]['func'](self.mem_data, 
                                                               module_params, sample_params)
