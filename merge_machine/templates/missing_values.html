@@ -7,9 +7,6 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/rainbow/1.2.0/themes/github.css">
         <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap-tagsinput-latest/src/bootstrap-tagsinput.css') }}" type = "text/css">
 
-
-
-
         <!--<link rel="stylesheet" type="text/css" href="http://www.csszengarden.com/219/219.css?v=8may2013">-->
         <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
         <script src="{{ url_for('static', filename='bootstrap-tagsinput-latest/src/bootstrap-tagsinput.js') }}" ></script>
@@ -29,21 +26,21 @@
 
 
 				var json_to_send_1 = {
-										data: {
+										data_params: {
 											'file_role': "{{ data_params['file_role'] }}",
 											'module_name': "replace_mvs",
 											'file_name': "config.json",
 											},
-										params: {"mvs_dict": mvs_dict}
+										module_params: {"mvs_dict": mvs_dict}
 									}
 
 				var json_to_send_2 = {
-										data: {
+										data_params: {
 											'file_role': "{{ data_params['file_role'] }}",
 											'module_name': "{{ data_params['module_name'] }}",
 											'file_name': "{{ data_params['file_name'] }}",
 											},
-										params: {"mvs_dict": mvs_dict}
+										module_params: {"mvs_dict": mvs_dict}
 									}
 
 	    		$.ajax({

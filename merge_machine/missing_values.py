@@ -327,6 +327,11 @@ def sample_mvs_ilocs(tab, params, sample_params):
                     sel = (tab[col] == mv['val']).diff().fillna(True)
                     sel.index = range(len(sel))
                     row_idxs.extend(list(sel[sel].index)[:num_per_missing_val_to_display])
+    for mv in params['mvs_dict']['all']:
+        if mv['score'] >= thresh:
+            sel = (tab == mv['val']).any(1).diff().fillna(True)
+            sel.index = range(len(sel))
+            row_idxs.extend(list(sel[sel].index)[:num_per_missing_val_to_display])        
     return row_idxs    
 
 
