@@ -1099,6 +1099,35 @@ def project_exists(project_type, project_id):
     except Exception as exc: 
         return jsonify(exists=False)
 
+@app.route('/api/download_config/<project_type>/<project_id>/', methods=['POST'])
+@cross_origin()
+def read_config(project_type, project_id):
+    """
+    Reads content of a config file
+    
+    GET:
+        - project_type: "link" or "normalize"
+        - project_id
+        
+    POST:
+        - data: {
+                "module_name": module to fetch from
+                "file_name": file to fetch
+                }    
+    """
+    # TODO: do not expose ?
+    proj = _init_project(project_type=project_type, project_id=project_id)    
+    data_params, _ = _parse_request() # TODO: add size limit on params
+    
+    file_name = data_params['file_name']
+    
+    # Check that the file_name is allowed:
+    assert file_name in ['training.json', 'infered_config.json', 'config.json']
+    
+    result = proj.read_config_data(data_params['module_name'], file_name)
+    return jsonify(result=result)
+
+
 
 @app.route('/api/upload_config/<project_type>/<project_id>/', methods=['POST'])
 @cross_origin()
@@ -1316,7 +1345,6 @@ def get_job_result(job_id):
     
     GET:
         - job_id: as returned by schedule_job
-    
     '''
     try:
         job = Job.fetch(job_id, connection=conn)
