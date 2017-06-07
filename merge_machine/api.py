@@ -885,13 +885,9 @@ def web_view_results(project_type, project_id):
                            download_api_url=url_for('download', 
                                 project_type=project_type, project_id=project_id))
 
-
-
 #==============================================================================
 # API
 #==============================================================================
-
-
 
 # TODO: get_config if module_name is specified specific module, otherwise, entire project
 #@app.route('/api/<project_type>/<project_id>/<module_name>/<file_name>/')
@@ -900,14 +896,9 @@ def web_view_results(project_type, project_id):
 #    proj = _init_project(project_type, project_id)
 #    return proj.get_config(module_name, file_name)
 
-
-
-
 #==============================================================================
 # GENERIC API METHODS (NORMALIZE AND LINK)
 #==============================================================================
-
-
 
 @app.route('/api/new/<project_type>', methods=['POST'])
 def new_project(project_type):
@@ -1146,7 +1137,9 @@ def upload_config(project_type, project_id):
 @app.route('/api/normalize/select_columns/<project_id>', methods=['POST'])
 def add_selected_columns(project_id):
     """
-    Select columns to modify in normalization project.
+    Select columns to modify in normalization project. 
+    
+    /!\ If column selection includes new columns 
     
     GET:
         - project_id
@@ -1155,7 +1148,6 @@ def add_selected_columns(project_id):
         - columns: [list of columns]
         
     """
-    # TODO: add doc
     selected_columns = request.json['columns']
     proj = UserNormalizer(project_id=project_id)
     proj.add_selected_columns(selected_columns)    
@@ -1333,7 +1325,7 @@ def get_job_result(job_id):
     
     if job.is_finished:
         #return str(job.result), 200
-        return jsonify(completed=True)
+        return jsonify(completed=True, result=job.result)
     else:
         return jsonify(completed=False), 202
 
