@@ -23,6 +23,8 @@ import string
 import numpy as np
 import pandas as pd
 
+DEFAULT_THRESH = 0.6
+
 def mv_from_letter_repetition(top_values, score=0.7):
     """Checks for unusual repetition of characters as in XX or 999999"""
     # Compute number of unique characters for each value
@@ -252,7 +254,6 @@ def replace_mvs(tab, params):
         tab: same table with values replaced by np.nan
         run_info    
     """
-    DEFAULT_THRESH = 0.6
     
     # Set variables and replace by default values
     mvs_dict = params['mvs_dict']
@@ -315,13 +316,17 @@ def sample_mvs_ilocs(tab, params, sample_params):
     # Select rows to display based on result
     num_per_missing_val_to_display = sample_params.get('num_per_missing_val_to_display', 4)
     
+    thresh = params.get('thresh', DEFAULT_THRESH)
+    
+    # TODO: add for ALL
     row_idxs = []
     for col, mvs in params['mvs_dict']['columns'].items():
         if col in tab.columns:
             for mv in mvs:
-                sel = (tab[col] == mv['val']).diff().fillna(True)
-                sel.index = range(len(sel))
-                row_idxs.extend(list(sel[sel].index)[:num_per_missing_val_to_display])
+                if mv['score'] >= thresh:
+                    sel = (tab[col] == mv['val']).diff().fillna(True)
+                    sel.index = range(len(sel))
+                    row_idxs.extend(list(sel[sel].index)[:num_per_missing_val_to_display])
     return row_idxs    
 
 
