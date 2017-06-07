@@ -310,14 +310,16 @@ def sample_mvs_ilocs(tab, params, sample_params):
         - tab: the pandas DataFrame on which inference was performed
         - params: the result of infer_mvs
         - sample_params:
+            - randomize: (default: True)
             - num_per_missing_val_to_display: for each missing value found, 
                                               how many examples to display
     '''
     # Select rows to display based on result
     num_per_missing_val_to_display = sample_params.get('num_per_missing_val_to_display', 4)
+    randomize = sample_params.get('randomize', True)
     
     thresh = params.get('thresh', DEFAULT_THRESH)
-    
+
     # TODO: add for ALL
     row_idxs = []
     for col, mvs in params['mvs_dict']['columns'].items():
@@ -331,7 +333,11 @@ def sample_mvs_ilocs(tab, params, sample_params):
         if mv['score'] >= thresh:
             sel = (tab == mv['val']).any(1).diff().fillna(True)
             sel.index = range(len(sel))
-            row_idxs.extend(list(sel[sel].index)[:num_per_missing_val_to_display])        
+            if randomize:
+                new_indexes = np.random.permutation(list(sel[sel].index))[:num_per_missing_val_to_display]
+            else:
+                new_indexes = list(sel[sel].index)[:num_per_missing_val_to_display]
+            row_idxs.extend(new_indexes)        
     return row_idxs    
 
 

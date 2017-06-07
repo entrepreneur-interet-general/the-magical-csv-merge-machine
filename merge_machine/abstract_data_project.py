@@ -29,6 +29,7 @@ import gc
 import os
 import time
 
+import numpy as np
 import pandas as pd
 
 from abstract_project import AbstractProject, NOT_IMPLEMENTED_MESSAGE
@@ -146,7 +147,14 @@ class AbstractDataProject(AbstractProject):
         '''
         self.check_mem_data()
         
-        sample_params.setdefault('sample_ilocs', range(3))
+        sample_params.setdefault('randomize', True)
+        
+        # TODO
+        if sample_params['randomize']:
+            indexes = np.random.permutation(range(self.mem_data.shape[0]))[:20]
+            sample_params.setdefault('sample_ilocs', indexes)
+        else:
+            sample_params.setdefault('sample_ilocs', range(20))
         
         # 
         if sampler_module_name is None:

@@ -56,6 +56,10 @@ TODO:
 
     - Dealing with inference parameters when columns change...
 
+    - integration test
+    - Add empty dict to infer_mvs
+
+
 DEV GUIDELINES:
     - By default the API will use the file with the same name in the last 
       module that was completed. Otherwise, you can specify the module to use file from
@@ -1069,6 +1073,7 @@ def get_sample(project_type, project_id):
                             'restrict_to_selected': True or False (default True),
                             'sample_ilocs': [list_of_ligne_indices] used as default if no result is returned
                                             by custom sampler (default range(3))
+                            'randomize': (default True) If false, will return first values
                             }
     '''
     proj = _init_project(project_type=project_type, project_id=project_id)    
@@ -1086,6 +1091,7 @@ def get_sample(project_type, project_id):
     
     sample_params.setdefault('restrict_to_selected', True)
     sample_params.setdefault('sample_ilocs', range(3))
+    sample_params.setdefault('randomize', True)
 
     if (sampler_module_name is not None) and (sampler_module_name not in API_SAMPLE_NAMES):
         raise ValueError('Requested sampler_module_name {0} is not valid. Valid'\
