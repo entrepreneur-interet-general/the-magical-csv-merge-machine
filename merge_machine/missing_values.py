@@ -309,28 +309,19 @@ def sample_mvs_ilocs(tab, params, sample_params):
         - tab: the pandas DataFrame on which inference was performed
         - params: the result of infer_mvs
         - sample_params:
-            - num_rows_to_display: 
             - num_per_missing_val_to_display: for each missing value found, 
                                               how many examples to display
     '''
     # Select rows to display based on result
-    num_rows_to_display = sample_params.get('num_rows_to_display', 30)
     num_per_missing_val_to_display = sample_params.get('num_per_missing_val_to_display', 4)
     
     row_idxs = []
     for col, mvs in params['mvs_dict']['columns'].items():
         if col in tab.columns:
             for mv in mvs:
-                try:
-                    sel = (tab[col] == mv['val']).diff().fillna(True)
-                except:
-                    import pdb; pdb.set_trace()
+                sel = (tab[col] == mv['val']).diff().fillna(True)
                 sel.index = range(len(sel))
                 row_idxs.extend(list(sel[sel].index)[:num_per_missing_val_to_display])
-            
-    if not row_idxs:
-        row_idxs = range(num_rows_to_display)
-
     return row_idxs    
 
 
