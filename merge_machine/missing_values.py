@@ -227,7 +227,7 @@ def infer_mvs(tab, params=None):
         return {'val': val[0], 'score': val[1], 'origin': val[2]}
 
     common_mvs = [triplet_to_dict(val) for val in mv_from_common_values_2(col_mvs)]
-    columns_mvs = {key:[triplet_to_dict(val) for val in vals] for key, vals in col_mvs.items() if vals}
+    columns_mvs = {key:[triplet_to_dict(val) for val in vals] for key, vals in col_mvs.items()}
     infered_mvs = {'columns': columns_mvs, 'all': common_mvs}
     return {'mvs_dict': infered_mvs, 'thresh': 0.6} # TODO: remove harcode
 
