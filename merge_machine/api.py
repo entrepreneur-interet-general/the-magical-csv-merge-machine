@@ -972,7 +972,7 @@ def metadata(project_type, project_id):
     return resp
 
 
-@app.route('/api/last_written/<project_type>/<project_id>', methods=['POST'])
+@app.route('/api/last_written/<project_type>/<project_id>', methods=['GET', 'POST'])
 def get_last_written(project_type, project_id):
     """
     Get coordinates (module_name, file_name) of the last file written for a 
@@ -1223,7 +1223,8 @@ def upload(project_id):
     '''
     # Load project
     proj = UserNormalizer(project_id=project_id) 
-        
+    
+    print('GOT HERE YES')
     # Upload data
     file = request.files['file']
     if file:
@@ -1392,7 +1393,7 @@ def schedule_job(job_name, project_id):
                    job_result_api_url=url_for('get_job_result', job_id=job_id))    
     
 
-@app.route("/queue/result/<job_id>", methods=['GET'])
+@app.route('/queue/result/<job_id>', methods=['GET'])
 def get_job_result(job_id):
     '''
     Fetch the json output of a module run scheduled by schedule_job. Will return 
@@ -1412,7 +1413,7 @@ def get_job_result(job_id):
     else:
         return jsonify(completed=False), 202
 
-@app.route("/queue/num_jobs/<job_id>", methods=['GET'])
+@app.route('/queue/num_jobs/<job_id>', methods=['GET'])
 def count_jobs_in_queue_before(job_id):
     '''
     Returns the number of jobs preceding job_id or -1 if job is no longer in queue.
@@ -1428,7 +1429,7 @@ def count_jobs_in_queue_before(job_id):
         return jsonify(num_jobs=-1)
     # TODO: check if better to return error
     
-@app.route("/queue/num_jobs/", methods=['GET'])
+@app.route('/queue/num_jobs/', methods=['GET'])
 def count_jobs_in_queue():
     '''Returns the number of jobs enqueued'''
     # TODO: change for position in queue
