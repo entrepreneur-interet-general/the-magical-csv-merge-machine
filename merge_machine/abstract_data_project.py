@@ -14,7 +14,6 @@ METHODS:
     - check_mem_data(self)
     - load_data(self, module_name, file_name, nrows=None, columns=None)
     - get_header(self, module_name, file_name)
-    - _get_sample(self, module_name, file_name, row_idxs=range(5), columns=None, drop_duplicates=True)
     - get_sample(self, sampler_module_name, params, sample_params)
     - write_log_buffer(self, written)
     - write_run_info_buffer(self)
@@ -89,47 +88,7 @@ class AbstractDataProject(AbstractProject):
         self.mem_data_info = {'file_name': file_name,
                               'module_name': module_name}
 
-    
-    def _get_sample(self, module_name, file_name, row_idxs=range(5), 
-                   columns=None, drop_duplicates=True):
-        '''
-        Returns a dict with the selected rows (including header)
-        
-        INPUT:
-            - module_name: module where data is stored
-            - file_name: name of file to load from
-            - row_idxs: list of indexes of rows to show (as in CSV file, 
-                        0 is header and is mandatory as first element of list)
-            - columns: list of columns to display. By default, all are shown
-            - drop_duplicates: wheather or not to show duplicate rows
-        '''
-        file_path = self.path_to(module_name, file_name)
-        
-        if row_idxs is not None:
-            if row_idxs[0] != 0:
-                raise Exception('Row selection for samples (row_idxs) should\
-                                include header (row_idxs[0]==0)')
-                
-            # Load the right amount of rows
-            max_rows = max(row_idxs)    
 
-            tab = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
-                              usecols=columns, nrows=max_rows)
-            
-            # row_idxs counts lines in csv including header --> de-increment
-            tab = tab.iloc[[x - 1 for x in row_idxs[1:]], :]
-
-        else:
-            tab = pd.read_csv(file_path, encoding='utf-8', dtype=str, usecols=columns)
-        
-        if drop_duplicates:
-            tab.drop_duplicates(inplace=True)
-        
-        # Replace missing values
-        tab.fillna('', inplace=True)
-        
-        return tab.to_dict('records')
-        
     def get_sample(self, sampler_module_name, module_params, sample_params):
         '''
         Returns an interesting sample for the data and config at hand.
@@ -187,7 +146,50 @@ class AbstractDataProject(AbstractProject):
         #                                 row_idxs=[0] + [x+1 for x in sample_ilocs])        
         sample = sub_tab.to_dict('records')    
         return sample
-    
+        
+    def make_mini(self, params):
+        '''
+        Creates a smaller version of the table in memory. 
+        Set mem_data_info and current file to mini
+        '''
+        NEW_FILE_NAME = '__MINI__' + self.mem_data_info['file_name']        
+       
+        self.check_mem_data()
+        if self.mem_data_info['module_name'] != 'INIT':
+            raise Exception('make_mini can only be called on data in memory from the INIT module')
+        self.clean_after('INIT', NEW_FILE_NAME) # TODO: check module_name for clean_after
+        
+        # Set defaults
+        sample_size = params.get('sample_size', 20000)
+        randomize = params.get('randomize', True)
+        
+        
+        # Initiate log
+        log = self.init_log('make_mini', 'transform')
+        
+        if randomize:
+            sample_index = self.mem_data.index[:sample_size]
+        else:
+            sample_index = np.random.permutation(self.mem_data.index)[:sample_size]
+        
+        # Replace data in memory
+        self.mem_data = self.mem_data.loc[sample_index, :]
+        
+        # Update metadata
+        self.mem_data_info['file_name'] = NEW_FILE_NAME
+        
+        # TODO: think if transformation should / should not be complete
+
+        # Complete log
+        log = self.end_log(log, error=False)
+                          
+        # Update buffers
+        self.log_buffer.append(log)
+        # TODO: Make sure that run_info_buffer should not be extended
+        return log            
+        
+        
+        
     
     def write_log_buffer(self, written):
         '''
@@ -268,3 +270,31 @@ class AbstractDataProject(AbstractProject):
         
         return infered_params
     
+    
+    def transform(self, module_name, params):
+        '''
+        Run module on pandas DataFrame in memory and update memory state.
+        /!\ DATA IS CLEANED WHEN transform IS CALLED
+        '''
+        self.check_mem_data()        
+        self.clean_after(module_name, self.mem_data_info['file_name'])
+        
+        # Initiate log
+        log = self.init_log(module_name, 'transform')
+
+        # TODO: catch module errors and add to log
+        # Run module on pandas DataFrame 
+        self.mem_data, run_info = MODULES['transform'][module_name]['func'](self.mem_data, params)
+        self.mem_data_info['module_name'] = module_name
+        
+        # Transformation -> the project is still_not/ no_longer complete
+        self.metadata['complete'][self.mem_data_info['file_name']] = False
+
+        # Complete log
+        log = self.end_log(log, error=False)
+                          
+        # Update buffers
+        self.log_buffer.append(log)
+        self.run_info_buffer[module_name] = run_info
+        
+        return log    

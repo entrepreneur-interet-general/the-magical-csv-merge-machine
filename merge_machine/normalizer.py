@@ -326,34 +326,6 @@ class Normalizer(AbstractDataProject):
                 os.remove(file_path)
             except FileNotFoundError:
                 pass
-
-    def transform(self, module_name, params):
-        '''
-        Run module on pandas DataFrame in memory and update memory state.
-        /!\ DATA IS CLEANED WHEN transform IS CALLED
-        '''
-        self.check_mem_data()        
-        self.clean_after(module_name, self.mem_data_info['file_name'])
-        
-        # Initiate log
-        log = self.init_log(module_name, 'transform')
-
-        # TODO: catch module errors and add to log
-        # Run module on pandas DataFrame 
-        self.mem_data, run_info = MODULES['transform'][module_name]['func'](self.mem_data, params)
-        self.mem_data_info['module_name'] = module_name
-        
-        # Transformation -> the project is still_not/ no_longer complete
-        self.metadata['complete'][self.mem_data_info['file_name']] = False
-
-        # Complete log
-        log = self.end_log(log, error=False)
-                          
-        # Update buffers
-        self.log_buffer.append(log)
-        self.run_info_buffer[module_name] = run_info
-        
-        return log
     
     def concat_with_init(self):
         '''

@@ -1210,7 +1210,9 @@ def add_selected_columns(project_id):
 def upload(project_id):
     '''
     Uploads files to a normalization project. (NB: cannot upload directly to 
-    a link type project)
+    a link type project). 
+    
+    Also creates the mini version of the project
     
     GET:
         - project_id: ID of the normalization project
@@ -1232,6 +1234,36 @@ def upload(project_id):
     run_info = proj.read_config_data('INIT', 'run_info.json')
     
     return jsonify(run_info=run_info, project_id=proj.project_id)
+
+
+@app.route('/api/normalize/make_mini/<project_id>', methods=['POST'])
+@cross_origin()
+def make_mini(project_id):
+    '''
+    Create sample version of selected file (call just after upload).
+    
+    GET:
+        - project_id
+    POST:
+        - data_params: 
+                        {
+                        module_name: 'INIT' (mandatory to be init)
+                        file_name: 
+                        }
+        - module_params: {
+                            sample_size: 
+                            randomize:
+                        }
+    '''
+    data_params, module_params = _parse_request()   
+    proj = UserNormalizer(project_id=project_id)
+    
+    proj.load_data(data_params['module_name'], data_params['file_name'])
+    proj.make_mini(module_params)
+    
+    # Write transformations and log
+    proj.write_data()    
+    proj.write_log_buffer(True)
 
 #==============================================================================
 # LINK API METHODS (see also SCHEDULER)
