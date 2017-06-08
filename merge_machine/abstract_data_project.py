@@ -152,6 +152,9 @@ class AbstractDataProject(AbstractProject):
         Creates a smaller version of the table in memory. 
         Set mem_data_info and current file to mini
         '''
+        # TODO: Change current 
+        # TODO: Current for normalize ?        
+        
         NEW_FILE_NAME = '__MINI__' + self.mem_data_info['file_name']        
        
         self.check_mem_data()
@@ -188,8 +191,7 @@ class AbstractDataProject(AbstractProject):
         # TODO: Make sure that run_info_buffer should not be extended
         return log            
         
-        
-        
+    
     
     def write_log_buffer(self, written):
         '''
