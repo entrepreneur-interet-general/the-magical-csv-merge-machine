@@ -512,9 +512,9 @@ def _web_mvs_normalize(project_id, file_name, next_url):
     
     # Format infered_mvs for display in web app
     formated_infered_mvs = dict()
-    formated_infered_mvs['columns'] = {col:[mv['val'] for mv in mvs] \
+    formated_infered_mvs['columns'] = {col:[mv['val'] for mv in mvs if mv['score'] >= mvs_config['thresh']] \
                     for col, mvs in mvs_config['mvs_dict']['columns'].items()}
-    formated_infered_mvs['all'] = [mv['val'] for mv in mvs_config['mvs_dict']['all']]
+    formated_infered_mvs['all'] = [mv['val'] for mv in mvs_config['mvs_dict']['all'] if mv['score'] >= mvs_config['thresh']]
     
     data_params = {'module_name': module_name, 'file_name': file_name}
 

@@ -319,8 +319,7 @@ def sample_mvs_ilocs(tab, params, sample_params):
     randomize = sample_params.get('randomize', True)
     
     thresh = params.get('thresh', DEFAULT_THRESH)
-
-    print('gaogaoga\n', params)
+    
     # TODO: add for ALL
     row_idxs = []
     for col, mvs in params['mvs_dict']['columns'].items():
