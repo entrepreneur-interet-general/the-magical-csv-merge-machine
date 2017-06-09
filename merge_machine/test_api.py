@@ -312,7 +312,6 @@ if __name__ == '__main__':
                                     'lycees_sources', 'departement', 'region']
                         }
     }
-    
     source_project_id = normalize_pipeline(params)
     
     #==============================================================================
@@ -350,9 +349,7 @@ if __name__ == '__main__':
                         },
                 'training_file_path': 'local_test_data/integration_1/training.json'
     }
-    
     link_project_id = link_pipeline(params)
-    
     
     #==============================================================================
     # Delete projects   

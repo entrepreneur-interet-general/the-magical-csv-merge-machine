@@ -720,11 +720,16 @@ def web_select_return(project_type, project_id):
         # TODO: temporary solution here
         from api_queued_modules import _concat_with_init
         _concat_with_init(proj.__dict__[file_role].project_id, {'module_name': module_name, 'file_name': file_name})        
-        if (file_role == 'ref') and (not proj.ref.metadata['complete']['ref.csv']):
-            import pdb; pdb.set_trace()
-            # TODO: figure out why columns are restricted
+        # Reload after modifications
+        proj.load_project_to_merge(file_role) 
+    
+        # TODO: figure out why columns are restricted
       
-        proj.__dict__[file_role].load_data(module_name, file_name, nrows=max(ROWS_TO_DISPLAY)+1, restrict_to_selected=False)
+        proj.__dict__[file_role].load_data(
+                        'concat_with_init', 
+                        file_name,
+                        nrows=max(ROWS_TO_DISPLAY)+1, 
+                        restrict_to_selected=False)
         samples[file_role] = proj.__dict__[file_role].get_sample(None, None, {'sample_ilocs':ROWS_TO_DISPLAY})
         
         selected_columns_to_return[file_role] = proj.read_cols_to_return(file_role) 
