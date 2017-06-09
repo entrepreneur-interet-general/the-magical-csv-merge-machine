@@ -58,6 +58,8 @@ TODO:
 
     - integration test
     - Add empty dict to infer_mvs
+    
+    - Error if job failed
 
 
 DEV GUIDELINES:
@@ -720,6 +722,7 @@ def web_select_return(project_type, project_id):
         _concat_with_init(proj.__dict__[file_role].project_id, {'module_name': module_name, 'file_name': file_name})        
         if (file_role == 'ref') and (not proj.ref.metadata['complete']['ref.csv']):
             import pdb; pdb.set_trace()
+            # TODO: figure out why columns are restricted
       
         proj.__dict__[file_role].load_data(module_name, file_name, nrows=max(ROWS_TO_DISPLAY)+1, restrict_to_selected=False)
         samples[file_role] = proj.__dict__[file_role].get_sample(None, None, {'sample_ilocs':ROWS_TO_DISPLAY})
@@ -1163,11 +1166,11 @@ def upload_config(project_type, project_id):
         - project_id
         
     POST:
-        - data: {
+        - data_params: {
                 "module_name": module to fetch from
                 "file_name": file to fetch
                 }
-        - params: parameters to write
+        - module_params: parameters to write
     
     """
     # TODO: do not expose ?
@@ -1270,24 +1273,28 @@ def make_mini(project_id):
 # LINK API METHODS (see also SCHEDULER)
 #==============================================================================
 
-@app.route('/api/link/add_columns_to_return/<project_id>/<file_role>/', methods=['POST'])
-@cross_origin()
-def add_columns_to_return(project_id, file_role):
-    '''
-    Specify columns to be included in download version of file. For link project 
+@app.route('/api/link/select_file/<project_id>', methods=['POST'])
+def select_file(project_id):
+    '''    
+    TODO: FIX THIS MESS  !!!!
     
-    # TODO: shouldn't this be for normalize also ?
-    
-    wrapper around UserLinker.add_cols_to_return
+    Choose a file to use as source or referential for merging
+    send {file_role: "source", project_id: "ABCYOUANDME", internal: False}
     
     GET:
-        project_id: ID for "link" project
-        file_role: "ref" or "source"
+        - project_id: ID for the "link" project
+        
+    POST:
+        - file_role: "ref" or "source". Role of the normalized file for linking
+        - project_id: ID of the "normalize" project to use for linking
     '''
-    columns_to_return = request.json
-    proj = UserLinker(project_id=project_id)
-    proj.add_cols_to_return(file_role, columns_to_return)    
+    proj = UserLinker(project_id)
+    params = request.json
+    proj.add_selected_project(file_role=params['file_role'], 
+                           internal=params.get('internal', False), # TODO: remove internal
+                           project_id=params['project_id'])
     return jsonify(error=False)
+
 
 @app.route('/api/link/add_column_matches/<project_id>/', methods=['POST'])
 @cross_origin()
@@ -1322,7 +1329,7 @@ def add_column_certain_matches(project_id):
         - project_id: ID for "link" project
         
     POST:
-        - column_certain_matches: [list object]: (see doc in original function)
+        - column_certain_matches: {dict object}: (see doc in original function)
     
     '''
     column_matches = request.json['column_certain_matches']
@@ -1330,26 +1337,25 @@ def add_column_certain_matches(project_id):
     proj.add_col_certain_matches(column_matches)
     return jsonify(error=False)
 
-@app.route('/api/link/select_file/<project_id>', methods=['POST'])
-def select_file(project_id):
-    '''    
-    TODO: FIX THIS MESS  !!!!
+
+
+@app.route('/api/link/add_columns_to_return/<project_id>/<file_role>/', methods=['POST'])
+@cross_origin()
+def add_columns_to_return(project_id, file_role):
+    '''
+    Specify columns to be included in download version of file. For link project 
     
-    Choose a file to use as source or referential for merging
-    send {file_role: "source", project_id: "ABCYOUANDME", internal: False}
+    # TODO: shouldn't this be for normalize also ?
+    
+    wrapper around UserLinker.add_cols_to_return
     
     GET:
-        - project_id: ID for the "link" project
-        
-    POST:
-        - file_role: "ref" or "source". Role of the normalized file for linking
-        - project_id: ID of the "normalize" project to use for linking
+        project_id: ID for "link" project
+        file_role: "ref" or "source"
     '''
-    proj = UserLinker(project_id)
-    params = request.json
-    proj.add_selected_project(file_role=params['file_role'], 
-                           internal=params.get('internal', False), # TODO: remove internal
-                           project_id=params['project_id'])
+    columns_to_return = request.json
+    proj = UserLinker(project_id=project_id)
+    proj.add_cols_to_return(file_role, columns_to_return)    
     return jsonify(error=False)
 
 #==============================================================================
@@ -1360,7 +1366,7 @@ def select_file(project_id):
 # TODO: put all job schedulers in single api (assert to show possible methods) or use @job   
 
 # TODO: get this from MODULES ?
-API_MODULE_NAMES = ['infer_mvs', 'replace_mvs', 'concat_with_init', 'linker', 'create_labeller']
+API_MODULE_NAMES = ['infer_mvs', 'replace_mvs', 'concat_with_init', 'create_labeller', 'linker']
 
 @app.route('/api/schedule/<job_name>/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
