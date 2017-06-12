@@ -58,7 +58,7 @@ import json
 import math
 import random
 
-from user_project import UserProject
+from linker import UserLinker
 
 
 def gen_dedupe_variable_definition(col_matches):
@@ -71,7 +71,7 @@ def gen_dedupe_variable_definition(col_matches):
     return my_variable_definition
 
 
-project_id = '7a4ce22c0ccd5d2c348b1b6ee2c43fd7'
+project_id = '2959f5fdb5041e585b9629df407d33b8'
 
 source_path = '/home/leo/Documents/eig/merge_machine/merge_machine/data/projects/7a4ce22c0ccd5d2c348b1b6ee2c43fd7/source/replace_mvs/source.csv'
 ref_path = '/home/leo/Documents/eig/merge_machine/merge_machine/data/referentials/liste_de_lycees/ref/INIT/ref.csv'
@@ -85,7 +85,7 @@ paths = {
              'train': train_path
          }
 
-proj = UserProject(project_id)
+proj = UserLinker(project_id)
 col_matches = proj.read_col_matches()
 my_variable_definition = gen_dedupe_variable_definition(col_matches)
 

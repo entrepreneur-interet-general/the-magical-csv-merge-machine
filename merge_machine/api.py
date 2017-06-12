@@ -260,10 +260,10 @@ def method_not_allowed(error):
     app.logger.error('Method not allowed (POST or GET): %s', (error))
     return jsonify(error=True, message=error.description), 404
 
-@app.errorhandler(Exception)
-def internal_server_error(error):
-    app.logger.error('Server Error: %s', (error))
-    return jsonify(error=True, message=error.__str__()), 500
+#@app.errorhandler(Exception)
+#def internal_server_error(error):
+#    app.logger.error('Server Error: %s', (error))
+#    return jsonify(error=True, message=error.__str__()), 500
 
 
 #==============================================================================
