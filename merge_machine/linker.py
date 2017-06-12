@@ -68,7 +68,7 @@ class Linker(AbstractDataProject):
         return metadata   
 
     def add_col_matches(self, column_matches):
-        '''column_matches is a json file as list of dict of list'''
+        '''column_matches is a json file as dict'''
         # TODO: add checks on file
         
         # Add matches

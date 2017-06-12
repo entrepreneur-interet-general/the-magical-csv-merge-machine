@@ -178,7 +178,6 @@ class AbstractProject():
     def read_metadata(self):
         '''Wrapper around read_config_data'''
         metadata = self.read_config_data(module_name='', file_name='metadata.json')
-        print(metadata)
         assert metadata['project_id'] == self.project_id
         return metadata
     
