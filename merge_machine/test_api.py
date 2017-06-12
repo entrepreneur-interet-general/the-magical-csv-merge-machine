@@ -61,7 +61,7 @@ def wait_get_resp(url_to_append, max_wait=10):
             return parsed_resp
         time.sleep(0.25)
     print(time.time() - start_time)
-    raise Exception('Timed out for {0}'.format(url_to_append))
+    raise Exception('Timed out after {0} seconds'.format(max_wait))
 
 
 
@@ -277,19 +277,19 @@ def link_pipeline(params):
     url_to_append = '/queue/result/{0}'.format(job_id)
     resp = wait_get_resp(url_to_append, max_wait=20)
     
-    ##==============================================================================
-    ## Run linker
-    ##==============================================================================
-    #url_to_append = '/api/schedule/linker/{0}/'.format(project_id)
-    #body = {}
-    #resp = post_resp(url_to_append, body)
-    #job_id = resp['job_id']
-    #
-    ##==============================================================================
-    ## --> Wait for job result
-    ##==============================================================================
-    #url_to_append = '/queue/result/{0}'.format(job_id)
-    #resp = wait_get_resp(url_to_append, max_wait=500)
+    #==============================================================================
+    # Run linker
+    #==============================================================================
+    url_to_append = '/api/schedule/linker/{0}/'.format(project_id)
+    body = {}
+    resp = post_resp(url_to_append, body)
+    job_id = resp['job_id']
+    
+    #==============================================================================
+    # --> Wait for job result
+    #==============================================================================
+    url_to_append = '/queue/result/{0}'.format(job_id)
+    resp = wait_get_resp(url_to_append, max_wait=600)
 
     return project_id
 

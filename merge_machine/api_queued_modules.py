@@ -166,6 +166,3 @@ def _linker(project_id, *argv):
     print('Wrote data to: ', file_path)
 
     return
-
-
-
