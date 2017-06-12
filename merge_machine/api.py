@@ -121,7 +121,7 @@ from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
 
 # Redis imports
-from rq import Queue
+from rq import cancel_job as rq_cancel_job, Queue
 from rq.job import Job
 from worker import conn
 
@@ -1412,6 +1412,23 @@ def get_job_result(job_id):
         return jsonify(completed=True, result=job.result)
     else:
         return jsonify(completed=False), 202
+
+@app.route('/queue/cancel/<job_id>', methods=['GET'])
+def cancel_job(job_id):
+    '''
+    Fetch the json output of a module run scheduled by schedule_job. Will return 
+    a 202 code if job is not yet complete and 404 if job could not be found.
+    
+    GET:
+        - job_id: as returned by schedule_job
+    '''
+    try:
+        Job.fetch(job_id, connection=conn)
+    except:
+        return jsonify(error=True, message='job_id could not be found', completed=False), 404
+    
+    rq_cancel_job(job_id)
+
 
 @app.route('/queue/num_jobs/<job_id>', methods=['GET'])
 def count_jobs_in_queue_before(job_id):
