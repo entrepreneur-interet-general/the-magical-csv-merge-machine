@@ -58,6 +58,8 @@ import json
 import math
 import random
 
+from joblib import Parallel, delayed
+
 from linker import UserLinker
 
 
@@ -71,42 +73,30 @@ def gen_dedupe_variable_definition(col_matches):
     return my_variable_definition
 
 
-project_id = '2959f5fdb5041e585b9629df407d33b8'
-
-source_path = '/home/leo/Documents/eig/merge_machine/merge_machine/data/projects/7a4ce22c0ccd5d2c348b1b6ee2c43fd7/source/replace_mvs/source.csv'
-ref_path = '/home/leo/Documents/eig/merge_machine/merge_machine/data/referentials/liste_de_lycees/ref/INIT/ref.csv'
-train_path = '/home/leo/Documents/eig/merge_machine/merge_machine/data/projects/7a4ce22c0ccd5d2c348b1b6ee2c43fd7/link/dedupe_linker/training.json'
-learned_settings_path = '/home/leo/Documents/eig/merge_machine/merge_machine/data/projects/7a4ce22c0ccd5d2c348b1b6ee2c43fd7/link/dedupe_linker/learned_settings'
-
-paths = {
-            'learned_settings': learned_settings_path,
-             'ref': ref_path,
-             'source': source_path,
-             'train': train_path
-         }
+project_id = 'db61ee4b23daad189c2569d441ada68b'
 
 proj = UserLinker(project_id)
+
+paths = proj._gen_paths_dedupe()
 col_matches = proj.read_col_matches()
-my_variable_definition = gen_dedupe_variable_definition(col_matches)
+my_variable_definition = proj._gen_dedupe_variable_definition(col_matches)
 
 params = {
         'variable_definition': my_variable_definition,
         'selected_columns_from_source': None,
         'selected_columns_from_ref': None
         }  
-
-
-with open('local_test_data/rnsr/my_dedupe_rnsr_config.json') as f:
-   my_config = json.load(f)    
+paths['og_train'] = paths['train']
+paths['og_learned_settings'] = paths['learned_settings']
 
 # Restrict training
 with open(paths['train']) as r:
     training = json.load(r)
-    num_matches = len(training['match'])
-    num_distinct = len(training['distinct'])
+num_matches = len(training['match'])
+num_distinct = len(training['distinct'])
 
 props = [x/10. for x in range(1,10)]
-props = [0.9]
+props = [0.9, 0.6, 0.3]
 match_sizes = []
 distinct_sizes = []
 recalls = {}
@@ -119,43 +109,54 @@ matches = training['match']
 random.shuffle(matches)
 distinct = training['distinct']
 random.shuffle(distinct)
-
-
-num_tries = 10
-for prop in props:
-    recalls[prop] = []
     
-    for _ in range(num_tries):
-        print('At prop: ', prop)
-        new_training = dict()
-        new_num_matches = math.ceil(prop*num_matches)
-        new_training['match'] = matches[:new_num_matches]
-        
-        new_num_distinct = math.ceil(prop*num_distinct)
-        new_training['distinct'] = distinct[:new_num_distinct]
-            
-        path_restricted_train = paths['train'] + '_temp'
-        with open(path_restricted_train, 'w') as w:
-            json.dump(new_training, w)  
-        
-        paths['train'] =  path_restricted_train   
-        
-        
-        proj.linker('dedupe_linker', paths, params)
-        source = proj.mem_data
-        
-        # Explore results
-        match_rate = source.__CONFIDENCE.notnull().mean()
-        print('Match rate', '-->', match_rate)
 
-        recalls[prop].append(match_rate)
-        match_sizes.append(new_num_matches)
-        distinct_sizes.append(new_num_distinct)
+def main_link_test(proj, paths, prop, num_matches, num_distinct, i):
+    new_training = dict()
+    new_num_matches = math.ceil(prop*num_matches)
+    new_training['match'] = matches[:new_num_matches]
+    
+    new_num_distinct = math.ceil(prop*num_distinct)
+    new_training['distinct'] = distinct[:new_num_distinct]
+        
+    paths['learned_settings'] = paths['og_learned_settings'] + '_temp_' + str(hash(str(i) + '_' + str(prop)))
+    path_restricted_train = paths['og_train'] + '_temp_' + str(hash(str(i) + '_' + str(prop)))
+    with open(path_restricted_train, 'w') as w:
+        json.dump(new_training, w)  
+    
+    paths['train'] =  path_restricted_train   
+    
+    proj.linker('dedupe_linker', paths, params)
+    source = proj.mem_data
+    
+    # Explore results
+    match_rate = source.__CONFIDENCE.notnull().mean()
+    
+    return match_rate, new_num_matches, new_num_distinct
+
+
+n_jobs = 8
+num_tries = 4
+res = Parallel(n_jobs=n_jobs)(delayed(main_link_test)(proj, paths, prop, num_matches, num_distinct, i) for i in range(num_tries) for prop in props)
+
+#for prop in props:
+#    recalls[prop] = []
+#    for _ in range(num_tries):
+#        print('At prop: ', prop)
+#        mr, nnm, nnd = main_link_test(proj, paths, prop, num_matches, num_distinct)
+#        print('\nMatch rate', '-->', mr, '\n')
+#
+#        recalls[prop].append(mr)
+#        match_sizes.append(nnm)
+#        distinct_sizes.append(nnd)
        
-        if match_rate >= 0.7:
-            break
+#        if match_rate >= 0.7:
+#            break
         
 
+print('Recalls:\n', recalls)
+print('Match sizezs:\n', match_sizes)
+print('Distinct sizes:\n', distinct_sizes)
 
 assert False
 
