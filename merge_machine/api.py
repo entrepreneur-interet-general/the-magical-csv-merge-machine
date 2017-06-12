@@ -244,6 +244,28 @@ def _init_project(project_type,
     return proj
             
 
+
+#==============================================================================
+# Error handling
+#==============================================================================
+
+
+@app.errorhandler(404)
+def page_not_found(error):
+    app.logger.error('URL not valid: %s', (error))
+    return jsonify(error=True, message=error.description), 404
+
+@app.errorhandler(405)
+def method_not_allowed(error):
+    app.logger.error('Method not allowed (POST or GET): %s', (error))
+    return jsonify(error=True, message=error.description), 404
+
+@app.errorhandler(Exception)
+def internal_server_error(error):
+    app.logger.error('Server Error: %s', (error))
+    return jsonify(error=True, message=error.__str__()), 500
+
+
 #==============================================================================
 # WEB
 #==============================================================================
