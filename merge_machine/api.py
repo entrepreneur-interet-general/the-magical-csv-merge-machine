@@ -149,7 +149,7 @@ Session(app)
 app.debug = True
 app.config['SECRET_KEY'] = open('secret_key.txt').read()
 app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024 # Check that files are not too big (2GB)
-          
+
 socketio = SocketIO(app)       
 
 # Redis connection
@@ -1443,6 +1443,7 @@ def get_job_result(job_id):
     if job.is_finished:
         #return str(job.result), 200
         return jsonify(completed=True, result=job.result)
+    
     else:
         return jsonify(completed=False), 202
 

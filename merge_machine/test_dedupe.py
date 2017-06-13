@@ -58,10 +58,9 @@ import json
 import math
 import random
 
-from joblib import Parallel, delayed
+#from joblib import Parallel, delayed
 
 from linker import UserLinker
-
 
 def gen_dedupe_variable_definition(col_matches):
     my_variable_definition = []
@@ -85,7 +84,8 @@ params = {
         'variable_definition': my_variable_definition,
         'selected_columns_from_source': None,
         'selected_columns_from_ref': None
-        }  
+        }
+
 paths['og_train'] = paths['train']
 paths['og_learned_settings'] = paths['learned_settings']
 
@@ -134,10 +134,16 @@ def main_link_test(proj, paths, prop, num_matches, num_distinct, i):
     
     return match_rate, new_num_matches, new_num_distinct
 
-
 n_jobs = 8
 num_tries = 4
-res = Parallel(n_jobs=n_jobs)(delayed(main_link_test)(proj, paths, prop, num_matches, num_distinct, i) for i in range(num_tries) for prop in props)
+
+for i in range(num_tries):
+    for prop in props:
+        match_rate, new_num_matches, new_num_distinct = main_link_test(proj, paths, prop, num_matches, num_distinct, i)
+        recalls.append(match_rate)
+        match_sizes.append(new_num_matches)
+        distinct_sizes.append(new_num_distinct)
+        
 
 #for prop in props:
 #    recalls[prop] = []

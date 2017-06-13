@@ -299,4 +299,4 @@ class AbstractDataProject(AbstractProject):
         self.log_buffer.append(log)
         self.run_info_buffer[module_name] = run_info
         
-        return log    
+        return log, run_info
