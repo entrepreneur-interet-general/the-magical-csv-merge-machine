@@ -1047,7 +1047,7 @@ def download(project_type, project_id):
     '''
     project_id = secure_filename(project_id)
 
-    proj = _init_project(project_id=project_id)
+    proj = _init_project(project_type, project_id)
     data_params, _ = _parse_request()
     
     if data_params is None:
