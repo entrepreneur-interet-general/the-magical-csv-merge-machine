@@ -1064,15 +1064,16 @@ def download(project_type, project_id):
     if file_name is not None:
         file_name = secure_filename(file_name)
 
-    (file_role, module_name, file_name) = proj.get_last_written(module_name, file_name)
+    (module_name, file_name) = proj.get_last_written(module_name, file_name)
 
     if module_name == 'INIT':
         return jsonify(error=True,
                message='No changes were made since upload. Download is not \
                        permitted. Please do not use this service for storage')
 
-    file_path = proj.path_to(file_role, module_name, file_name)
-    return send_file(file_path, as_attachment=True, attachment_filename='m3_merged.csv')
+    file_path = proj.path_to(module_name, file_name)
+    new_file_name = file_name.split('.csv')[0] + '_MMM.csv'
+    return send_file(file_path, as_attachment=True, attachment_filename=new_file_name)
 
 
 # TODO: get this from MODULES ?
