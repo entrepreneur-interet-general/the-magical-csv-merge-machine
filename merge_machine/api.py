@@ -1226,13 +1226,22 @@ def upload(project_id):
         - project_id: ID of the normalization project
         
     POST:
-        - file: (csv file) A csv to upload to the chosen normalization project
-                NB: the "filename" property will be used to name the file
+        
+      file: (csv file) A csv to upload to the chosen normalization project
+                  NB: the "filename" property will be used to name the file
+      json:
+        - module_params:
+            - make_mini: (default True) Set to False to NOT create a mini version of the file
+            - sample_size
+            - randomize
     '''
     # Load project
     proj = UserNormalizer(project_id=project_id) 
+    _, module_params = _parse_request()   
+    if module_params is None:
+        module_params = {}
+    make_mini = module_params.get('make_mini', True)
     
-    print('GOT HERE YES')
     # Upload data
     file = request.files['file']
     if file:
@@ -1240,8 +1249,16 @@ def upload(project_id):
     else:
         raise Exception('Empty file')
         
-    run_info = proj.read_config_data('INIT', 'run_info.json')
+    # Make mini
+    if make_mini:
+        proj.make_mini(module_params)
+        
+        # Write transformations and log
+        proj.write_data()    
+        proj.write_log_buffer(True)
     
+        
+    run_info = proj.read_config_data('INIT', 'run_info.json')
     return jsonify(run_info=run_info, project_id=proj.project_id)
 
 

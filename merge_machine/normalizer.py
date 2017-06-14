@@ -165,7 +165,6 @@ class Normalizer(AbstractDataProject):
 
     def upload_init_data(self, file, file_name, user_given_name=None):
         # TODO: deal with og_file_name, file_id, display_name, user_given_name
-        
         """
         Upload and write source or reference to the project. Tables will
         be added to the "INIT" module.
@@ -267,7 +266,7 @@ class Normalizer(AbstractDataProject):
 
         self.upload_config_data(config_dict, 'INIT', 'infered_config.json')
 
-        self.clear_memory()    
+        # self.clear_memory()    
         
     def add_selected_columns(self, columns):
         '''

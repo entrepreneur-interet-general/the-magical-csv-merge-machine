@@ -154,10 +154,10 @@ class AbstractDataProject(AbstractProject):
         '''
         # TODO: Change current 
         # TODO: Current for normalize ?        
+        self.check_mem_data()
         
         NEW_FILE_NAME = '__MINI__' + self.mem_data_info['file_name']        
-       
-        self.check_mem_data()
+        
         if self.mem_data_info['module_name'] != 'INIT':
             raise Exception('make_mini can only be called on data in memory from the INIT module')
         self.clean_after('INIT', NEW_FILE_NAME) # TODO: check module_name for clean_after

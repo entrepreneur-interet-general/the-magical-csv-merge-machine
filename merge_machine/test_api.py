@@ -203,7 +203,6 @@ def normalize_pipeline(params):
     url_to_append = '/api/metadata/normalize/{0}'.format(project_id)
     resp = get_resp(url_to_append)
 
-
     return project_id
 
 
@@ -328,6 +327,26 @@ if __name__ == '__main__':
                         }
     }
     ref_project_id = normalize_pipeline(params)
+    
+    #==============================================================================
+    # Download file    
+    #==============================================================================
+    url_to_append = '/api/download/normalize/{0}'.format(ref_project_id)
+    body = {
+            'data_params': {
+                'module_name': 'concat_with_init',
+                'file_name': 'ref.csv'}
+            }
+            
+#    url = PROTOCOL + HOST + url_to_append
+#    resp = requests.post(url, json=body, **kwargs)     
+#    
+#    if resp.ok:
+#        parsed_resp = json.loads(resp.content.decode())
+#        _print(url_to_append, parsed_resp)
+#        return parsed_resp        
+            
+    resp = post_resp(url_to_append, body)    
     
     #==============================================================================
     # RUN LINK PIPELINE
