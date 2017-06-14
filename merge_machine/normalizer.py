@@ -47,6 +47,7 @@ class Normalizer(AbstractDataProject):
         metadata['complete'] = dict() # File is complete once final is reconstructed
         metadata['column_tracker'] = None
         metadata['files'] = dict() # Contains single file metadata
+        metadata['has_mini'] = False
         return metadata   
 
     def init_log(self, module_name, module_type):
