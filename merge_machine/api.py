@@ -1413,7 +1413,8 @@ def add_columns_to_return(project_id, file_role):
 # TODO: put all job schedulers in single api (assert to show possible methods) or use @job   
 
 # TODO: get this from MODULES ?
-API_MODULE_NAMES = ['infer_mvs', 'replace_mvs', 'concat_with_init', 'create_labeller', 'linker']
+API_MODULE_NAMES = ['infer_mvs', 'replace_mvs', 'concat_with_init', 
+                    'run_all_transforms', 'create_labeller', 'linker']
 
 @app.route('/api/schedule/<job_name>/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
@@ -1440,6 +1441,9 @@ def schedule_job(job_name, project_id):
             job_id=project_id, 
             #depends_on=project_id
     )    
+
+    # job = q.enqueue_call(func='api_queued_modules._' + job_name, args=(project_id, data_params, module_params),  result_ttl=5000, job_id=project_id)        
+    
     job_id = job.get_id()
     print(job_id)
     return jsonify(job_id=job_id,

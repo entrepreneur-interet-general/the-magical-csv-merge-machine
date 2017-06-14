@@ -350,18 +350,45 @@ class Normalizer(AbstractDataProject):
         
         run_info = {} # TODO: check specifications for run_info
         
-        
-        print('here')
         # Project is complete at that stage
         self.metadata['complete'][self.mem_data_info['file_name']] = True
 
         # Complete log
         log = self.end_log(log, error=False)
                           
+        # Add time to run_info (# TODO: is this the best way?)
+        run_info['start_timestamp'] = log['start_timestamp']
+        run_info['end_timestamp'] = log['end_timestamp']        
+        
         # Update buffers
         self.log_buffer.append(log)
-        self.run_info_buffer['concat_with_init'] = run_info
+        self.run_info_buffer['concat_with_init'] = run_info        
+        return log, run_info
+    
+    def transform(self, module_name, params):
+        '''Overwrite transform from AbstractDataProject to be able to use concat_with_init'''       
+        if module_name == 'concat_with_init':
+            return self.concat_with_init()
+        else:
+            return super().transform(module_name, params)
+            
+    def run_all_transforms(self):
+        '''Runs all modules on data in memory. And config from module names'''
+        self.check_mem_data()
         
+        # Only run all if there is a MINI version of the file # TODO: check that this is valid
+        if self.metadata['has_mini']:
+            for module_name in NORMALIZE_MODULE_ORDER:
+                if MODULES['transform'][module_name].get('use_in_full_run', False):
+                    try:
+                        params = self.read_config_data(module_name, 'run_info.json')['params']
+                        # Load parameters from config files
+                        self.transform(module_name, params)
+                    except:
+                        print('WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
+                        # TODO: warning here
+        return
+
 
 
 class UserNormalizer(Normalizer):

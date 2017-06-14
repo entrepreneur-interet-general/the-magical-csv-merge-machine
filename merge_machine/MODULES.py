@@ -26,14 +26,17 @@ MODULES = {
                             },
                     'replace_mvs': {
                                 'func': replace_mvs,
-                                'desc': replace_mvs.__doc__
+                                'desc': replace_mvs.__doc__,
+                                'use_in_full_run': True
                             },
-#                    'normalizeValues': {
+#                   'normalizeValues': {
 #                               'func':  normalizeValues,
-#                               'desc': normalizeValues.__doc__
+#                               'desc': normalizeValues.__doc__,
+#                               'use_in_full_run': True
 #                           },
                     'concat_with_init': {
-                               'desc': 'Merge intial and transformed files (cannot be called)'
+                               'desc': 'Merge intial and transformed files (cannot be called)',
+                               'use_in_full_run': False
                            }
                     },
         'infer':{
@@ -76,5 +79,4 @@ MODULES = {
                 
 # Sanity check
 for module_from_loop in NORMALIZE_MODULE_ORDER:
-    assert (module_from_loop in MODULES['transform']) \
-        or (module_from_loop in MODULES['link'])
+    assert (module_from_loop in MODULES['transform'])

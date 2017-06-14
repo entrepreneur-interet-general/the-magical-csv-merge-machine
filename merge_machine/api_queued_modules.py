@@ -101,12 +101,39 @@ def _concat_with_init(project_id, data_params, *argv):
     
     # TODO: there was a pdb here. is everything alright ?
     
-    proj.concat_with_init()
+    proj.transform('concat_with_init', None)
     # Write transformations and log
     proj.write_data()    
     proj.write_log_buffer(True)
     proj.write_run_info_buffer()
-    return
+    return {}
+
+def _run_all_transforms(project_id, data_params, *argv):
+    '''
+    Run all transformations that were already (based on presence of 
+    run_info.json files) with parameters in run_info.json files.
+
+    ARGUMENTS (GET):
+        project_id: ID for "normalize" project
+
+    ARGUMENTS (POST):
+        - data_params: file to concatenate to original
+                {
+                    "file_name": file to use for transform (module_name is 'INIT')
+                }
+    '''
+    proj = UserNormalizer(project_id=project_id)
+
+    file_name = data_params['file_name']
+
+    proj.load_data('INIT', file_name)
+    proj.run_all_transforms()
+
+    # Write transformations and log
+    proj.write_data()    
+    proj.write_log_buffer(True)
+    proj.write_run_info_buffer()
+    return {}
 
 
 def _create_labeller(project_id, *argv):
@@ -170,4 +197,4 @@ def _linker(project_id, *argv):
                              proj.mem_data_info['file_name'])
     print('Wrote data to: ', file_path)
 
-    return
+    return {}

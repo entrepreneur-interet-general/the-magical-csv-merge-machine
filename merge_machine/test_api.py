@@ -227,11 +227,22 @@ def normalize_pipeline(params):
     job_id = resp['job_id']
     
     #==============================================================================
+    # Run all transforms on original file
+    #==============================================================================
+    file_name = file_name.replace('MINI__', '')
+    url_to_append = '/api/schedule/run_all_transforms/{0}/'.format(project_id)
+    body = {
+            'data_params': {'file_name': file_name}
+            }
+    resp = post_resp(url_to_append, body)
+    job_id = resp['job_id']        
+    
+    #==============================================================================
     # --> Wait for job result
     #==============================================================================
     url_to_append = '/queue/result/{0}'.format(job_id)
     resp = wait_get_resp(url_to_append, max_wait=10)
-    
+        
     
     #==============================================================================
     # Read normalize metadata

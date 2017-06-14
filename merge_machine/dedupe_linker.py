@@ -289,7 +289,6 @@ def dedupe_linker(paths, params):
     train_path = paths['train']   
     learned_settings_path = paths['learned_settings']
     my_variable_definition = params['variable_definition']
-    add_labels = params.get('add_labels', True)
     
     # Put to dedupe input format
     ref = pd.read_csv(ref_path, encoding='utf-8', dtype=str)
@@ -328,10 +327,7 @@ def dedupe_linker(paths, params):
     return source, run_info
 
 
-if __name__ == '__main__':
-    
-    import json
-    
+if __name__ == '__main__':    
     match_rates = []
 #    for i in range(5):
     new_param = 200

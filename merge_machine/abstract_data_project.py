@@ -308,6 +308,7 @@ class AbstractDataProject(AbstractProject):
         log = self.end_log(log, error=False)
                           
         # Add time to run_info (# TODO: is this the best way?)
+        run_info['params'] = params
         run_info['start_timestamp'] = log['start_timestamp']
         run_info['end_timestamp'] = log['end_timestamp']
         
