@@ -28,19 +28,7 @@ import time
 
 import numpy as np
 
-class MyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.integer):
-            return int(obj)
-        elif isinstance(obj, np.floating):
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif isinstance(obj, np.bool_):
-            return bool(obj)
-        else:
-            return super(MyEncoder, self).default(obj)
-
+from my_json_encoder import MyEncoder
 
 NOT_IMPLEMENTED_MESSAGE = 'NOT IMPLEMENTED in abstract class'
 

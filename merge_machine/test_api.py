@@ -12,35 +12,59 @@ TODO:
 """
 
 import json
+import pprint
 import requests
 import time
 
 PROTOCOL = 'http://'
 HOST = '0.0.0.0:5000'
 PRINT = True
+PRINT_CHAR_LIMIT = 10000
 
-def _print(url_to_append, parsed_resp):
-    if PRINT:
-        print('\n>>>>>>>>>>>>>>>>>>>>>>>>>\n', url_to_append, '\n\n', parsed_resp)
+def my_pformat(dict_obj):
+    formated_string = pprint.pformat(dict_obj)
+    if len(formated_string) > PRINT_CHAR_LIMIT:
+        formated_string = formated_string[:PRINT_CHAR_LIMIT]
+        formated_string += '\n[ ... ] (increase PRINT_CHAR_LIMIT to see more...)'
+    return formated_string
+
+def my_print(func):
+    def wrapper(*args, **kwargs):
+        if PRINT:
+            print('\n' + '>'*60 + '\n', args[0])
             
+            if len(args) >= 2:
+                body = args[1]
+                if body:
+                    print('\n <> POST REQUEST:\n', my_pformat(body))
+        resp = func(*args, **kwargs)
+        
+        if PRINT:
+            print('\n <> RESPONSE:\n', my_pformat(resp))        
+        
+        return resp
+    return wrapper
+    
+@my_print
 def get_resp(url_to_append):
     url = PROTOCOL + HOST + url_to_append
     resp = requests.get(url)
     
     if resp.ok:
         parsed_resp = json.loads(resp.content.decode())
-        _print(url_to_append, parsed_resp)
+        #        _print(url_to_append,  parsed_resp)
         return parsed_resp
     else: 
         raise Exception('Problem:\n', resp)
-        
+
+@my_print
 def post_resp(url_to_append, body, **kwargs):
     url = PROTOCOL + HOST + url_to_append
     resp = requests.post(url, json=body, **kwargs)     
     
     if resp.ok:
         parsed_resp = json.loads(resp.content.decode())
-        _print(url_to_append, parsed_resp)
+        #        _print(url_to_append, parsed_resp)
         return parsed_resp
     else: 
         raise Exception('Problem:\n', resp)
@@ -56,8 +80,9 @@ def wait_get_resp(url_to_append, max_wait=10):
             raise Exception('Problem:\n', resp)
             
         if parsed_resp['completed']:
-            print('\n--> Waited {0} seconds'.format(time.time()-start_time))
-            print('\n', parsed_resp)
+            if PRINT:
+                print('\n <> RESPONSE AFTER JOB COMPLETION (Waited {0} seconds):'.format(time.time()-start_time))
+                print(parsed_resp)
             return parsed_resp
         time.sleep(0.25)
     print(time.time() - start_time)

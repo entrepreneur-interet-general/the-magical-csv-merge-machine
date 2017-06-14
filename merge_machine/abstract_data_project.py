@@ -295,8 +295,12 @@ class AbstractDataProject(AbstractProject):
         # Complete log
         log = self.end_log(log, error=False)
                           
+        # Add time to run_info (# TODO: is this the best way?)
+        run_info['start_timestamp'] = log['start_timestamp']
+        run_info['end_timestamp'] = log['end_timestamp']
+        
         # Update buffers
         self.log_buffer.append(log)
         self.run_info_buffer[module_name] = run_info
         
-        return log    
+        return log, run_info

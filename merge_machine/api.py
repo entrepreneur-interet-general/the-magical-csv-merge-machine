@@ -123,7 +123,7 @@ from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
 
 # Redis imports
-from rq import Queue
+from rq import cancel_job as rq_cancel_job, Queue
 from rq.job import Job
 from worker import conn
 
@@ -149,7 +149,7 @@ Session(app)
 app.debug = True
 app.config['SECRET_KEY'] = open('secret_key.txt').read()
 app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024 # Check that files are not too big (2GB)
-          
+
 socketio = SocketIO(app)       
 
 # Redis connection
@@ -243,6 +243,28 @@ def _init_project(project_type,
                               description=description)
     return proj
             
+
+
+#==============================================================================
+# Error handling
+#==============================================================================
+
+
+@app.errorhandler(404)
+def page_not_found(error):
+    app.logger.error('URL not valid: %s', (error))
+    return jsonify(error=True, message=error.description), 404
+
+@app.errorhandler(405)
+def method_not_allowed(error):
+    app.logger.error('Method not allowed (POST or GET): %s', (error))
+    return jsonify(error=True, message=error.description), 404
+
+#@app.errorhandler(Exception)
+#def internal_server_error(error):
+#    app.logger.error('Server Error: %s', (error))
+#    return jsonify(error=True, message=error.__str__()), 500
+
 
 #==============================================================================
 # WEB
@@ -1025,7 +1047,7 @@ def download(project_type, project_id):
     '''
     project_id = secure_filename(project_id)
 
-    proj = _init_project(project_id=project_id)
+    proj = _init_project(project_type, project_id)
     data_params, _ = _parse_request()
     
     if data_params is None:
@@ -1042,15 +1064,16 @@ def download(project_type, project_id):
     if file_name is not None:
         file_name = secure_filename(file_name)
 
-    (file_role, module_name, file_name) = proj.get_last_written(module_name, file_name)
+    (module_name, file_name) = proj.get_last_written(module_name, file_name)
 
     if module_name == 'INIT':
         return jsonify(error=True,
                message='No changes were made since upload. Download is not \
                        permitted. Please do not use this service for storage')
 
-    file_path = proj.path_to(file_role, module_name, file_name)
-    return send_file(file_path, as_attachment=True, attachment_filename='m3_merged.csv')
+    file_path = proj.path_to(module_name, file_name)
+    new_file_name = file_name.split('.csv')[0] + '_MMM.csv'
+    return send_file(file_path, as_attachment=True, attachment_filename=new_file_name)
 
 
 # TODO: get this from MODULES ?
@@ -1438,8 +1461,26 @@ def get_job_result(job_id):
     if job.is_finished:
         #return str(job.result), 200
         return jsonify(completed=True, result=job.result)
+    
     else:
         return jsonify(completed=False), 202
+
+@app.route('/queue/cancel/<job_id>', methods=['GET'])
+def cancel_job(job_id):
+    '''
+    Fetch the json output of a module run scheduled by schedule_job. Will return 
+    a 202 code if job is not yet complete and 404 if job could not be found.
+    
+    GET:
+        - job_id: as returned by schedule_job
+    '''
+    try:
+        Job.fetch(job_id, connection=conn)
+    except:
+        return jsonify(error=True, message='job_id could not be found', completed=False), 404
+    
+    rq_cancel_job(job_id)
+
 
 @app.route('/queue/num_jobs/<job_id>', methods=['GET'])
 def count_jobs_in_queue_before(job_id):

@@ -65,7 +65,11 @@ def _replace_mvs(project_id, data_params, module_params):
     proj.write_data()    
     proj.write_log_buffer(True)
     proj.write_run_info_buffer()
-    return
+    
+    # Get run info (TODO: Use object returned by transform instead)
+    run_info = proj.read_config_data('replace_mvs', 'run_info.json')
+    
+    return run_info
 
 
 def _concat_with_init(project_id, data_params, *argv):
@@ -121,6 +125,7 @@ def _create_labeller(project_id, *argv):
     proj = UserLinker(project_id=project_id)
     labeller = proj._gen_dedupe_labeller()
     proj.write_labeller(labeller)
+    return
 
 # In test_linker
 def _linker(project_id, *argv):
