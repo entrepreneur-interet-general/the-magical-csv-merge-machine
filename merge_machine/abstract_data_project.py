@@ -157,41 +157,50 @@ class AbstractDataProject(AbstractProject):
         self.check_mem_data()
         
          # Set defaults
-        sample_size = params.get('sample_size', 20000)
+        sample_size = params.get('sample_size', 5000)
         randomize = params.get('randomize', True)       
         NEW_FILE_NAME = 'MINI__' + self.mem_data_info['file_name']        
         
-        if self.mem_data_info['module_name'] != 'INIT':
-            raise Exception('make_mini can only be called on data in memory from the INIT module')
-        self.clean_after('INIT', NEW_FILE_NAME) # TODO: check module_name for clean_after
         
-
-        # Initiate log
-        log = self.init_log('INIT', 'transform')  # TODO: hack here: module_name should be 'make_mini'
         
-        if randomize:
-            sample_index = self.mem_data.index[:sample_size]
+        # Only create file if it is larger than sample size
+        
+        if self.mem_data.shape[0] > sample_size:            
+            if self.mem_data_info['module_name'] != 'INIT':
+                raise Exception('make_mini can only be called on data in memory from the INIT module')
+            self.clean_after('INIT', NEW_FILE_NAME) # TODO: check module_name for clean_after
+            
+    
+            # Initiate log
+            log = self.init_log('INIT', 'transform')  # TODO: hack here: module_name should be 'make_mini'
+            
+            if randomize:
+                sample_index = self.mem_data.index[:sample_size]
+            else:
+                sample_index = np.random.permutation(self.mem_data.index)[:sample_size]
+            
+            # Replace data in memory
+            self.mem_data = self.mem_data.loc[sample_index, :]
+            
+            # Update metadata and log
+            self.metadata['has_mini'] = True
+            self.mem_data_info['file_name'] = NEW_FILE_NAME
+            log['og_file_name'] = log['file_name']
+            log['file_name'] = NEW_FILE_NAME
+            
+            # TODO: think if transformation should / should not be complete
+    
+            # Complete log
+            log = self.end_log(log, error=False)
+                              
+            # Update buffers
+            self.log_buffer.append(log)
+            # TODO: Make sure that run_info_buffer should not be extended
+                   
+            return log            
         else:
-            sample_index = np.random.permutation(self.mem_data.index)[:sample_size]
-        
-        # Replace data in memory
-        self.mem_data = self.mem_data.loc[sample_index, :]
-        
-        # Update metadata and log
-        self.mem_data_info['file_name'] = NEW_FILE_NAME
-        log['og_file_name'] = log['file_name']
-        log['file_name'] = NEW_FILE_NAME
-        
-        # TODO: think if transformation should / should not be complete
-
-        # Complete log
-        log = self.end_log(log, error=False)
-                          
-        # Update buffers
-        self.log_buffer.append(log)
-        # TODO: Make sure that run_info_buffer should not be extended
-        return log            
-        
+            self.metadata['has_mini'] = False
+            return {}
     
     
     def write_log_buffer(self, written):
@@ -203,8 +212,10 @@ class AbstractDataProject(AbstractProject):
         
         '''
         if not self.log_buffer:
-            raise Exception('No log buffer: no operations were executed since \
-                            write_log_buffer was last called')
+            # TODO: Put warning here
+            pass
+            #            raise Exception('No log buffer: no operations were executed since \
+            #                            write_log_buffer was last called')
         
         # Indicate if any data was written
         if written:
