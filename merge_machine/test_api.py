@@ -69,6 +69,16 @@ def post_resp(url_to_append, body, **kwargs):
     else: 
         raise Exception('Problem:\n', resp)
 
+@my_print
+def post_download(url_to_append, body, **kwargs):
+    url = PROTOCOL + HOST + url_to_append
+    resp = requests.post(url, json=body, **kwargs)     
+    
+    if resp.ok:
+        return resp
+    else: 
+        raise Exception('Problem:\n', resp)    
+
 def wait_get_resp(url_to_append, max_wait=10):
     url = PROTOCOL + HOST + url_to_append
     start_time = time.time()
@@ -362,16 +372,9 @@ if __name__ == '__main__':
                 'module_name': 'concat_with_init',
                 'file_name': 'ref.csv'}
             }
-            
-#    url = PROTOCOL + HOST + url_to_append
-#    resp = requests.post(url, json=body, **kwargs)     
-#    
-#    if resp.ok:
-#        parsed_resp = json.loads(resp.content.decode())
-#        _print(url_to_append, parsed_resp)
-#        return parsed_resp        
-            
-    resp = post_resp(url_to_append, body)    
+    PRINT = False
+    resp = post_download(url_to_append, body)    
+    PRINT = True
     
     #==============================================================================
     # RUN LINK PIPELINE
