@@ -1110,8 +1110,8 @@ def get_sample(project_type, project_id):
     print('Sample request is ', request.json)
     
     proj = _init_project(project_type=project_type, project_id=project_id)    
-    data_params, all_params = _parse_request() # TODO: add size limit on params    
-
+    data_params, all_params = _parse_request() # TODO: add size limit on params
+    
     if all_params is None:
         all_params = dict()
 

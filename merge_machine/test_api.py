@@ -366,7 +366,7 @@ if __name__ == '__main__':
         'new_project': {'description': 'File to use as ref for testing',
                     'display_name': 'test_ref.csv',
                     'internal': True},
-        'file_path': 'local_test_data/integration_1/ref.csv',
+        'file_path': 'local_test_data/integration_1/ref (copy).csv',
         'select_columns':{
                         'columns': ['full_name', 'adresse_uai', 'localite_acheminement_uai', 
                             'patronyme_uai', 'departement', 'code_postal_uai', 'numero_uai']

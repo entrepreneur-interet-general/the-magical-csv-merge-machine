@@ -11,6 +11,7 @@ import os
 import time
 
 import pandas as pd
+from werkzeug.utils import secure_filename
 
 from abstract_data_project import AbstractDataProject
 from CONFIG import NORMALIZE_DATA_PATH
@@ -160,8 +161,9 @@ class Normalizer(AbstractDataProject):
         return path
         
     def safe_filename(self, file_name, ext='.csv'):
-        assert file_name[-len(ext):] == ext        
-        return "".join([c for c in file_name[:-4] if c.isalpha() or c.isdigit() or c==' ']).rstrip() + ext
+        assert file_name[-len(ext):] == ext
+        return secure_filename(file_name)
+        #return "".join([c for c in file_name[:-4] if c.isalpha() or c.isdigit() or c==' ']).rstrip() + ext
     
 
     def upload_init_data(self, file, file_name, user_given_name=None):
@@ -192,13 +194,12 @@ class Normalizer(AbstractDataProject):
                                 'module_name': 'INIT'
                              }
     
-        if user_given_name is None:
-            self.mem_data_info['file_name'] = self.safe_filename(file_name)
-            display_name = file_name
-        else:
+        if user_given_name is not None:
             file_name = user_given_name
-            self.mem_data_info['file_name'] = file_name
-            display_name = user_given_name
+            
+        file_name = secure_filename(file_name)
+        self.mem_data_info['file_name'] = file_name
+        display_name = file_name
         
         # Check that file name is not already present 
         if file_name in self.metadata['files']:
