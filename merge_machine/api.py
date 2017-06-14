@@ -1107,6 +1107,8 @@ def get_sample(project_type, project_id):
                             'randomize': (default True) If false, will return first values
                             }
     '''
+    print('Sample request is ', request.json)
+    
     proj = _init_project(project_type=project_type, project_id=project_id)    
     data_params, all_params = _parse_request() # TODO: add size limit on params    
 
@@ -1474,12 +1476,20 @@ def cancel_job(job_id):
     GET:
         - job_id: as returned by schedule_job
     '''
-    try:
-        Job.fetch(job_id, connection=conn)
-    except:
-        return jsonify(error=True, message='job_id could not be found', completed=False), 404
+    import pdb
+    pdb.set_trace()
     
-    rq_cancel_job(job_id)
+    try:
+        job = Job.fetch(job_id, connection=conn)
+        job.cancel()
+        return jsonify(job_canceled=True, completed=False)
+    except:
+        return jsonify(job_canceled=False,
+                       error=True, 
+                       message='job_id could not be found', 
+                       completed=False), 404
+    
+
 
 
 @app.route('/queue/num_jobs/<job_id>', methods=['GET'])

@@ -12,13 +12,17 @@ from missing_values import infer_mvs, replace_mvs, sample_mvs_ilocs
 #from preprocess_fields_v3 import inferTypes, normalizeValues, sample_types_ilocs
 
 #NORMALIZE_MODULE_ORDER = ['INIT', 'replace_mvs', 'normalizeValues', 'concat_with_init']
-NORMALIZE_MODULE_ORDER = ['INIT', 'replace_mvs', 'concat_with_init']
+NORMALIZE_MODULE_ORDER = ['INIT', 'make_mini', 'replace_mvs', 'concat_with_init']
 
 
 MODULES = {
         'transform':{
                     'INIT': {
                                 'desc': 'Initial upload (cannot be called)'                            
+                            },
+                    'make_mini': {
+                                'desc': 'Make __MINI__ version of selected file',
+                                'write_to': 'INIT',
                             },
                     'replace_mvs': {
                                 'func': replace_mvs,
@@ -43,7 +47,7 @@ MODULES = {
 #                               'write_to': 'normalizeValues',
 #                               'desc': inferTypes.__doc__
 #                           },
-              'results_analysis': {
+                'results_analysis': {
                                 'func': results_analysis,
                                 'write_to': 'results_analysis',
                                 'desc': results_analysis.__doc__

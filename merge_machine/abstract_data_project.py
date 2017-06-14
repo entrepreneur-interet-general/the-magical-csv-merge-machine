@@ -156,19 +156,18 @@ class AbstractDataProject(AbstractProject):
         # TODO: Current for normalize ?        
         self.check_mem_data()
         
-        NEW_FILE_NAME = '__MINI__' + self.mem_data_info['file_name']        
+         # Set defaults
+        sample_size = params.get('sample_size', 20000)
+        randomize = params.get('randomize', True)       
+        NEW_FILE_NAME = 'MINI__' + self.mem_data_info['file_name']        
         
         if self.mem_data_info['module_name'] != 'INIT':
             raise Exception('make_mini can only be called on data in memory from the INIT module')
         self.clean_after('INIT', NEW_FILE_NAME) # TODO: check module_name for clean_after
         
-        # Set defaults
-        sample_size = params.get('sample_size', 20000)
-        randomize = params.get('randomize', True)
-        
-        
+
         # Initiate log
-        log = self.init_log('make_mini', 'transform')
+        log = self.init_log('INIT', 'transform')  # TODO: hack here: module_name should be 'make_mini'
         
         if randomize:
             sample_index = self.mem_data.index[:sample_size]
@@ -178,8 +177,10 @@ class AbstractDataProject(AbstractProject):
         # Replace data in memory
         self.mem_data = self.mem_data.loc[sample_index, :]
         
-        # Update metadata
+        # Update metadata and log
         self.mem_data_info['file_name'] = NEW_FILE_NAME
+        log['og_file_name'] = log['file_name']
+        log['file_name'] = NEW_FILE_NAME
         
         # TODO: think if transformation should / should not be complete
 

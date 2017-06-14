@@ -152,7 +152,8 @@ def normalize_pipeline(params):
             'sample_params':{
                             'restrict_to_selected': True, # restrict to selected columns
                             'randomize': True
-                            }
+                            },
+            '__test': '__has_underscores_before_and_after__'
             }
     resp = post_resp(url_to_append, body)
     
@@ -318,6 +319,16 @@ def link_pipeline(params):
     body = {}
     resp = post_resp(url_to_append, body)
     job_id = resp['job_id']
+
+    resp = post_resp(url_to_append, body)
+    job_id_useless = resp['job_id']
+    
+    # Cancel job   
+    url_to_append = '/queue/cancel/{0}'.format(job_id_useless)
+    resp = get_resp(url_to_append)
+    
+    # Check that job was cancelled
+
     
     #==============================================================================
     # --> Wait for job result
@@ -369,8 +380,7 @@ if __name__ == '__main__':
     url_to_append = '/api/download/normalize/{0}'.format(ref_project_id)
     body = {
             'data_params': {
-                'module_name': 'concat_with_init',
-                'file_name': 'ref.csv'}
+                'module_name': 'concat_with_init'}
             }
     PRINT = False
     resp = post_download(url_to_append, body)    
