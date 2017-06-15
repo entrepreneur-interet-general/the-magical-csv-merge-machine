@@ -12,13 +12,10 @@ TODO:
     - API: List of finished modules for given project / source
     - API: List of loaded sources
     
-    - API: Fetch infered parameters
     - API: Fetch logs
     - API: Move implicit load out of API
     
     - API: Error codes / remove error
-    
-    - API: DOWNLOAD CONFIG and run pipeline
     
     - Use logging module
     
@@ -29,7 +26,6 @@ TODO:
     -
     - ADD LICENSE
 
-    - Gray out next button until all fields are properly filled
     - Do not go to next page if an error occured
     - General error handling
     
@@ -57,9 +53,11 @@ TODO:
     - Dealing with inference parameters when columns change...
 
     - integration test
-    - Add empty dict to infer_mvs
     
     - Error if job failed
+    
+    - Avoid import in scheduled 
+    - fix cancel job
 
 
 DEV GUIDELINES:
@@ -1480,8 +1478,6 @@ def cancel_job(job_id):
     GET:
         - job_id: as returned by schedule_job
     '''
-    import pdb
-    pdb.set_trace()
     
     try:
         job = Job.fetch(job_id, connection=conn)

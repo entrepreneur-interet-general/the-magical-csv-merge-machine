@@ -11,8 +11,17 @@ import os
 import redis
 from rq import Worker, Queue, Connection
 
+
+# Preload necessary imports for efficiency
+import api_queued_modules
+
+from admin import Admin
+from normalizer import UserNormalizer
+from linker import UserLinker
+
+
+# 
 listen = ['default']
-    
 redis_url = os.getenv('REDISTOGO_URL', 'redis://localhost:6379')
 
 conn = redis.from_url(redis_url)
