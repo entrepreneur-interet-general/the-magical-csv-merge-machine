@@ -3,7 +3,7 @@
 
 # Standard modules
 import csv, itertools, re, unicodedata, logging, optparse, time, sys, math, os
-from functools import partial, reduce
+from functools import partial, reduce, lru_cache
 from collections import defaultdict, Counter, Iterable
 from operator import itemgetter, add
 from fuzzywuzzy import fuzz
@@ -283,7 +283,7 @@ def fileToVariantMap(fileName, sep = '|', includeSelf = False):
 FRENCH_LEXICON = fileColumnToList('most_common_tokens_fr', 0, '|')
 
 def fileToList(fileName, path = RESOURCE_PATH):
-    filePath = fieldName if path is None else os.path.join(path, fileName)
+    filePath = fileName if path is None else os.path.join(path, fileName)
     with open(filePath, mode = 'r') as f:
         return [stripped(line) for line in f]
 
@@ -858,19 +858,28 @@ class Fields(object):
             lvt = types[fieldName]
             ofs = uniq(list(f.normalizedFields(h, lvt)))
             logging.info('Output fields for %s: %s', fieldName, ofs)
+            nvs = list(f.normalizedValues(h, lvt))
+            c = [0] * self.entries
             for of in ofs:
                 b = [None] * self.entries
-                for i, nc in enumerate(f.normalizedValues(h, lvt)):
+                for i, nc in enumerate(nvs):
                     if of not in nc: continue
                     if b[i] is None:
                         b[i] = nc[of]
                     elif isinstance(b[i], list):
                         if isinstance(nc[of], list): b[i].extend(nc[of])
                         else: b[i].append(nc[of])
+                        c[i] += 1
                     else:
                         if isinstance(nc[of], list): b[i] = [b[i]] + nc[of]
                         else: b[i] = [b[i], nc[of]]
+                        c[i] += 1
                 yield (of, b)
+            # Array c now contains a non-zero count for each value that has been normalized into at least one new column,
+            # maybe it should be shoved into run_info below...
+
+@lru_cache(maxsize = 1048576, typed = False)
+def cachedNormalization(c, t): return c.normalizedValues(t)
 
 class Field(object):
     def __init__(self, cells):
@@ -897,13 +906,13 @@ class Field(object):
                 if lt not in PARENT_CHILD_RELS or len(PARENT_CHILD_RELS[lt] & set(lts[i + 1:])) < 1: return lt
         return None
     def normalizedFields(self, h, t):
-        return reduce(set.union, [set(c.normalizedValues(t).keys()) for c in self.cells], set([h.value]))
+        return reduce(set.union, [set(cachedNormalization(c, t).keys()) for c in self.cells], set([h.value]))
     def normalizedValues(self, h, t):
         ''' Casts this field with header h into type t and returns its values as a list of augmented
             (field name, field value) dictionaries (not including the original field with its header). '''
         for c in self.cells:
             # Normalized/augmented fields
-            nc = c.normalizedValues(t)
+            nc = cachedNormalization(c, t)
             # Original field value
             nc[h.value] = c.value
             yield nc
@@ -1683,6 +1692,19 @@ def generateValueMatchers(lvl = 0):
         yield VariantExpander(fileToVariantMap('org_hal.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT)
         yield VariantExpander(fileToVariantMap('etab_enssup.syn'), F_MESR, False, targetType = F_ETAB_ENSSUP)
 
+def allDatatypes():
+    ''' Returns a map of categories (including a default one for orphan data types) to a list of data types 
+    '''
+    allTypes = set([vm.t for vm in valueMatchers()])
+    categorizedTypes = defaultdict(list)
+    for parent, child in PARENT_CHILD_RELS.items():
+        # We allow for duplicates under different categories
+        if child not in categorizedTypes[parent]:
+            categorizedTypes[parent].append(child)
+        allTypes.discard(child)
+    categorizedTypes[C_OTHERS] = list(allTypes)
+    return categorizedTypes
+
 # Main functionality
 
 def preProcessHeaders(inferences, m):
@@ -1715,7 +1737,7 @@ def postProcessHeaders(inferences, m):
 def inferTypes(tab, params = None):
     '''  Infers column types for the input array and produces a dictionary of column name to likeliest types. '''
     fields = parseFieldsFromPanda(tab)
-    return { 'dataTypes': fields.inferTypes() }
+    return { 'columnTypes': fields.inferTypes(), 'allTypes': allDatatypes() }
 
 def normalizeValues (tab, params):
     ''' Normalizes the values in each column whose type has been identified, and returns the input array after adding the
@@ -1728,9 +1750,17 @@ def normalizeValues (tab, params):
     types = fields.inferTypes()
     for (of, vs) in fields.normalizeValues(types):
         tab[of] = vs
-    run_info = {} # TODO: add this
-    return tab, run_info
 
+    # Run information
+    run_info = dict()
+    # List of unique names of columns for which at least one value has been normalized
+    run_info['modified_columns'] = []
+    # Global boolean telling whether at least one column has been modified
+    run_info['has_modifications'] = False
+    # Number of normalized values, global and per column
+    run_info['replace_num'] = {'all': 0, 'columns': dict((of, 0) for of in tab.keys())}
+    
+    return tab, run_info
 
 def sample_types_ilocs(tab, params, sample_params):
 
