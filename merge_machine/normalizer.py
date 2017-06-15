@@ -227,6 +227,10 @@ class Normalizer(AbstractDataProject):
         if not could_read:
             raise Exception('Separator and/or Encoding not detected. Try uploading \
                             a csv with "," as separator with utf-8 encoding')
+            
+        if len(set(self.mem_data.columns)) != self.mem_data.shape[1]:
+            raise Exception('Column names should all be different')
+
 
         # Add file to metadata
         self.metadata['files'][file_name] = {

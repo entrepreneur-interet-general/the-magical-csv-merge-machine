@@ -12,7 +12,7 @@ import time
 import pandas as pd
 
 from abstract_data_project import AbstractDataProject
-from dedupe_linker import format_for_dedupe, old_load_deduper
+from dedupe_linker import format_for_dedupe, current_load_deduper
 from labeller import Labeller, DummyLabeller
 from normalizer import InternalNormalizer, UserNormalizer
 
@@ -175,11 +175,25 @@ class Linker(AbstractDataProject):
         #            raise Exception('File {0} could not be found in project {1} \
         #                 (internal: {2})'.format(file_name, project_id, internal))
         
-        file_name = proj.get_last_written()[1]
+        # Check that normalization project has only one file (and possibly a MINI__ version)
+        if not len(self.metadata['files']):
+            raise Exception('The selected normalization project ({0}) has no upload file'.format(project_id))
+        if len(self.metadata['files']) > 1:
+            raise Exception('The selected normalization project ({0}) has more than one file.'\
+                    + ' This method expects projects to have exactly 1 file as it'\
+                    + ' uses the implicit get_last_written'.format(project_id))
+ 
         
+        (module_name, file_name) = proj.get_last_written()
+    
+        # TODO: add warning for implicit use of mini
+        if proj.metadata['has_mini']:
+            proj = 'MINI__' + file_name.replace('MINI__', '')
+
         # Check that         
         self.metadata['current'][file_role] = {'internal': internal, 
                                              'project_id': project_id,
+                                             'module_name': module_name,
                                              'file_name': file_name}  
         self.write_metadata()
         self.load_project_to_merge(file_role)
@@ -281,24 +295,32 @@ class Linker(AbstractDataProject):
         
         # Put to dedupe input format
         print('loading ref')
-        ref = pd.read_csv(paths['ref'], encoding='utf-8', dtype=str)
-        data_ref = format_for_dedupe(ref, my_variable_definition, 'ref') 
-        del ref # To save memory
+        self.load_project_to_merge('ref')
+        module_name = self.metadata['current']['ref']['module_name']
+        file_name = self.metadata['current']['ref']['file_name']
+        self.ref.load_data(module_name, file_name)
+        data_ref = format_for_dedupe(self.ref.mem_data, my_variable_definition, 'ref') 
+        self.ref.clear_memory()
         gc.collect()
-        print('loaded_ref')
+        print('loaded ref')
         
         # Put to dedupe input format
         print('loading source')
-        source = pd.read_csv(paths['source'], encoding='utf-8', dtype=str)
-        data_source = format_for_dedupe(source, my_variable_definition, 'source')
-        del source
+        self.load_project_to_merge('source')
+        module_name = self.metadata['current']['source']['module_name']
+        file_name = self.metadata['current']['source']['file_name']
+        self.source.load_data(module_name, file_name)
+        data_source = format_for_dedupe(self.source.mem_data, my_variable_definition, 'ref') 
+        self.source.clear_memory()
         gc.collect()
-        print('loaded_source')
+        print('loaded source')
         
         #==========================================================================
         # Should really start here
         #==========================================================================
-        deduper = old_load_deduper(data_ref, data_source, my_variable_definition)
+        deduper = current_load_deduper(data_ref, data_source, my_variable_definition, 
+                                       og_len_ref=og_len_ref,
+                                       og_len_source=og_len_source)
         
         return Labeller(deduper, 
                         training_path=paths['train'], 
