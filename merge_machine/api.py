@@ -58,6 +58,8 @@ TODO:
     
     - Avoid import in scheduled 
     - fix cancel job
+    
+    - test slack integration
 
 
 DEV GUIDELINES:
