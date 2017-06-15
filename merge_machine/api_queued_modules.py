@@ -71,6 +71,61 @@ def _replace_mvs(project_id, data_params, module_params):
     
     return run_info
 
+def _infer_types(project_id, data_params, module_params):
+    '''
+    Runs the infer_types module
+    
+    wrapper around UserNormalizer.infer ?
+    
+    ARGUMENTS (GET):
+        project_id: ID for "normalize" project
+
+    ARGUMENTS (POST):
+        - data_params: {
+                "module_name": module to fetch from
+                "file_name": file to fetch
+                }
+        - module_params: none
+    
+    '''
+    proj = UserNormalizer(project_id=project_id)
+    proj.load_data(data_params['module_name'], data_params['file_name'])    
+    result = proj.infer('inferTypes', module_params)
+        
+    # Write log
+    proj.write_log_buffer(False)
+    return result
+
+
+def _recode_types(project_id, data_params, module_params):
+    '''
+    Runs the recoding module
+    
+    ARGUMENTS (GET):
+        project_id: ID for "normalize" project
+
+    ARGUMENTS (POST):
+        - data_params: {
+                "module_name": module to fetch from
+                "file_name": file to fetch
+                }
+        - module_params: same as result of infer_mvs
+    '''
+    proj = UserNormalizer(project_id=project_id)
+
+    proj.load_data(data_params['module_name'], data_params['file_name'])
+    
+    proj.transform('normalizeValues', module_params)
+    # Write transformations and log
+    proj.write_data()    
+    proj.write_log_buffer(True)
+    proj.write_run_info_buffer()
+    
+    # Get run info (TODO: Use object returned by transform instead)
+    run_info = proj.read_config_data('replace_mvs', 'run_info.json')
+    
+    return run_info
+
 
 def _concat_with_init(project_id, data_params, *argv):
     '''
@@ -198,3 +253,10 @@ def _linker(project_id, *argv):
     print('Wrote data to: ', file_path)
 
     return {}
+
+def _test_long(*argv):
+    print('-->>>>  STARTED JOB')
+    import time
+    time.sleep(10)
+    print('-->>>>  ENDED JOB')
+    return
