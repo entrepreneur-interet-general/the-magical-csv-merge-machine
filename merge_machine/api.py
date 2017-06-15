@@ -37,10 +37,10 @@ TODO:
     - User account
     - Auto train 
     
-    - ABSOLUTELY: CHANGE to user context rather than _app_ctx_stack . handle memory issues
+    - ABSOLUTELY:  handle memory issues
     - Allocate memory by user/ by IP?
     
-    - TODO: look why I can get 90% or 30% match on same file
+    - look why I can get 90% or 30% match on same file
     - Study impact of training set size on match rate
     - POSTGRES all this ish
     
@@ -1411,8 +1411,8 @@ def add_columns_to_return(project_id, file_role):
 # TODO: put all job schedulers in single api (assert to show possible methods) or use @job   
 
 # TODO: get this from MODULES ?
-API_MODULE_NAMES = ['infer_mvs', 'replace_mvs', 'concat_with_init', 
-                    'run_all_transforms', 'create_labeller', 'linker']
+API_MODULE_NAMES = ['infer_mvs', 'replace_mvs', 'infer_types', 'recode_types', 
+                    'concat_with_init', 'run_all_transforms', 'create_labeller', 'linker']
 
 @app.route('/api/schedule/<job_name>/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
@@ -1431,16 +1431,31 @@ def schedule_job(job_name, project_id):
     '''
     assert job_name in API_MODULE_NAMES
     data_params, module_params = _parse_request()
+    
+    job_id = project_id + '_' + job_name
+    
+    
+    #    job_name = 'test_long'
+    #    import time
+    #    
+    #    for x in range(3): job = q.enqueue_call(func='api_queued_modules._' + job_name, args=(project_id, data_params, module_params), result_ttl=5000, job_id='test')
+    #        
+    #    time.sleep(1)
+    #    job.cancel(); print(q.jobs)
+    #    
+    #    import pdb; pdb.set_trace()
+    
     #TODO: remove and de-comment unfer
     job = q.enqueue_call(
             func='api_queued_modules._' + job_name,
             args=(project_id, data_params, module_params), 
             result_ttl=5000, 
-            job_id=project_id, 
+            job_id=job_id, 
             #depends_on=project_id
     )    
-
-    # job = q.enqueue_call(func='api_queued_modules._' + job_name, args=(project_id, data_params, module_params),  result_ttl=5000, job_id=project_id)        
+    
+    
+    # 
     
     job_id = job.get_id()
     print(job_id)
@@ -1472,8 +1487,9 @@ def get_job_result(job_id):
 @app.route('/queue/cancel/<job_id>', methods=['GET'])
 def cancel_job(job_id):
     '''
-    Fetch the json output of a module run scheduled by schedule_job. Will return 
-    a 202 code if job is not yet complete and 404 if job could not be found.
+    Remove job from queue
+    
+    # TODO: make this work
     
     GET:
         - job_id: as returned by schedule_job

@@ -79,7 +79,7 @@ def post_download(url_to_append, body, **kwargs):
     else: 
         raise Exception('Problem:\n', resp)    
 
-def wait_get_resp(url_to_append, max_wait=10):
+def wait_get_resp(url_to_append, max_wait=30):
     url = PROTOCOL + HOST + url_to_append
     start_time = time.time()
     while (time.time() - start_time) <= max_wait:
@@ -178,7 +178,7 @@ def normalize_pipeline(params):
     # --> Wait for job result
     #==============================================================================
     url_to_append = '/queue/result/{0}'.format(job_id)
-    infer_mvs_resp = wait_get_resp(url_to_append)
+    infer_mvs_resp = wait_get_resp(url_to_append, max_wait=100)
 
     #==============================================================================
     # Get MVS-specific sample
@@ -208,14 +208,50 @@ def normalize_pipeline(params):
     resp = post_resp(url_to_append, body)
     job_id = resp['job_id']
     
+
+    
     #==============================================================================
     # --> Wait for job result
     #==============================================================================
     url_to_append = '/queue/result/{0}'.format(job_id)
     resp = wait_get_resp(url_to_append)
     
-    # TODO: add normalize here
     
+    #==============================================================================
+    # Schedule infer Types
+    #==============================================================================
+    url_to_append = '/api/schedule/infer_types/{0}/'.format(project_id)
+    body = {
+            'data_params': {'module_name': 'INIT', 'file_name': file_name}
+            }
+    resp = post_resp(url_to_append, body)
+    job_id = resp['job_id']
+
+    #==============================================================================
+    # --> Wait for job result
+    #==============================================================================
+    url_to_append = '/queue/result/{0}'.format(job_id)
+    infer_types_resp = wait_get_resp(url_to_append)
+
+    #==============================================================================
+    # Schedule recode types
+    #==============================================================================
+    url_to_append = '/api/schedule/recode_types/{0}/'.format(project_id)
+    body = {
+            'data_params': {'module_name': 'INIT', 'file_name': file_name},
+            'module_params': infer_types_resp['result']
+            }
+    resp = post_resp(url_to_append, body)
+    job_id = resp['job_id']
+
+    #==============================================================================
+    # --> Wait for job result
+    #==============================================================================
+    url_to_append = '/queue/result/{0}'.format(job_id)
+    infer_mvs_resp = wait_get_resp(url_to_append)
+        
+    
+         # TODO: add recode here
     #==============================================================================
     # Schedule _concat_with_init
     #==============================================================================
@@ -417,7 +453,7 @@ if __name__ == '__main__':
                         },
                 'training_file_path': 'local_test_data/integration_1/training.json'
     }
-    link_project_id = link_pipeline(params)
+#    link_project_id = link_pipeline(params)
     
     #==============================================================================
     # Delete projects   
