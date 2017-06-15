@@ -180,6 +180,8 @@ class Normalizer(AbstractDataProject):
         SEPARATORS = [',', ';', '\t']
         
         # Check that 
+        if self.metadata['files']:
+            raise Exception('Cannot upload multiple files to the same project anymore :(')
         
         # Check that user given name is not illegal
         if user_given_name is not None:
