@@ -163,9 +163,8 @@ def format_for_dedupe(tab, my_variable_definition, file_role):
     return data
 
 
-
-def current_load_deduper(data_ref, data_source, my_variable_definition, 
-                         og_len_ref, og_len_source):
+def current_load_deduper(data_ref, data_source, my_variable_definition):# 
+                         #og_len_ref, og_len_source):
     '''Load the dedupe object; TODO: duplicate with code in main dedupe'''
     
     SAMPLE_SIZE = 5000

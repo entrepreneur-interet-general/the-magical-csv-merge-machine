@@ -71,7 +71,6 @@ def gen_dedupe_variable_definition(col_matches):
             {"ref": match['ref'][0], "source": match['source'][0]}, "type": "String"})
     return my_variable_definition
 
-
 project_id = 'db61ee4b23daad189c2569d441ada68b'
 
 proj = UserLinker(project_id)

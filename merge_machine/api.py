@@ -1454,11 +1454,9 @@ def schedule_job(job_name, project_id):
             result_ttl=5000, 
             job_id=job_id, 
             #depends_on=project_id
-    )    
-    
+    )        
     
     # 
-    
     job_id = job.get_id()
     print(job_id)
     return jsonify(job_id=job_id,
