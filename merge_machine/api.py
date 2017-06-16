@@ -454,12 +454,12 @@ def _web_infertypes_normalize(project_id, file_name, next_url):
                     'drop_duplicates': True
                      }
     sample = proj.get_sample('sample_types', types_config, sample_params)
-    
+
     formatted_inferred_types = dict()
     # An (input field name, likeliest type) dictionary
     formatted_inferred_types['columns'] = inferredTypes['dataTypes']
     # The list of all available types so the user can override any automatically inferred type
-    formatted_inferred_types['all'] = list(preprocess_fields_v3.allDatatypes()) 
+    formatted_inferred_types['all'] = preprocess_fields_v3.allDatatypes()
     
     data_params = {'module_name': module_name, 'file_name': file_name}
 

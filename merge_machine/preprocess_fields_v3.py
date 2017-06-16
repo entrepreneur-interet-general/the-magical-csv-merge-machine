@@ -970,7 +970,6 @@ class Cell(object):
         logging.debug('Posited type {} for "{}"'.format(t, self.value))
         self.pts.add(t)
     def notExcludedTypes(self):
-        # return set(self.tis.keys()) - self.nts
         return set(self.tis.keys()) & self.pts - self.nts
     def matches(self, t, mm):
         return [] if t not in self.notExcludedTypes() else filter(lambda ti: ti.mm == mm, self.tis[t])
@@ -1013,7 +1012,6 @@ class Cell(object):
             for ti in self.tis[t]:
                 if isinstance(ti.hit, list): res[ti.t] |= set(ti.hit)
                 else: res[ti.t].add(str(ti.hit))
-        # return { k: setAsListOrSingleton(v) for (k, v) in res.items() }
         return { k: uniqueCellValue(v) for (k, v) in res.items() }
 
 def setAsListOrSingleton(v):
@@ -1699,11 +1697,12 @@ def allDatatypes():
     '''
     allTypes = set([vm.t for vm in valueMatchers()])
     categorizedTypes = defaultdict(list)
-    for parent, child in PARENT_CHILD_RELS.items():
-        # We allow for duplicates under different categories
-        if child not in categorizedTypes[parent]:
-            categorizedTypes[parent].append(child)
-        allTypes.discard(child)
+    for parent, children in PARENT_CHILD_RELS.items():
+        for child in children:
+            # We allow for duplicates under different categories
+            if child not in categorizedTypes[parent]:
+                categorizedTypes[parent].append(child)
+            allTypes.discard(child)
     categorizedTypes[C_OTHERS] = list(allTypes)
     return categorizedTypes
 
