@@ -322,6 +322,9 @@ def iterNgrams(v, n, bounds = False):
     if len(v) < n: return iter(())
     return chngrams(' {} '.format(v) if bounds else v, n).items()
 
+# Special datatype categories
+C_OTHERS = 'Autres types'
+
 # Special fields and field prefixes
 # F_COMPOSITE_REMAINDER = u'+++'
 F_ORIGINAL_PATTERN = u'Original %s'
@@ -829,7 +832,6 @@ class Fields(object):
             logging.info('Likeliest type for %s header: %s', fieldName, lht)
             if lht is not None: types[fieldName] = lht
             for (t, s) in f.scoredTypes().items():
-                print('ICI', t, s)
                 if s < COLUMN_SCORE_THRESHOLD: continue
                 f2t[fieldName].append((t, s))
                 t2f[t].append((fieldName, s))
