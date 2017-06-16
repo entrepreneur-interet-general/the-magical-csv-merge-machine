@@ -207,15 +207,12 @@ def normalize_pipeline(params):
             }
     resp = post_resp(url_to_append, body)
     job_id = resp['job_id']
-    
 
-    
     #==============================================================================
     # --> Wait for job result
     #==============================================================================
     url_to_append = '/queue/result/{0}'.format(job_id)
     resp = wait_get_resp(url_to_append)
-    
     
     #==============================================================================
     # Schedule infer Types
@@ -285,6 +282,19 @@ def normalize_pipeline(params):
     #==============================================================================
     url_to_append = '/api/metadata/normalize/{0}'.format(project_id)
     resp = get_resp(url_to_append)
+
+
+    #==============================================================================
+    # Download file    
+    #==============================================================================
+    url_to_append = '/api/download/normalize/{0}'.format(project_id)
+    body = {
+            'data_params': {
+                'module_name': 'concat_with_init'}
+            }
+    PRINT = False
+    resp = post_download(url_to_append, body)    
+    PRINT = True
 
     return project_id
 
@@ -391,79 +401,44 @@ def link_pipeline(params):
 
 if __name__ == '__main__':
     
+    # Parameters
+    source_params_path = 'local_test_data/integration_1/source_params.json'
+    ref_params_path = 'local_test_data/integration_1/ref_params.json'
+    link_params_path = 'local_test_data/integration_1/link_params.json'
+    
     #==============================================================================
     # RUN NORMALIZE PIPELINE ON SOURCE
-    #==============================================================================
-    params = {
-        'new_project': {'description': 'File to use as source for testing',
-                        'display_name': 'test_source.csv',
-                        'internal': False},
-        'file_path': 'local_test_data/integration_1/source.csv',
-        'select_columns':{
-                        'columns': ['id_cordee', 'uai', 'commune', 'academie', 
-                                    'lycees_sources', 'departement', 'region']
-                        }
-    }
-    source_project_id = normalize_pipeline(params)
+    #==============================================================================        
+    with open(source_params_path) as f:
+        source_params = json.load(f)        
+    source_project_id = normalize_pipeline(source_params)
     
     #==============================================================================
     # RUN NORMALIZE PIPELINE ON REF
     #==============================================================================
-    params = {
-        'new_project': {'description': 'File to use as ref for testing',
-                    'display_name': 'test_ref.csv',
-                    'internal': True},
-        'file_path': 'local_test_data/integration_1/ref (copy).csv',
-        'select_columns':{
-                        'columns': ['full_name', 'adresse_uai', 'localite_acheminement_uai', 
-                            'patronyme_uai', 'departement', 'code_postal_uai', 'numero_uai']
-                        }
-    }
-    ref_project_id = normalize_pipeline(params)
-    
-    #==============================================================================
-    # Download file    
-    #==============================================================================
-    url_to_append = '/api/download/normalize/{0}'.format(ref_project_id)
-    body = {
-            'data_params': {
-                'module_name': 'concat_with_init'}
-            }
-    PRINT = False
-    resp = post_download(url_to_append, body)    
-    PRINT = True
+    with open(ref_params_path) as f:
+        ref_params = json.load(f)        
+    ref_project_id = normalize_pipeline(ref_params)
     
     #==============================================================================
     # RUN LINK PIPELINE
     #==============================================================================
-    params = {
-                'source_project_id': source_project_id,
-                'ref_project_id': ref_project_id,
-                'new_project': {'description': 'Link project for testing',
-                                'display_name': 'test_link',
-                                'internal': False},
-                'column_matches': {
-                            'column_matches':
-                                [{"ref": ["departement"], "source": ["departement"]}, 
-                                {"ref": ["full_name"], "source": ["lycees_sources"]}, 
-                                {"ref": ["localite_acheminement_uai"], "source": ["commune"]}]
-                        },
-                'column_certain_matches': {
-                             'column_certain_matches': {'source': 'uai', 'ref': 'numero_uai'}
-                        },
-                'training_file_path': 'local_test_data/integration_1/training.json'
-    }
-#    link_project_id = link_pipeline(params)
+    with open(link_params_path) as f:
+        link_params = json.load(f)                     
+
+    link_params['source_project_id'] = source_project_id
+    link_params['ref_project_id'] = ref_project_id
+               
+    link_project_id = link_pipeline(link_params)
     
     #==============================================================================
     # Delete projects   
     #==============================================================================
-    for _id in [source_project_id, ref_project_id]:
-        url_to_append = '/api/delete/normalize/{0}'.format(_id)
+    for (_type, _id) in [('normalize', source_project_id), 
+                         ('normalize', ref_project_id), 
+                         ('link', link_project_id)]:
+        url_to_append = '/api/delete/{0}/{1}'.format(_type, _id)
         resp = get_resp(url_to_append)
-    
-    url_to_append = '/api/delete/link/{0}'.format(link_project_id)
-    resp = get_resp(url_to_append)
 
     #==============================================================================
     # List projects
