@@ -12,6 +12,7 @@ TODO:
 """
 
 import json
+import os
 import pprint
 import requests
 import time
@@ -396,10 +397,8 @@ def link_pipeline(params):
     return project_id
 
 
-
-
-
-if __name__ == '__main__':
+if __name__ == '__main__':    
+    dir_path = os.path.join('local_test_data', 'integration_1')
     
     # Parameters
     source_params_path = 'local_test_data/integration_1/source_params.json'
@@ -410,14 +409,16 @@ if __name__ == '__main__':
     # RUN NORMALIZE PIPELINE ON SOURCE
     #==============================================================================        
     with open(source_params_path) as f:
-        source_params = json.load(f)        
+        source_params = json.load(f)
+    source_params['file_path'] = os.path.join(dir_path, source_params['file_name'])
     source_project_id = normalize_pipeline(source_params)
     
     #==============================================================================
     # RUN NORMALIZE PIPELINE ON REF
     #==============================================================================
     with open(ref_params_path) as f:
-        ref_params = json.load(f)        
+        ref_params = json.load(f)
+    ref_params['file_path'] = os.path.join(dir_path, ref_params['file_name'])
     ref_project_id = normalize_pipeline(ref_params)
     
     #==============================================================================
@@ -428,6 +429,7 @@ if __name__ == '__main__':
 
     link_params['source_project_id'] = source_project_id
     link_params['ref_project_id'] = ref_project_id
+    link_params['training_file_path'] = os.path.join(dir_path, ref_params['training_file_name'])
                
     link_project_id = link_pipeline(link_params)
     
