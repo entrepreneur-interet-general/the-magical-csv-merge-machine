@@ -133,12 +133,18 @@ def main_link_test(proj, paths, prop, num_matches, num_distinct, i):
     
     return match_rate, new_num_matches, new_num_distinct
 
+
+
+
 n_jobs = 8
 num_tries = 4
 
 for i in range(num_tries):
     for prop in props:
         match_rate, new_num_matches, new_num_distinct = main_link_test(proj, paths, prop, num_matches, num_distinct, i)
+        
+        print('match_rate --> ', match_rate)
+        
         recalls.append(match_rate)
         match_sizes.append(new_num_matches)
         distinct_sizes.append(new_num_distinct)

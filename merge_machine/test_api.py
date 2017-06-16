@@ -93,7 +93,7 @@ def wait_get_resp(url_to_append, max_wait=30):
         if parsed_resp['completed']:
             if PRINT:
                 print('\n <> RESPONSE AFTER JOB COMPLETION (Waited {0} seconds):'.format(time.time()-start_time))
-                print(parsed_resp)
+                print(my_pformat(parsed_resp))
             return parsed_resp
         time.sleep(0.25)
     print(time.time() - start_time)
