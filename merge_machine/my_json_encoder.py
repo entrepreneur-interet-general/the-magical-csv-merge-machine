@@ -20,5 +20,7 @@ class MyEncoder(json.JSONEncoder):
             return obj.tolist()
         elif isinstance(obj, np.bool_):
             return bool(obj)
+        elif isinstance(obj, set):
+            return list(obj)
         else:
             return super(MyEncoder, self).default(obj)
