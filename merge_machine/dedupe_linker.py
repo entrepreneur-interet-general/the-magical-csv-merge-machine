@@ -249,11 +249,11 @@ def main_dedupe(data_ref,
     all_predicates = []
     gazetteer.sample(data_1=nonexact_1, data_2=nonexact_2, sample_size=SAMPLE_SIZE)
     gazetteer.train(recall=0.95, index_predicates=True) # TODO: look into memory usage of index_predicates
-    all_predicates.extend(list(gazetteer.predicates))
-        
+    #all_predicates.extend(list(gazetteer.predicates))
+    
     import dedupe.blocking as blocking
-    gazetteer.blocker = blocking.Blocker(all_predicates)
-    gazetteer.predicates = tuple(all_predicates)
+    #gazetteer.blocker = blocking.Blocker(all_predicates)
+    #gazetteer.predicates = tuple(all_predicates)
         #all_predicates.extend(gazetteer.predicates)
 
     # Write settings    
