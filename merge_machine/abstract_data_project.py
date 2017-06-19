@@ -108,12 +108,14 @@ class AbstractDataProject(AbstractProject):
         
         sample_params.setdefault('randomize', True)
         
+        num_rows = sample_params.setdefault('num_rows', min(50, self.mem_data.shape[0]))
+        
         # TODO
         if sample_params['randomize']:
-            indexes = np.random.permutation(range(self.mem_data.shape[0]))[:20]
+            indexes = np.random.permutation(range(self.mem_data.shape[0]))[:num_rows]
             sample_params.setdefault('sample_ilocs', indexes)
         else:
-            sample_params.setdefault('sample_ilocs', range(20))
+            sample_params.setdefault('sample_ilocs', range(num_rows))
         
         # 
         if sampler_module_name is None:
