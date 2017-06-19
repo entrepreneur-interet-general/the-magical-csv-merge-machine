@@ -1104,6 +1104,7 @@ def get_sample(project_type, project_id):
                             'restrict_to_selected': True or False (default True),
                             'sample_ilocs': [list_of_ligne_indices] used as default if no result is returned
                                             by custom sampler (default range(3))
+                                            or integer (n) to get n first lines
                             'randomize': (default True) If false, will return first values
                             }
     '''
@@ -1123,8 +1124,11 @@ def get_sample(project_type, project_id):
     sample_params = all_params.get('sample_params', {})
     
     sample_params.setdefault('restrict_to_selected', True)
-    sample_params.setdefault('sample_ilocs', range(3))
+    sample_params.setdefault('sample_ilocs', range(50))
     sample_params.setdefault('randomize', True)
+
+    if isinstance(sample_params['sample_ilocs'], int):
+        sample_params['sample_ilocs'] = range(sample_params['sample_ilocs'])
 
     if (sampler_module_name is not None) and (sampler_module_name not in API_SAMPLE_NAMES):
         raise ValueError('Requested sampler_module_name {0} is not valid. Valid'\
