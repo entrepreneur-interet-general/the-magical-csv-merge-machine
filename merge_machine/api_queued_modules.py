@@ -115,7 +115,7 @@ def _recode_types(project_id, data_params, module_params):
 
     proj.load_data(data_params['module_name'], data_params['file_name'])
     
-    proj.transform('normalizeValues', module_params)
+    proj.transform('recode_types', module_params)
     # Write transformations and log
     proj.write_data()    
     proj.write_log_buffer(True)
