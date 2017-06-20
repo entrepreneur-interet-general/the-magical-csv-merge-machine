@@ -460,6 +460,8 @@ def _web_infertypes_normalize(project_id, file_name, next_url):
     formatted_inferred_types['columns'] = inferredTypes['dataTypes']
     # The list of all available types so the user can override any automatically inferred type
     formatted_inferred_types['all'] = preprocess_fields_v3.allDatatypes()
+    # The tags associated to each supported data type
+    formatted_inferred_types['tags'] = preprocess_fields_v3.typeTags()
     
     data_params = {'module_name': module_name, 'file_name': file_name}
 
