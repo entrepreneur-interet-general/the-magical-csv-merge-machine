@@ -53,6 +53,7 @@ class Labeller():
         self.deduper = deduper
         self.finished = False
         self.use_previous = False
+        
         self.fields = unique(field.field 
                               for field
                               in deduper.data_model.primary_fields)

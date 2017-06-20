@@ -11,6 +11,7 @@ import os
 import time
 
 import pandas as pd
+import unidecode
 from werkzeug.utils import secure_filename
 
 from abstract_data_project import AbstractDataProject
@@ -215,7 +216,8 @@ class Normalizer(AbstractDataProject):
                 try:
                     self.mem_data = pd.read_csv(file, sep=sep, encoding=encoding, dtype=str)
                     for char in CHARS_TO_REPLACE:
-                        self.mem_data.columns = [x.replace(char, '_') for x in self.mem_data.columns]
+                        self.mem_data.columns = [unidecode.unidecode(x.replace(char, '_')) \
+                                                 for x in self.mem_data.columns]
                     could_read = True
                     break
                 except Exception as e:

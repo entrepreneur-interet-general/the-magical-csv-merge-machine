@@ -148,6 +148,7 @@ def format_for_dedupe(tab, my_variable_definition, file_role):
     # Pre-process
     print('before preprocessing')
     cols_for_match = get_cols_for_match(my_variable_definition)
+    
     for col in cols_for_match:
         print('At column', col)
         sel = tab[col].notnull()
@@ -184,9 +185,9 @@ def current_load_deduper(data_ref, data_source, my_variable_definition):#
                                  num_cores=num_cores)
     
     gazetteer.sample(data_1=nonexact_1, data_2=nonexact_2, 
-                     sample_size=SAMPLE_SIZE,
-                     original_length_1=og_len_ref,
-                     original_length_2=og_len_source
+                     sample_size=SAMPLE_SIZE# ,
+#                     original_length_1=og_len_ref,
+#                     original_length_2=og_len_source
                      )
     
     return gazetteer

@@ -1792,7 +1792,7 @@ def inferTypes(tab, params = None):
 		'allTypes': allDatatypes(),
 		'typeTags': typeTags() }
 
-def normalizeValues (tab, params):
+def normalizeValues(tab, params):
 	''' Normalizes the values in each column whose type has been identified, and returns the input array after adding the
 		resulting new columns.
 

@@ -176,9 +176,9 @@ class Linker(AbstractDataProject):
         #                 (internal: {2})'.format(file_name, project_id, internal))
         
         # Check that normalization project has only one file (and possibly a MINI__ version)
-        if not len(self.metadata['files']):
+        if not len(proj.metadata['files']):
             raise Exception('The selected normalization project ({0}) has no upload file'.format(project_id))
-        if len(self.metadata['files']) > 1:
+        if len(proj.metadata['files']) > 1:
             raise Exception('The selected normalization project ({0}) has more than one file.'\
                     + ' This method expects projects to have exactly 1 file as it'\
                     + ' uses the implicit get_last_written'.format(project_id))
@@ -310,7 +310,7 @@ class Linker(AbstractDataProject):
         module_name = self.metadata['current']['source']['module_name']
         file_name = self.metadata['current']['source']['file_name']
         self.source.load_data(module_name, file_name)
-        data_source = format_for_dedupe(self.source.mem_data, my_variable_definition, 'ref') 
+        data_source = format_for_dedupe(self.source.mem_data, my_variable_definition, 'source') 
         self.source.clear_memory()
         gc.collect()
         print('loaded source')
@@ -318,7 +318,7 @@ class Linker(AbstractDataProject):
         #==========================================================================
         # Should really start here
         #==========================================================================
-        deduper = current_load_deduper(data_ref, data_source, my_variable_definition), 
+        deduper = current_load_deduper(data_ref, data_source, my_variable_definition)
 #                                       og_len_ref=og_len_ref,
 #                                       og_len_source=og_len_source)
         
@@ -375,12 +375,12 @@ if __name__ == '__main__':
 
     # Try deduping
     proj = UserLinker(create_new=True)
-    proj.add_selected_file('source', False, source_proj_id, source_user_given_name)
-    proj.add_selected_file('ref', False, ref_proj_id, ref_file_name)
+    proj.add_selected_project('source', False, source_proj_id)
+    proj.add_selected_project('ref', False, ref_proj_id)
     
     paths = dict()
     
-    paths = proj.gen_paths_dedupe()
+    paths = proj._gen_paths_dedupe()
     
     ## Parameters
     # Variables
@@ -408,17 +408,20 @@ if __name__ == '__main__':
               'selected_columns_from_ref': selected_columns_from_ref}
 
     # Add training data
-    with open('local_test_data/training.json') as f:
+    with open('local_test_data/integration_1/training.json') as f:
         config_dict = json.load(f)
     proj.upload_config_data(config_dict, 'dedupe_linker', 'training.json')
-                
-              
+
+    # 
+    # proj.transform()
+    
     # Perform linking
     proj.linker('dedupe_linker', paths, params)
     proj.write_data()
     proj.write_log_buffer(written=True)
     proj.write_run_info_buffer()
     
+
     
     
     import pprint

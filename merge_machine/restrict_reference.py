@@ -4,9 +4,14 @@
 Created on Tue Feb 21 16:13:02 2017
 @author: leo
 
-Try to infer properties of reference based on given matches (from manual training or exact match on a given field). In particular: guess words that SHOULD be present in a given column. You can then restrict the reference to lines that ALL contain these words.
+Try to infer properties of the reference file based on given matches (from manual 
+training or exact match on a given field). In particular: guess words that 
+SHOULD be present in a given column. You can then restrict the reference to 
+lines that ALL contain these words.
 
-For example: if source only contains companies listed in departement:"Essonne" in the reference for training matches, you can suggest that we should only search for matches within rows of the reference that have departement:"Essonne"
+For example: if source only contains companies listed in departement:"Essonne" 
+in the reference for training matches, you can suggest that we should only 
+search for matches within rows of the reference that have departement:"Essonne"
 
 # TODO: Add threshold for value presence to account for user mistake
 
@@ -104,13 +109,22 @@ def filter_by_vals(ref, col_vals):
     
     INPUT:
         - ref: pandas DataFrame
-        - col_words: dictionnary mapping values to columns (same as 
+        - col_vals: dictionnary mapping values to columns (same as 
                     output of find_common_vals). Specifies the value to look 
                     for in each column (to keep).
     OUTPUT:
         -ref: table filtered by words to keep for each column
     """
+    run_info = {'og_len': len(ref)}
+    
     for col, val in col_vals.iteritems():
         if val is not None:
             ref = ref[ref[col] == val]
+            
+    run_info['new_len'] = "NOT_YET_IMPLEMENTED"
     return ref
+
+#==============================================================================
+# Project specific module
+#==============================================================================
+
