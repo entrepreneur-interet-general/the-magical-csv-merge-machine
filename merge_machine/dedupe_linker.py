@@ -187,7 +187,6 @@ def current_load_deduper(data_ref, data_source, my_variable_definition):#
                      sample_size=SAMPLE_SIZE,
                      original_length_1=og_len_ref,
                      original_length_2=og_len_source
-                     
                      )
     
     return gazetteer
@@ -268,6 +267,7 @@ def main_dedupe(data_ref,
     # Compute threshold
     recall_weight = 2.5
     threshold = gazetteer.threshold(data_source, recall_weight=recall_weight)
+    threshold = 10**-10
     print('Threshold', threshold)
 
     matched_records = gazetteer.match(data_source, threshold=threshold)

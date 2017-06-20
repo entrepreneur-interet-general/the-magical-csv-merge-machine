@@ -1111,6 +1111,8 @@ def get_sample(project_type, project_id):
     proj = _init_project(project_type=project_type, project_id=project_id)    
     data_params, all_params = _parse_request() # TODO: add size limit on params
     
+    print('1', request.json)
+    
     if all_params is None:
         all_params = dict()
 
@@ -1128,7 +1130,9 @@ def get_sample(project_type, project_id):
                    restrict_to_selected=sample_params['restrict_to_selected'])
 
     sample_params.setdefault('randomize', True)
+    print('2', sample_params)
     sample_params.setdefault('num_rows', min(50, proj.mem_data.shape[0]))
+    print('3', sample_params)
 
     if (sampler_module_name is not None) and (sampler_module_name not in API_SAMPLE_NAMES):
         raise ValueError('Requested sampler_module_name {0} is not valid. Valid'\

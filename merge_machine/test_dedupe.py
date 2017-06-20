@@ -94,6 +94,12 @@ with open(paths['train']) as r:
 num_matches = len(training['match'])
 num_distinct = len(training['distinct'])
 
+# Read certain matches
+with open(proj.path_to('dedupe_linker', 'column_certain_matches.json')) as r:
+    column_certain_matches = json.load(r)
+
+
+
 props = [x/10. for x in range(1,10)]
 props = [0.9, 0.6, 0.3]
 match_sizes = []
@@ -110,7 +116,7 @@ distinct = training['distinct']
 random.shuffle(distinct)
     
 
-def main_link_test(proj, paths, prop, num_matches, num_distinct, i):
+def main_link_test(proj, paths, prop, num_matches, num_distinct, i, column_certain_matches=None):
     new_training = dict()
     new_num_matches = math.ceil(prop*num_matches)
     new_training['match'] = matches[:new_num_matches]
@@ -128,27 +134,45 @@ def main_link_test(proj, paths, prop, num_matches, num_distinct, i):
     proj.linker('dedupe_linker', paths, params)
     source = proj.mem_data
     
-    # Explore results
-    match_rate = source.__CONFIDENCE.notnull().mean()
+    # Explore results    
+    certain_col_matches = proj.read_col_certain_matches()
+    use_lower = True
+    metrics = proj.infer('results_analysis', {'col_matches': certain_col_matches, 'lower':use_lower})
+
     
-    return match_rate, new_num_matches, new_num_distinct
+    return metrics
 
 
 
 
 n_jobs = 8
-num_tries = 4
+num_tries = 1
 
 for i in range(num_tries):
     for prop in props:
-        match_rate, new_num_matches, new_num_distinct = main_link_test(proj, paths, prop, num_matches, num_distinct, i)
+        metrics = main_link_test(proj, paths, prop, num_matches, num_distinct, i)
         
-        print('match_rate --> ', match_rate)
+        print('match_rate --> ', metrics['perc_match'])
+        print('precision --> ', metrics['perc_precision'])
         
-        recalls.append(match_rate)
-        match_sizes.append(new_num_matches)
-        distinct_sizes.append(new_num_distinct)
+        import os
+        file_path = '/home/m75380/Documents/eig/the-magical-csv-merge-machine'\
+            '/merge_machine/local_test_data/test_results.json'
+        if os.path.isfile(file_path):
+            with open(file_path, 'r') as f:
+                results = json.load(f)
+                if 'metrics' not in results:
+                    results['metrics'] = []
+                if 'prop' not in results:
+                    results['prop'] = []
+        else:
+            results = dict()
+            results['metrics'] = []
+        results['metrics'].append(metrics)
+        results['prop'].append(prop)
         
+        with open(file_path, 'w') as w:
+            json.dump(results, w)
 
 #for prop in props:
 #    recalls[prop] = []
