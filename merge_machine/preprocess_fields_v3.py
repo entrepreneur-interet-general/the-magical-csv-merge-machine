@@ -1745,6 +1745,16 @@ def allDatatypes():
 	categorizedTypes[C_OTHERS] = list(allTypes)
 	return categorizedTypes
 
+def typeTags():
+	allTags = defaultdict(list)
+	allTags.update(TYPE_TAGS)
+	for parent, children in PARENT_CHILD_RELS.items():
+		for parentTag in allTags[parent]:
+			for child in children:
+				if parentTag not in allTags[child]:
+					allTags[child].append(parentTag)
+	return allTags
+
 # Main functionality
 
 def preProcessHeaders(inferences, m):
@@ -1777,7 +1787,10 @@ def postProcessHeaders(inferences, m):
 def inferTypes(tab, params = None):
 	'''  Infers column types for the input array and produces a dictionary of column name to likeliest types. '''
 	fields = parseFieldsFromPanda(tab)
-	return { 'columnTypes': fields.inferTypes(), 'allTypes': allDatatypes() }
+	return { 
+		'columnTypes': fields.inferTypes(), 
+		'allTypes': allDatatypes(),
+		'typeTags': typeTags() }
 
 def normalizeValues (tab, params):
 	''' Normalizes the values in each column whose type has been identified, and returns the input array after adding the
