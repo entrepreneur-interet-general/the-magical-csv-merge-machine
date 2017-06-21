@@ -82,6 +82,7 @@ def post_download(url_to_append, body, **kwargs):
 
 def wait_get_resp(url_to_append, max_wait=30):
     url = PROTOCOL + HOST + url_to_append
+    print('this_url', url)
     start_time = time.time()
     while (time.time() - start_time) <= max_wait:
         resp = requests.get(url)
@@ -275,7 +276,7 @@ def normalize_pipeline(params):
     # --> Wait for job result
     #==============================================================================
     url_to_append = '/queue/result/{0}'.format(job_id)
-    resp = wait_get_resp(url_to_append, max_wait=10)
+    resp = wait_get_resp(url_to_append, max_wait=180)
         
     
     #==============================================================================
@@ -429,7 +430,7 @@ if __name__ == '__main__':
 
     link_params['source_project_id'] = source_project_id
     link_params['ref_project_id'] = ref_project_id
-    link_params['training_file_path'] = os.path.join(dir_path, ref_params['training_file_name'])
+    link_params['training_file_path'] = os.path.join(dir_path, link_params['training_file_name'])
                
     link_project_id = link_pipeline(link_params)
     
