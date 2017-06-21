@@ -1478,16 +1478,18 @@ def get_job_result(job_id):
     
     GET:
         - job_id: as returned by schedule_job
-    '''
+    '''    
     try:
         job = Job.fetch(job_id, connection=conn)
     except:
         return jsonify(error=True, message='job_id could not be found', completed=False), 404
+        
+    if job.status == 'failed':
+        return jsonify(error=True, message='Job failed', completed=False), 500
     
     if job.is_finished:
         #return str(job.result), 200
         return jsonify(completed=True, result=job.result)
-    
     else:
         return jsonify(completed=False), 202
 
