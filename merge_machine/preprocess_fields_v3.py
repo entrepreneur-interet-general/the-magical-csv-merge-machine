@@ -387,6 +387,7 @@ F_RD_PARTNER = u'Partenaire de recherche'
 F_CLINICALTRIAL_COLLAB = u'Collaborateur d\'essai clinique'
 F_RD = u'Institution de recherche'
 F_ETAB = u'Etablissement'
+F_ACADEMIE = u'Académie'
 F_ETAB_ENSSUP = u'Etablissement d\'Enseignement Supérieur'
 F_APB_MENTION = u'Mention APB'
 F_RD_DOMAIN = u'Domaine de Recherche'
@@ -437,7 +438,7 @@ TYPE_TAGS = {
 	F_RD_STRUCT: [u'Organisation', u'Structure', u'Recherche'],
 	F_RD_PARTNER: [u'Organisation', u'Structure', u'Recherche'],
 	F_RD: [u'Recherche'],
-	F_ETAB: [u'Enseignement'],
+	F_ACADEMIE: [u'Enseignement'],
 	F_ETAB: [u'Enseignement', u'Enseignement supérieur'],
 	F_PHYTO: [u'Agro'],
 	F_AGRO: [u'Agro'],
@@ -1633,7 +1634,9 @@ def generateValueMatchers(lvl = 0):
 	if lvl >= 2: yield TokenizedMatcher(F_CLINICALTRIAL_COLLAB, fileToSet('clinical_trial_sponsor_collab.col'),
 		maxTokens = 4)
 	yield SubtypeMatcher(F_RD, [F_RD_STRUCT, F_RD_PARTNER, F_CLINICALTRIAL_COLLAB])
-	# SIES/APB
+	if lvl >= 0:
+		yield RegexMatcher(F_ACADEMIE, "acad.mie", ignoreCase = True)
+		yield LabelMatcher(F_ACADEMIE, fileToSet('academie'), MATCH_MODE_EXACT)	# SIES/APB
 	if lvl >= 0: yield VocabMatcher(F_ETAB, fileToSet('etablissement.vocab'), ignoreCase = True, partial = False)
 	# yield TokenizedMatcher(F_ETAB, fileToSet('etablissement'),
 	#     maxTokens = 2)
