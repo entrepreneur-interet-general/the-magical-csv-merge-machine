@@ -768,6 +768,7 @@ class Fields(object):
 	def __init__(self, fields, entries):
 		self.fields = fields # Mapping from header Cell object to value Field object
 		self.entries = entries
+		self.modifiedByColumn = { }
 	@timed
 	def matchHeadersAndValues(self):
 		logging.info('RUNNING all header matchers')
@@ -891,8 +892,10 @@ class Fields(object):
 	@timed
 	def normalizeValues(self, types):
 		''' Generates (field name, list of field values) pairs for each output field. '''
+		self.modifiedByColumn.clear()
 		for (h, f) in self.fields.items():
 			fieldName = h.value
+			self.modifiedByColumn[fieldName] = [0] * self.entries
 			if fieldName not in types:
 				logging.warning('No values to normalize for {}'.format(fieldName))
 				continue
@@ -901,24 +904,21 @@ class Fields(object):
 			ofs = uniq(list(f.normalizedFields(h, lvt)))
 			logging.info('Output fields for %s: %s', fieldName, ofs)
 			nvs = list(f.normalizedValues(h, lvt))
-			c = [0] * self.entries
 			for of in ofs:
 				b = [None] * self.entries
 				for i, nc in enumerate(nvs):
 					if of not in nc: continue
 					if b[i] is None:
 						b[i] = nc[of]
-					elif isinstance(b[i], list):
-						if isinstance(nc[of], list): b[i].extend(nc[of])
-						else: b[i].append(nc[of])
-						c[i] += 1
 					else:
-						if isinstance(nc[of], list): b[i] = [b[i]] + nc[of]
-						else: b[i] = [b[i], nc[of]]
-						c[i] += 1
+						if isinstance(b[i], list):
+							if isinstance(nc[of], list): b[i].extend(nc[of])
+							else: b[i].append(nc[of])
+						else:
+							if isinstance(nc[of], list): b[i] = [b[i]] + nc[of]
+							else: b[i] = [b[i], nc[of]]
+						self.modifiedByColumn[fieldName][i] += 1
 				yield (of, b)
-			# Array c now contains a non-zero count for each value that has been normalized into at least one new column,
-			# maybe it should be shoved into run_info below...
 
 @lru_cache(maxsize = 1048576, typed = False)
 def cachedNormalization(c, t): return c.normalizedValues(t)
@@ -1813,7 +1813,17 @@ def normalizeValues(tab, params):
 	# Global boolean telling whether at least one column has been modified
 	run_info['has_modifications'] = False
 	# Number of normalized values, global and per column
-	run_info['replace_num'] = {'all': 0, 'columns': dict((of, 0) for of in tab.keys())}
+	run_info['replace_num'] = { 'all': 0, 'columns': dict() }
+	allFields = []
+	for (h, f) in fields.fields.items():
+		fieldName = h.value
+		allFields.append(fieldName)
+		columnMods = sum([k > 0 for k in fields.modifiedByColumn[fieldName]])
+		run_info['replace_num']['columns'][fieldName] = columnMods
+		if columnMods > 0: 
+			run_info['modified_columns'].append(fieldName)
+			run_info['has_modifications'] = True
+	run_info['replace_num']['all'] = sum([any([i < len(fields.modifiedByColumn[fieldName]) and fields.modifiedByColumn[fieldName][i] for fieldName in allFields]) for i in range(fields.entries)])
 	return tab, run_info
 
 def sample_types_ilocs(tab, params, sample_params):
