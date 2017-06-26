@@ -461,10 +461,12 @@ class TypeMatcher(object):
 	def __str__(self):
 		return '{}<{}>'.format(self.__class__.__name__, self.t)
 	def registerFullMatch(self, c, t, ms, hit = None):
-		c.registerFullMatch(t, self.t == t, ms, hit)
+		outputFieldPrefix = None if self.t == t else self.t 
+		c.registerFullMatch(t, outputFieldPrefix, ms, hit)
 		self.updateDiversity(hit)
 	def registerPartialMatch(self, c, t, ms, hit, span):
-		c.registerPartialMatch(t, self.t == t, ms, hit, span)
+		outputFieldPrefix = None if self.t == t else self.t 
+		c.registerPartialMatch(t, outputFieldPrefix, ms, hit, span)
 		self.updateDiversity(hit)
 	def updateDiversity(self, hit):
 		self.diversion |= set(hit if isinstance(hit, list) else [hit])
@@ -769,6 +771,7 @@ class Fields(object):
 		self.fields = fields # Mapping from header Cell object to value Field object
 		self.entries = entries
 		self.modifiedByColumn = { }
+		self.outputFieldsByColumn = { }
 	@timed
 	def matchHeadersAndValues(self):
 		logging.info('RUNNING all header matchers')
@@ -893,6 +896,7 @@ class Fields(object):
 	def normalizeValues(self, types):
 		''' Generates (field name, list of field values) pairs for each output field. '''
 		self.modifiedByColumn.clear()
+		self.outputFieldsByColumn.clear()
 		for (h, f) in self.fields.items():
 			fieldName = h.value
 			self.modifiedByColumn[fieldName] = [0] * self.entries
@@ -918,6 +922,7 @@ class Fields(object):
 							if isinstance(nc[of], list): b[i] = [b[i]] + nc[of]
 							else: b[i] = [b[i], nc[of]]
 					self.modifiedByColumn[fieldName][i] += 1
+			self.outputFieldsByColumn[fieldName] = ofs
 				yield (of, b)
 
 @lru_cache(maxsize = 1048576, typed = False)
@@ -1013,21 +1018,21 @@ class Cell(object):
 		return set(self.tis.keys()) & self.pts - self.nts
 	def matches(self, t, mm):
 		return [] if t not in self.notExcludedTypes() else filter(lambda ti: ti.mm == mm, self.tis[t])
-	def normedType(self, t, normedIfHeaderField):
-		return '++{}++'.format(t) if normedIfHeaderField else t
-	def registerFullMatch(self, t, normedIfHeaderField, ms, hit = None):
+	def normedType(self, t, outputFieldPrefix):
+		return '++{}++'.format(self.f if outputFieldPrefix is None else outputFieldPrefix + '.' + self.f)
+	def registerFullMatch(self, t, outputFieldPrefix, ms, hit = None):
 		''' If normedIfHeaderField is True and the target type is the cell's parent type, then the output
 			field should indicate that normalization has been done in order not to conflict with the
 			original field. '''
 		if ms <= 0: return
-		t0 = self.normedType(t, normedIfHeaderField)
+		t0 = self.normedType(t, outputFieldPrefix)
 		logging.debug('FULL MATCH of type <%s> for %s (p=%d): %s', t, self, ms, self.value if hit is None else hit)
 		self.tis[t].append(TypeInference(t0, FULL_MATCH, ms, self.value if hit is None else hit, 0, len(self.value)))
-	def registerPartialMatch(self, t, normedIfHeaderField, ms, hit, span):
+	def registerPartialMatch(self, t, outputFieldPrefix, ms, hit, span):
 		# TODO accept span = None and fetch start/end indices on-the-fly
 		if ms <= 0: return
 		checkSpan(hit, span)
-		t0 = self.normedType(t, normedIfHeaderField)
+		t0 = self.normedType(t, outputFieldPrefix)
 		logging.debug('PARTIAL MATCH of type <%s> for %s (p=%d): %s', t, self, ms, hit)
 		self.tis[t].append(TypeInference(t0, PARTIAL_MATCH, ms, hit, span[0] if span else -1, span[1] if span else -1))
 	def registerCoverMatch(self, t, ms, tis):
@@ -1814,6 +1819,7 @@ def normalizeValues(tab, params):
 	run_info['has_modifications'] = False
 	# Number of normalized values, global and per column
 	run_info['replace_num'] = { 'all': 0, 'columns': dict() }
+	run_info['output_columns'] = dict(fields.outputFieldsByColumn)
 	allFields = []
 	for (h, f) in fields.fields.items():
 		fieldName = h.value
