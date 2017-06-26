@@ -917,7 +917,7 @@ class Fields(object):
 						else:
 							if isinstance(nc[of], list): b[i] = [b[i]] + nc[of]
 							else: b[i] = [b[i], nc[of]]
-						self.modifiedByColumn[fieldName][i] += 1
+					self.modifiedByColumn[fieldName][i] += 1
 				yield (of, b)
 
 @lru_cache(maxsize = 1048576, typed = False)
@@ -1818,7 +1818,7 @@ def normalizeValues(tab, params):
 	for (h, f) in fields.fields.items():
 		fieldName = h.value
 		allFields.append(fieldName)
-		columnMods = sum([k > 0 for k in fields.modifiedByColumn[fieldName]])
+		columnMods = sum([fields.modifiedByColumn[fieldName][i] > 0 for i in range(fields.entries)])
 		run_info['replace_num']['columns'][fieldName] = columnMods
 		if columnMods > 0: 
 			run_info['modified_columns'].append(fieldName)
