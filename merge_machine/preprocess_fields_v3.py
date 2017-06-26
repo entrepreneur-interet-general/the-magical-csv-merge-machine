@@ -1656,7 +1656,7 @@ def generateValueMatchers(lvl = 0):
 	if lvl >= 0: yield RegexMatcher(F_ZIP, "[0-9]{5}")
 	if lvl >= 0: yield LabelMatcher(F_COUNTRY, fileToSet('country'), MATCH_MODE_EXACT)
 
-	# yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT) # MATCH_MODE_CLOSE too imprecise
+	yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT) # MATCH_MODE_CLOSE too imprecise
 	# yield TokenizedMatcher(F_CITY, COMMUNE_LEXICON, maxTokens = 3)
 	if lvl >= 0: yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
 
