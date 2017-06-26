@@ -1796,9 +1796,9 @@ def inferTypes(tab, params = None):
 	'''  Infers column types for the input array and produces a dictionary of column name to likeliest types. '''
 	fields = parseFieldsFromPanda(tab)
 	return { 
-		'columnTypes': fields.inferTypes(), 
-		'allTypes': allDatatypes(),
-		'typeTags': typeTags() }
+		'column_types': fields.inferTypes(), 
+		'all_types': allDatatypes(),
+		'type_tags': typeTags() }
 
 def normalizeValues(tab, params):
 	''' Normalizes the values in each column whose type has been identified, and returns the input array after adding the
