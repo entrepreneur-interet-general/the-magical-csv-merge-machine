@@ -130,6 +130,7 @@ from worker import conn
 import api_queued_modules
 
 from admin import Admin
+from my_json_encoder import MyEncoder
 from normalizer import UserNormalizer
 from linker import UserLinker
 
@@ -139,6 +140,8 @@ from linker import UserLinker
 
 # Initiate application
 app = Flask(__name__)
+app.json_encoder = MyEncoder
+
 cors = CORS(app)    
 app.config['CORS_HEADERS'] = 'Content-Type'
 #app.config['SERVER_NAME'] = '127.0.0.1:5000'
@@ -965,6 +968,7 @@ def new_project(project_type):
     else:
         proj = UserLinker(create_new=True, description=description, display_name=display_name)
 
+    
     return jsonify(error=False, 
                    project_id=proj.project_id)
 
@@ -1287,8 +1291,6 @@ def upload(project_id):
         
         # Write transformations and log
         proj.write_data()    
-        proj.write_log_buffer(True)
-    
         
     run_info = proj.read_config_data('INIT', 'run_info.json')
     return jsonify(run_info=run_info, project_id=proj.project_id)
@@ -1320,8 +1322,7 @@ def make_mini(project_id):
     proj.make_mini(module_params)
     
     # Write transformations and log
-    proj.write_data()    
-    proj.write_log_buffer(True)
+    proj.write_data()
 
 #==============================================================================
 # LINK API METHODS (see also SCHEDULER)
@@ -1489,6 +1490,10 @@ def get_job_result(job_id):
         return jsonify(completed=True, result=job.result)
     
     else:
+        if job.status == 'failed':
+            return jsonify(completed=False, error=True, message=job.exc_info), 500
+        
+        # TODO: Check for success specifically
         return jsonify(completed=False), 202
 
 @app.route('/queue/cancel/<job_id>', methods=['GET'])
