@@ -233,7 +233,7 @@ class Linker(AbstractDataProject):
                           
         # Update buffers
         self.log_buffer.append(log)        
-        self.run_info_buffer[module_name] = run_info
+        self.run_info_buffer[(module_name, self.mem_data_info['file_name'])] = run_info
         return 
 
     #==========================================================================
@@ -417,12 +417,7 @@ if __name__ == '__main__':
     
     # Perform linking
     proj.linker('dedupe_linker', paths, params)
-    proj.write_data()
-    proj.write_log_buffer(written=True)
-    proj.write_run_info_buffer()
-    
-
-    
+    proj.write_data()   
     
     import pprint
     pprint.pprint(proj.metadata)

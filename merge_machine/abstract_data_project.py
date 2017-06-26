@@ -35,12 +35,15 @@ from abstract_project import AbstractProject, NOT_IMPLEMENTED_MESSAGE
 
 from MODULES import MODULES
 
+
+
+MINI_PREFIX = 'MINI__'
+
 class AbstractDataProject(AbstractProject):
     '''
     Allows loading and writing of data objects (pandas DataFrames) and 
     anticipates usage of transformations and writing them to log
-    '''
-    
+    '''    
     def __init__(self, 
                  project_id=None, 
                  create_new=False, 
@@ -148,7 +151,16 @@ class AbstractDataProject(AbstractProject):
         #                                 row_idxs=[0] + [x+1 for x in sample_ilocs])        
         sample = sub_tab.to_dict('records')    
         return sample
-        
+    
+    @staticmethod
+    def _is_mini(file_name):
+        return file_name[:len(MINI_PREFIX)] == MINI_PREFIX
+    
+    @staticmethod
+    def _og_from_mini(file_name):
+        '''Returns the original file name from the MINI version'''
+        return file_name[len(MINI_PREFIX):]
+    
     def make_mini(self, params):
         '''
         Creates a smaller version of the table in memory. 
@@ -161,18 +173,14 @@ class AbstractDataProject(AbstractProject):
          # Set defaults
         sample_size = params.get('sample_size', 5000)
         randomize = params.get('randomize', True)       
-        NEW_FILE_NAME = 'MINI__' + self.mem_data_info['file_name']        
-        
-        
+        new_file_name = MINI_PREFIX + self.mem_data_info['file_name']
         
         # Only create file if it is larger than sample size
-        
         if self.mem_data.shape[0] > sample_size:            
             if self.mem_data_info['module_name'] != 'INIT':
                 raise Exception('make_mini can only be called on data in memory from the INIT module')
-            self.clean_after('INIT', NEW_FILE_NAME) # TODO: check module_name for clean_after
+            self.clean_after('INIT', new_file_name) # TODO: check module_name for clean_after
             
-    
             # Initiate log
             log = self.init_log('INIT', 'transform')  # TODO: hack here: module_name should be 'make_mini'
             
@@ -186,9 +194,9 @@ class AbstractDataProject(AbstractProject):
             
             # Update metadata and log
             self.metadata['has_mini'] = True
-            self.mem_data_info['file_name'] = NEW_FILE_NAME
+            self.mem_data_info['file_name'] = new_file_name
             log['og_file_name'] = log['file_name']
-            log['file_name'] = NEW_FILE_NAME
+            log['file_name'] = new_file_name
             
             # TODO: think if transformation should / should not be complete
     
@@ -196,14 +204,13 @@ class AbstractDataProject(AbstractProject):
             log = self.end_log(log, error=False)
                               
             # Update buffers
-            self.log_buffer.append(log)
+            self.log_buffer[self.mem_data_info['file_name']] = log
             # TODO: Make sure that run_info_buffer should not be extended
-                   
-            return log            
+            return log
+        
         else:
             self.metadata['has_mini'] = False
             return {}
-    
     
     def write_log_buffer(self, written):
         '''
@@ -211,7 +218,6 @@ class AbstractDataProject(AbstractProject):
         
         INPUT: 
             - written: weather or not the data was written
-        
         '''
         if not self.log_buffer:
             # TODO: Put warning here
@@ -227,20 +233,23 @@ class AbstractDataProject(AbstractProject):
                     log['written'] = True
                     break
                        
-        # Add buffer to metadata  
-        self.metadata['log'].extend(self.log_buffer)
+        # Add buffer to metadata
+        for log in log_buffer:
+            self.metadata['log'].extend(self.log_buffer)
     
         # Write metadata and clear log buffer
         self.write_metadata()
         self.log_buffer = []
+
 
     def write_run_info_buffer(self):
         '''
         Appends run info buffer to metadata, writes metadata and clears run_info_buffer.        
         '''
         # TODO: run_info should be file_name aware
-        for module_name, run_info in self.run_info_buffer.items():
-            self.upload_config_data(run_info, module_name, 'run_info.json')
+        for (module_name, file_name), run_info in self.run_info_buffer.items():
+            config_file_name = file_name + '__run_info.json'
+            self.upload_config_data(run_info, module_name, config_file_name)
         self.run_info_buffer = dict()
         
     def write_data(self):
@@ -256,6 +265,9 @@ class AbstractDataProject(AbstractProject):
         self.mem_data.to_csv(file_path, encoding='utf-8', index=False, 
                              quoting=csv.QUOTE_NONNUMERIC)
         print('Wrote to ', file_path)
+        
+        self.write_log_buffer(True)
+        self.write_run_info_buffer()
 
         
     def clear_memory(self):
@@ -310,12 +322,18 @@ class AbstractDataProject(AbstractProject):
         log = self.end_log(log, error=False)
                           
         # Add time to run_info (# TODO: is this the best way?)
+        try:
+            run_info['file_name'] = self.mem_data_info['file_name']
+        except:
+            import pdb
+            pdb.set_trace()
+        run_info['module_name'] = module_name
         run_info['params'] = params
         run_info['start_timestamp'] = log['start_timestamp']
         run_info['end_timestamp'] = log['end_timestamp']
         
         # Update buffers
         self.log_buffer.append(log)
-        self.run_info_buffer[module_name] = run_info
+        self.run_info_buffer[(module_name, self.mem_data_info['file_name'])] = run_info
         
         return log, run_info
