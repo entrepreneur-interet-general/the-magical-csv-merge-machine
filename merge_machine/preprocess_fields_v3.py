@@ -387,6 +387,7 @@ F_RD_PARTNER = u'Partenaire de recherche'
 F_CLINICALTRIAL_COLLAB = u'Collaborateur d\'essai clinique'
 F_RD = u'Institution de recherche'
 F_ETAB = u'Etablissement'
+F_ACADEMIE = u'Académie'
 F_ETAB_ENSSUP = u'Etablissement d\'Enseignement Supérieur'
 F_APB_MENTION = u'Mention APB'
 F_RD_DOMAIN = u'Domaine de Recherche'
@@ -437,7 +438,7 @@ TYPE_TAGS = {
 	F_RD_STRUCT: [u'Organisation', u'Structure', u'Recherche'],
 	F_RD_PARTNER: [u'Organisation', u'Structure', u'Recherche'],
 	F_RD: [u'Recherche'],
-	F_ETAB: [u'Enseignement'],
+	F_ACADEMIE: [u'Enseignement'],
 	F_ETAB: [u'Enseignement', u'Enseignement supérieur'],
 	F_PHYTO: [u'Agro'],
 	F_AGRO: [u'Agro'],
@@ -460,10 +461,12 @@ class TypeMatcher(object):
 	def __str__(self):
 		return '{}<{}>'.format(self.__class__.__name__, self.t)
 	def registerFullMatch(self, c, t, ms, hit = None):
-		c.registerFullMatch(t, self.t == t, ms, hit)
+		outputFieldPrefix = None if self.t == t else self.t 
+		c.registerFullMatch(t, outputFieldPrefix, ms, hit)
 		self.updateDiversity(hit)
 	def registerPartialMatch(self, c, t, ms, hit, span):
-		c.registerPartialMatch(t, self.t == t, ms, hit, span)
+		outputFieldPrefix = None if self.t == t else self.t 
+		c.registerPartialMatch(t, outputFieldPrefix, ms, hit, span)
 		self.updateDiversity(hit)
 	def updateDiversity(self, hit):
 		self.diversion |= set(hit if isinstance(hit, list) else [hit])
@@ -768,6 +771,7 @@ class Fields(object):
 		self.fields = fields # Mapping from header Cell object to value Field object
 		self.entries = entries
 		self.modifiedByColumn = { }
+		self.outputFieldsByColumn = { }
 	@timed
 	def matchHeadersAndValues(self):
 		logging.info('RUNNING all header matchers')
@@ -892,6 +896,7 @@ class Fields(object):
 	def normalizeValues(self, types):
 		''' Generates (field name, list of field values) pairs for each output field. '''
 		self.modifiedByColumn.clear()
+		self.outputFieldsByColumn.clear()
 		for (h, f) in self.fields.items():
 			fieldName = h.value
 			self.modifiedByColumn[fieldName] = [0] * self.entries
@@ -916,7 +921,8 @@ class Fields(object):
 						else:
 							if isinstance(nc[of], list): b[i] = [b[i]] + nc[of]
 							else: b[i] = [b[i], nc[of]]
-						self.modifiedByColumn[fieldName][i] += 1
+					self.modifiedByColumn[fieldName][i] += 1
+			self.outputFieldsByColumn[fieldName] = ofs
 				yield (of, b)
 
 @lru_cache(maxsize = 1048576, typed = False)
@@ -1012,21 +1018,21 @@ class Cell(object):
 		return set(self.tis.keys()) & self.pts - self.nts
 	def matches(self, t, mm):
 		return [] if t not in self.notExcludedTypes() else filter(lambda ti: ti.mm == mm, self.tis[t])
-	def normedType(self, t, normedIfHeaderField):
-		return '++{}++'.format(t) if normedIfHeaderField else t
-	def registerFullMatch(self, t, normedIfHeaderField, ms, hit = None):
+	def normedType(self, t, outputFieldPrefix):
+		return '++{}++'.format(self.f if outputFieldPrefix is None else outputFieldPrefix + '.' + self.f)
+	def registerFullMatch(self, t, outputFieldPrefix, ms, hit = None):
 		''' If normedIfHeaderField is True and the target type is the cell's parent type, then the output
 			field should indicate that normalization has been done in order not to conflict with the
 			original field. '''
 		if ms <= 0: return
-		t0 = self.normedType(t, normedIfHeaderField)
+		t0 = self.normedType(t, outputFieldPrefix)
 		logging.debug('FULL MATCH of type <%s> for %s (p=%d): %s', t, self, ms, self.value if hit is None else hit)
 		self.tis[t].append(TypeInference(t0, FULL_MATCH, ms, self.value if hit is None else hit, 0, len(self.value)))
-	def registerPartialMatch(self, t, normedIfHeaderField, ms, hit, span):
+	def registerPartialMatch(self, t, outputFieldPrefix, ms, hit, span):
 		# TODO accept span = None and fetch start/end indices on-the-fly
 		if ms <= 0: return
 		checkSpan(hit, span)
-		t0 = self.normedType(t, normedIfHeaderField)
+		t0 = self.normedType(t, outputFieldPrefix)
 		logging.debug('PARTIAL MATCH of type <%s> for %s (p=%d): %s', t, self, ms, hit)
 		self.tis[t].append(TypeInference(t0, PARTIAL_MATCH, ms, hit, span[0] if span else -1, span[1] if span else -1))
 	def registerCoverMatch(self, t, ms, tis):
@@ -1633,7 +1639,9 @@ def generateValueMatchers(lvl = 0):
 	if lvl >= 2: yield TokenizedMatcher(F_CLINICALTRIAL_COLLAB, fileToSet('clinical_trial_sponsor_collab.col'),
 		maxTokens = 4)
 	yield SubtypeMatcher(F_RD, [F_RD_STRUCT, F_RD_PARTNER, F_CLINICALTRIAL_COLLAB])
-	# SIES/APB
+	if lvl >= 0:
+		yield RegexMatcher(F_ACADEMIE, "acad.mie", ignoreCase = True)
+		yield LabelMatcher(F_ACADEMIE, fileToSet('academie'), MATCH_MODE_EXACT)	# SIES/APB
 	if lvl >= 0: yield VocabMatcher(F_ETAB, fileToSet('etablissement.vocab'), ignoreCase = True, partial = False)
 	# yield TokenizedMatcher(F_ETAB, fileToSet('etablissement'),
 	#     maxTokens = 2)
@@ -1653,7 +1661,7 @@ def generateValueMatchers(lvl = 0):
 	if lvl >= 0: yield RegexMatcher(F_ZIP, "[0-9]{5}")
 	if lvl >= 0: yield LabelMatcher(F_COUNTRY, fileToSet('country'), MATCH_MODE_EXACT)
 
-	# yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT) # MATCH_MODE_CLOSE too imprecise
+	yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT) # MATCH_MODE_CLOSE too imprecise
 	# yield TokenizedMatcher(F_CITY, COMMUNE_LEXICON, maxTokens = 3)
 	if lvl >= 0: yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
 
@@ -1788,9 +1796,9 @@ def inferTypes(tab, params = None):
 	'''  Infers column types for the input array and produces a dictionary of column name to likeliest types. '''
 	fields = parseFieldsFromPanda(tab)
 	return { 
-		'columnTypes': fields.inferTypes(), 
-		'allTypes': allDatatypes(),
-		'typeTags': typeTags() }
+		'column_types': fields.inferTypes(), 
+		'all_types': allDatatypes(),
+		'type_tags': typeTags() }
 
 def normalizeValues(tab, params):
 	''' Normalizes the values in each column whose type has been identified, and returns the input array after adding the
@@ -1811,11 +1819,12 @@ def normalizeValues(tab, params):
 	run_info['has_modifications'] = False
 	# Number of normalized values, global and per column
 	run_info['replace_num'] = { 'all': 0, 'columns': dict() }
+	run_info['output_columns'] = dict(fields.outputFieldsByColumn)
 	allFields = []
 	for (h, f) in fields.fields.items():
 		fieldName = h.value
 		allFields.append(fieldName)
-		columnMods = sum([k > 0 for k in fields.modifiedByColumn[fieldName]])
+		columnMods = sum([fields.modifiedByColumn[fieldName][i] > 0 for i in range(fields.entries)])
 		run_info['replace_num']['columns'][fieldName] = columnMods
 		if columnMods > 0: 
 			run_info['modified_columns'].append(fieldName)
