@@ -912,16 +912,25 @@ class Fields(object):
                 b = [None] * self.entries
                 for i, nc in enumerate(nvs):
                     if of not in nc: continue
+                    isNewValue = True
                     if b[i] is None:
                         b[i] = nc[of]
                     else:
                         if isinstance(b[i], list):
-                            if isinstance(nc[of], list): b[i].extend(nc[of])
-                            else: b[i].append(nc[of])
+                            if isinstance(nc[of], list): 
+                            	isNewValue = any([x not in b[i] for x in nc[of]])
+                            	b[i].extend(nc[of])
+                            else: 
+                            	isNewValue = nc[of] not in b[i]
+                            	b[i].append(nc[of])
                         else:
-                            if isinstance(nc[of], list): b[i] = [b[i]] + nc[of]
-                            else: b[i] = [b[i], nc[of]]
-                    self.modifiedByColumn[fieldName][i] += 1
+                            if isinstance(nc[of], list): 
+                            	isNewValue = b[i] not in nc[of]
+                            	b[i] = [b[i]] + nc[of]
+                            else: 
+                            	isNewValue = b[i] != nc[of]
+                            	b[i] = [b[i], nc[of]]
+                    if isNewValue: self.modifiedByColumn[fieldName][i] += 1
                 yield (of, b)
             self.outputFieldsByColumn[fieldName] = ofs
 
