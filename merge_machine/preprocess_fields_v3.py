@@ -922,8 +922,8 @@ class Fields(object):
                             if isinstance(nc[of], list): b[i] = [b[i]] + nc[of]
                             else: b[i] = [b[i], nc[of]]
                     self.modifiedByColumn[fieldName][i] += 1
+                yield (of, b)
             self.outputFieldsByColumn[fieldName] = ofs
-            yield (of, b)
 
 @lru_cache(maxsize = 1048576, typed = False)
 def cachedNormalization(c, t): return c.normalizedValues(t)
