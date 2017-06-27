@@ -60,15 +60,10 @@ def _replace_mvs(project_id, data_params, module_params):
 
     proj.load_data(data_params['module_name'], data_params['file_name'])
     
-    proj.transform('replace_mvs', module_params)
+    _, run_info = proj.transform('replace_mvs', module_params)
+    
     # Write transformations and log
-    proj.write_data()    
-    proj.write_log_buffer(True)
-    proj.write_run_info_buffer()
-    
-    # Get run info (TODO: Use object returned by transform instead)
-    run_info = proj.read_config_data('replace_mvs', 'run_info.json')
-    
+    proj.write_data()
     return run_info
 
 def _infer_types(project_id, data_params, module_params):
@@ -115,15 +110,11 @@ def _recode_types(project_id, data_params, module_params):
 
     proj.load_data(data_params['module_name'], data_params['file_name'])
     
-    proj.transform('recode_types', module_params)
-    # Write transformations and log
-    proj.write_data()    
-    proj.write_log_buffer(True)
-    proj.write_run_info_buffer()
+    _, run_info = proj.transform('recode_types', module_params)
     
-    # Get run info (TODO: Use object returned by transform instead)
-    run_info = proj.read_config_data('replace_mvs', 'run_info.json')
-    
+    # Write transformations and logs
+    proj.write_data()
+
     return run_info
 
 
@@ -156,12 +147,11 @@ def _concat_with_init(project_id, data_params, *argv):
     
     # TODO: there was a pdb here. is everything alright ?
     
-    proj.transform('concat_with_init', None)
-    # Write transformations and log
-    proj.write_data()    
-    proj.write_log_buffer(True)
-    proj.write_run_info_buffer()
-    return {}
+    _, run_info = proj.transform('concat_with_init', None)
+    
+    # Write transformations and logs
+    proj.write_data()
+    return run_info
 
 def _run_all_transforms(project_id, data_params, *argv):
     '''
@@ -184,10 +174,8 @@ def _run_all_transforms(project_id, data_params, *argv):
     proj.load_data('INIT', file_name)
     proj.run_all_transforms()
 
-    # Write transformations and log
-    proj.write_data()    
-    proj.write_log_buffer(True)
-    proj.write_run_info_buffer()
+    # Write transformations and logs
+    proj.write_data()
     return {}
 
 
@@ -244,9 +232,7 @@ def _linker(project_id, *argv):
 
     print('Writing data')
     # Write transformations and log
-    proj.write_data()    
-    proj.write_log_buffer(True)
-    proj.write_run_info_buffer()
+    proj.write_data()
     
     file_path = proj.path_to(proj.mem_data_info['module_name'], 
                              proj.mem_data_info['file_name'])

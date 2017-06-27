@@ -100,7 +100,6 @@ class AbstractProject():
                 if not os.path.isdir(dir_path):
                     os.makedirs(dir_path)
                 self.upload_config_data(config, module_name, file_name)
-
       
     @staticmethod
     def gen_id():

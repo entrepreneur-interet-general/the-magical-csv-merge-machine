@@ -6,11 +6,11 @@ Created on Tue Jun 13 14:01:33 2017
 @author: m75380
 """
 
-import json
+from flask.json import JSONEncoder
 
 import numpy as np
 
-class MyEncoder(json.JSONEncoder):
+class MyEncoder(JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.integer):
             return int(obj)

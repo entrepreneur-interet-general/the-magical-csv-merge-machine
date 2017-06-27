@@ -264,14 +264,12 @@ class Normalizer(AbstractDataProject):
                         'nrows': self.mem_data.shape[0], 
                         'ncols': self.mem_data.shape[1]
                     }
-        self.run_info_buffer['INIT'] = config_dict
+        self.run_info_buffer[('INIT', file_name)] = config_dict
         # TODO: duplicate with run_info and infered_config.json        
         
         
         # write data and log
         self.write_data()
-        self.write_log_buffer(written=True)
-        self.write_run_info_buffer() # TODO: add run_info_buffer?
 
 
         self.upload_config_data(config_dict, 'INIT', 'infered_config.json')
@@ -298,7 +296,6 @@ class Normalizer(AbstractDataProject):
         if any(col not in self.metadata['column_tracker']['selected'] for col in columns):
             for file_name in self.metadata['files']:
                 self.clean_after('INIT', file_name, include_current_module=False)
-
         
         # Add selected columns to metadata
         self.metadata['column_tracker']['selected'] = columns
@@ -348,7 +345,8 @@ class Normalizer(AbstractDataProject):
         # Initiate log
         log = self.init_log('concat_with_init', 'transform')
     
-        og_file_path = self.path_to('INIT', self.mem_data_info['file_name'])
+        og_file_name = self.mem_data_info['file_name']
+        og_file_path = self.path_to('INIT', og_file_name)
         og_tab = pd.read_csv(og_file_path, encoding='utf-8', dtype=str)
         assert len(og_tab) == len(self.mem_data)
         self.mem_data.columns = [x + '__MMM_NORMALIZED' for x in self.mem_data.columns]
@@ -370,7 +368,7 @@ class Normalizer(AbstractDataProject):
         
         # Update buffers
         self.log_buffer.append(log)
-        self.run_info_buffer['concat_with_init'] = run_info        
+        self.run_info_buffer[('concat_with_init', og_file_name)] = run_info        
         return log, run_info
     
     def transform(self, module_name, params):
