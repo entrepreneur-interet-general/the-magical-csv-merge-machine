@@ -315,9 +315,14 @@ class Normalizer(AbstractDataProject):
         if any(col not in self.metadata['column_tracker']['selected'] for col in columns):
             for file_name in self.metadata['files']:
                 self.clean_after('INIT', file_name, include_current_module=False)
+
+        # Add to log
+        for file_name in self.metadata['files']:
+            self.metadata['log'][file_name]['add_selected_columns']['completed'] = True
         
         # Add selected columns to metadata
         self.metadata['column_tracker']['selected'] = columns
+        
         self.write_metadata()   
 
     def read_selected_columns(self):

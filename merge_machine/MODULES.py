@@ -12,7 +12,7 @@ from missing_values import infer_mvs, replace_mvs, sample_mvs_ilocs
 from preprocess_fields_v3 import inferTypes, normalizeValues, sample_types_ilocs
 
 
-NORMALIZE_MODULE_ORDER_log = ['INIT', 'make_mini', 'infer_mvs', 'replace_mvs', 'infer_types','recode_types', 'concat_with_init']
+NORMALIZE_MODULE_ORDER_log = ['INIT', 'make_mini', 'add_selected_columns', 'infer_mvs', 'replace_mvs', 'infer_types','recode_types', 'concat_with_init']
 NORMALIZE_MODULE_ORDER = ['INIT', 'make_mini', 'replace_mvs', 'recode_types', 'concat_with_init']
 
 
