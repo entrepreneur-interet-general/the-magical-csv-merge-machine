@@ -317,7 +317,7 @@ class Normalizer(AbstractDataProject):
                 self.clean_after('INIT', file_name, include_current_module=False)
 
         # Add to log
-        for file_name in self.metadata['files']:
+        for file_name in self.metadata['log']:
             self.metadata['log'][file_name]['add_selected_columns']['completed'] = True
         
         # Add selected columns to metadata
