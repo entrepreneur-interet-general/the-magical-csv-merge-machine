@@ -16,7 +16,7 @@ from werkzeug.utils import secure_filename
 
 from abstract_data_project import AbstractDataProject
 from CONFIG import NORMALIZE_DATA_PATH
-from MODULES import MODULES, NORMALIZE_MODULE_ORDER
+from MODULES import MODULES, NORMALIZE_MODULE_ORDER, NORMALIZE_MODULE_ORDER_log # TODO: think about these...
 
 class Normalizer(AbstractDataProject):
     """
@@ -50,7 +50,16 @@ class Normalizer(AbstractDataProject):
         metadata['column_tracker'] = None
         metadata['files'] = dict() # Contains single file metadata
         metadata['has_mini'] = False
+        metadata['log'] = {}
         return metadata   
+    
+    @staticmethod
+    def default_log():
+        '''Default log for a (module_name, file_name) tuple if module was never run'''
+        return {
+                'completed': False,
+                'skipped': False
+                }
 
     def init_log(self, module_name, module_type):
         '''
@@ -138,18 +147,24 @@ class Normalizer(AbstractDataProject):
         if (module_name is not None) and (before_module is not None):
             raise Exception('Variables module_name and before_module cannot be \
                             set simultaneously')
+
+        if module_name is not None:
+            modules_to_search = [module_name]
+        else:        
+            previous_modules = {NORMALIZE_MODULE_ORDER[i]: NORMALIZE_MODULE_ORDER[:i] for i in range(len(NORMALIZE_MODULE_ORDER))}
+            previous_modules[None] = NORMALIZE_MODULE_ORDER
+            modules_to_search = previous_modules[before_module][::-1]
         
-        previous_modules = {NORMALIZE_MODULE_ORDER[i]: NORMALIZE_MODULE_ORDER[:i] for i in range(len(NORMALIZE_MODULE_ORDER))}
-    
-        for log in self.metadata['log'][::-1]:
-            if (not log['error']) and log['written'] \
-                      and ((module_name is None) or (log['module_name'] == module_name)) \
-                      and ((file_name is None) or (log['file_name'] == file_name)) \
-                      and ((before_module is None) or (log['module_name'] in previous_modules[before_module])):                
+        if file_name is None:
+            file_name = self.metadata['last_written']['file_name']
+        
+        for module_name in modules_to_search:
+            log = self.metadata['log'][file_name][module_name]
+            if (not log.get('error', False)) and (log.get('written', False)):
                 break
         else:
             raise Exception('No written data could be found in logs')
-        
+            
         module_name = log['module_name']
         file_name = log['file_name']        
         return (module_name, file_name)
@@ -249,6 +264,10 @@ class Normalizer(AbstractDataProject):
         else:
             assert list(self.mem_data.columns) == self.metadata['column_tracker']['original']
         
+        # Create new empty log in metadata
+        self.metadata['log'][file_name] = {module_name: self.default_log() for module_name in NORMALIZE_MODULE_ORDER_log}
+        
+        
         self.write_metadata()
         
         # Complete log
@@ -316,8 +335,7 @@ class Normalizer(AbstractDataProject):
             if file_name == _file_name:
                 self.remove(module_name, file_name)
         
-        self.metadata['log'] = filter(lambda x: (x['file_name']!=file_name), 
-                                                 self.metadata['log'])     
+        self.metadata['log'][file_name] = {module_name: self.default_log() for module_name in NORMALIZE_MODULE_ORDER_log}
         self.write_metadata()
 
     def clean_after(self, module_name, file_name, include_current_module=True):
@@ -325,13 +343,29 @@ class Normalizer(AbstractDataProject):
         Removes all occurences of file and transformations
         at and after the given module (NORMALIZE_MODULE_ORDER)
         '''
+        # TODO: move to normalize
+        
+        if file_name not in self.metadata['log']:
+            # TODO: put warning here instead
+            pass
+            # raise Exception('This file cannot be cleaned: it cannot be found in log')
+        
         start_idx = NORMALIZE_MODULE_ORDER.index(module_name) + int(not include_current_module)
-        for iter_module_name in NORMALIZE_MODULE_ORDER[start_idx:]:
+        for iter_module_name in NORMALIZE_MODULE_ORDER_log[start_idx:]:            
+            # module_log = self.metadata['log'][file_name]
+            # TODO: check skipped, written instead of try except            
+            
             file_path = self.path_to(iter_module_name, file_name)
             try:
                 os.remove(file_path)
             except FileNotFoundError:
                 pass
+            
+            try:
+                self.metadata['log'][file_name][iter_module_name] = self.default_log()
+            except:
+                pass
+            self.write_metadata()
     
     def concat_with_init(self):
         '''
@@ -435,7 +469,7 @@ if __name__ == '__main__':
     # Load source data to memory
     proj.load_data(module_name='INIT' , file_name=user_given_name)
     
-    inferredTypes = proj.infer('inferTypes', params = None)
+    inferredTypes = proj.infer('infer_types', params = None)
     
     print('Inferred data types:', inferredTypes)
 
@@ -448,7 +482,7 @@ if __name__ == '__main__':
     'VILLE': 'Commune',
     'CDPOSTAL': 'Code Postal',
     'PAYS': 'Pays' } }
-    proj.transform('normalizeValues', params)
+    proj.transform('recode_types', params)
     
     # Write transformed file
     proj.write_data()

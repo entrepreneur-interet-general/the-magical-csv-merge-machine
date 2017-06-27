@@ -11,6 +11,8 @@ from performance import results_analysis
 from missing_values import infer_mvs, replace_mvs, sample_mvs_ilocs
 from preprocess_fields_v3 import inferTypes, normalizeValues, sample_types_ilocs
 
+
+NORMALIZE_MODULE_ORDER_log = ['INIT', 'make_mini', 'infer_mvs', 'replace_mvs', 'infer_types','recode_types', 'concat_with_init']
 NORMALIZE_MODULE_ORDER = ['INIT', 'make_mini', 'replace_mvs', 'recode_types', 'concat_with_init']
 
 
@@ -44,7 +46,7 @@ MODULES = {
                                 'write_to': 'replace_mvs',
                                 'desc': infer_mvs.__doc__
                             },
-              'inferTypes': {
+                'infer_types': {
                                'func': inferTypes,
                                'write_to': 'normalizeValues',
                                'desc': inferTypes.__doc__
@@ -69,7 +71,7 @@ MODULES = {
                         'func': sample_mvs_ilocs,
                         'desc': sample_mvs_ilocs.__doc__
                         },
-               'sample_types': {
+                'sample_types': {
                         'func': sample_types_ilocs,
                         'desc': sample_types_ilocs.__doc__
                         }

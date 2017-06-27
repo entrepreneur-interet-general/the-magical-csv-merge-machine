@@ -85,7 +85,7 @@ def _infer_types(project_id, data_params, module_params):
     '''
     proj = UserNormalizer(project_id=project_id)
     proj.load_data(data_params['module_name'], data_params['file_name'])    
-    result = proj.infer('inferTypes', module_params)
+    result = proj.infer('infer_types', module_params)
         
     # Write log
     proj.write_log_buffer(False)

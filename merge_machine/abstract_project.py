@@ -115,7 +115,7 @@ class AbstractProject():
         metadata = dict()
         metadata['description'] = description
         metadata['display_name'] = display_name
-        metadata['log'] = []
+        metadata['log'] = {}
         metadata['project_id'] = self.project_id
         metadata['timestamp'] = time.time()
         metadata['user_id'] = '__ NOT IMPLEMENTED'

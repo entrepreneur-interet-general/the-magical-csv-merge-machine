@@ -33,7 +33,7 @@ import pandas as pd
 
 from abstract_project import AbstractProject, NOT_IMPLEMENTED_MESSAGE
 
-from MODULES import MODULES
+from MODULES import MODULES, NORMALIZE_MODULE_ORDER_log # TODO: absolutely move this
 
 
 
@@ -58,6 +58,7 @@ class AbstractDataProject(AbstractProject):
         self.mem_data_info =  dict() # Information on data in memory
         self.run_info_buffer = dict()
         self.log_buffer = [] # List of logs not yet written to metadata.json    
+        self.last_written = {}
     
     
     def init_log(self, module_name, module_type):
@@ -72,6 +73,8 @@ class AbstractDataProject(AbstractProject):
         '''
         log['end_timestamp'] = time.time()
         log['error'] = error
+        if not error:
+            log['completed'] = True
         return log    
     
     def check_mem_data(self):
@@ -195,16 +198,21 @@ class AbstractDataProject(AbstractProject):
             # Update metadata and log
             self.metadata['has_mini'] = True
             self.mem_data_info['file_name'] = new_file_name
+            
+            # Create new empty log in metadata # TODO: make class method
+            self.metadata['log'][new_file_name] = {module_name: self.default_log() for module_name in NORMALIZE_MODULE_ORDER_log}
+        
+        
             log['og_file_name'] = log['file_name']
             log['file_name'] = new_file_name
             
             # TODO: think if transformation should / should not be complete
     
             # Complete log
-            log = self.end_log(log, error=False)
+            log = self.end_log(log, error=False) 
                               
             # Update buffers
-            self.log_buffer[self.mem_data_info['file_name']] = log
+            self.log_buffer.append(log) # TODO: change for dict
             # TODO: Make sure that run_info_buffer should not be extended
             return log
         
@@ -231,11 +239,15 @@ class AbstractDataProject(AbstractProject):
                 assert log['module_type'] in ['infer', 'transform', 'link']
                 if log['module_type'] in ['transform', 'link']:
                     log['written'] = True
+                    self.metadata['last_written'] = {
+                                                    'module_name': log['module_name'], 
+                                                    'file_name': log['file_name']
+                                                    }
                     break
                        
         # Add buffer to metadata
-        for log in log_buffer:
-            self.metadata['log'].extend(self.log_buffer)
+        for log in self.log_buffer:
+            self.metadata['log'][log['file_name']][log['module_name']].update(log)
     
         # Write metadata and clear log buffer
         self.write_metadata()
