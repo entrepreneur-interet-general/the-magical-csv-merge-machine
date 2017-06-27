@@ -355,7 +355,7 @@ class Normalizer(AbstractDataProject):
             pass
             # raise Exception('This file cannot be cleaned: it cannot be found in log')
         
-        start_idx = NORMALIZE_MODULE_ORDER.index(module_name) + int(not include_current_module)
+        start_idx = NORMALIZE_MODULE_ORDER_log.index(module_name) + int(not include_current_module)
         for iter_module_name in NORMALIZE_MODULE_ORDER_log[start_idx:]:            
             # module_log = self.metadata['log'][file_name]
             # TODO: check skipped, written instead of try except            

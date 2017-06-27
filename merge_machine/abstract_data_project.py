@@ -232,7 +232,7 @@ class AbstractDataProject(AbstractProject):
             pass
             #            raise Exception('No log buffer: no operations were executed since \
             #                            write_log_buffer was last called')
-        
+    
         # Indicate if any data was written
         if written:
             for log in self.log_buffer[::-1]:
@@ -316,7 +316,7 @@ class AbstractDataProject(AbstractProject):
         Run module on pandas DataFrame in memory and update memory state.
         /!\ DATA IS CLEANED WHEN transform IS CALLED
         '''
-        self.check_mem_data()        
+        self.check_mem_data()
         self.clean_after(module_name, self.mem_data_info['file_name'])
         
         # Initiate log
