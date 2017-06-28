@@ -326,19 +326,12 @@ class AbstractDataProject(AbstractProject):
         # Run module on pandas DataFrame 
         self.mem_data, run_info = MODULES['transform'][module_name]['func'](self.mem_data, params)
         self.mem_data_info['module_name'] = module_name
-        
-        # Transformation -> the project is still_not/ no_longer complete
-        self.metadata['complete'][self.mem_data_info['file_name']] = False
 
         # Complete log
         log = self.end_log(log, error=False)
                           
         # Add time to run_info (# TODO: is this the best way?)
-        try:
-            run_info['file_name'] = self.mem_data_info['file_name']
-        except:
-            import pdb
-            pdb.set_trace()
+        run_info['file_name'] = self.mem_data_info['file_name']
         run_info['module_name'] = module_name
         run_info['params'] = params
         run_info['start_timestamp'] = log['start_timestamp']

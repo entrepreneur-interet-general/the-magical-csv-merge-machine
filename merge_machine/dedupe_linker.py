@@ -183,6 +183,7 @@ def current_load_deduper(data_ref, data_source, my_variable_definition):#
     num_cores = 4 # Fix num cores
     gazetteer = dedupe.Gazetteer(variable_definition=variable_definition, 
                                  num_cores=num_cores)
+
     
     gazetteer.sample(data_1=nonexact_1, data_2=nonexact_2, 
                      sample_size=SAMPLE_SIZE# ,
@@ -214,7 +215,7 @@ def main_dedupe(data_ref,
      nonexact_2,
      exact_pairs) = exact_matches(data_ref, data_source, cols_for_match)
 
-    num_cores = 2
+    num_cores = 4
     gazetteer = dedupe.Gazetteer(variable_definition=variable_definition, 
                                  num_cores=num_cores)    
 

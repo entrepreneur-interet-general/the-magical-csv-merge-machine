@@ -46,7 +46,6 @@ class Normalizer(AbstractDataProject):
         metadata = super().create_metadata(description=description, 
                                             display_name=display_name)
         # For dicts below, keys are file_names
-        metadata['complete'] = dict() # File is complete once final is reconstructed
         metadata['column_tracker'] = None
         metadata['files'] = dict() # Contains single file metadata
         metadata['has_mini'] = False
@@ -255,7 +254,6 @@ class Normalizer(AbstractDataProject):
                                                 'display_name': display_name,
                                                 'upload_time': time.time()
                                             }
-        self.metadata['complete'][file_name] = False
         
         if self.metadata['column_tracker'] is None:
             self.metadata['column_tracker'] = {'original': list(self.mem_data.columns),
@@ -286,7 +284,6 @@ class Normalizer(AbstractDataProject):
         self.run_info_buffer[('INIT', file_name)] = config_dict
         # TODO: duplicate with run_info and infered_config.json        
         
-        
         # write data and log
         self.write_data()
 
@@ -295,6 +292,8 @@ class Normalizer(AbstractDataProject):
 
         # self.clear_memory()    
         
+        return None, config_dict
+
     def add_selected_columns(self, columns):
         '''
         Select the columns to normalize on. Will clear all changes if more columns 
@@ -394,9 +393,6 @@ class Normalizer(AbstractDataProject):
         self.mem_data_info['module_name'] = 'concat_with_init'
         
         run_info = {} # TODO: check specifications for run_info
-        
-        # Project is complete at that stage
-        self.metadata['complete'][self.mem_data_info['file_name']] = True
 
         # Complete log
         log = self.end_log(log, error=False)

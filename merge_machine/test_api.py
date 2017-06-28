@@ -17,6 +17,12 @@ import pprint
 import requests
 import time
 
+
+# Change current path to path of test_file.py
+curdir = os.path.dirname(os.path.realpath(__file__))
+os.chdir(curdir)
+
+
 PROTOCOL = 'http://'
 HOST = '0.0.0.0:5000'
 PRINT = True

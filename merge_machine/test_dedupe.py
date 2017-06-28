@@ -5,7 +5,6 @@ Created on Wed Apr  5 20:11:03 2017
 
 @author: leo
 
-
 {0.1: [0.27793493635077793,
   0.25318246110325321,
   0.29632248939179634,
@@ -51,7 +50,6 @@ Created on Wed Apr  5 20:11:03 2017
   0.53041018387553041,
   0.557991513437058,
   0.4794908062234795]}
-
 """
 
 import json
@@ -71,7 +69,7 @@ def gen_dedupe_variable_definition(col_matches):
             {"ref": match['ref'][0], "source": match['source'][0]}, "type": "String"})
     return my_variable_definition
 
-project_id = 'db61ee4b23daad189c2569d441ada68b'
+project_id = '78246d462d500c1234903cc338c7c495'
 
 proj = UserLinker(project_id)
 
@@ -99,7 +97,6 @@ with open(proj.path_to('dedupe_linker', 'column_certain_matches.json')) as r:
     column_certain_matches = json.load(r)
 
 
-
 props = [x/10. for x in range(1,10)]
 props = [0.9, 0.6, 0.3]
 match_sizes = []
@@ -114,7 +111,7 @@ matches = training['match']
 random.shuffle(matches)
 distinct = training['distinct']
 random.shuffle(distinct)
-    
+
 
 def main_link_test(proj, paths, prop, num_matches, num_distinct, i, column_certain_matches=None):
     new_training = dict()
@@ -132,17 +129,12 @@ def main_link_test(proj, paths, prop, num_matches, num_distinct, i, column_certa
     paths['train'] =  path_restricted_train   
     
     proj.linker('dedupe_linker', paths, params)
-    source = proj.mem_data
     
     # Explore results    
     certain_col_matches = proj.read_col_certain_matches()
     use_lower = True
     metrics = proj.infer('results_analysis', {'col_matches': certain_col_matches, 'lower':use_lower})
-
-    
     return metrics
-
-
 
 
 n_jobs = 8

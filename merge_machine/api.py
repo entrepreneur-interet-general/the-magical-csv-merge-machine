@@ -1281,7 +1281,7 @@ def upload(project_id):
     # Upload data
     file = request.files['file']
     if file:
-        proj.upload_init_data(file.stream, file.filename)
+        _, run_info = proj.upload_init_data(file.stream, file.filename)
     else:
         raise Exception('Empty file')
         
@@ -1291,8 +1291,7 @@ def upload(project_id):
         
         # Write transformations and log
         proj.write_data()    
-        
-    run_info = proj.read_config_data('INIT', 'run_info.json')
+
     return jsonify(run_info=run_info, project_id=proj.project_id)
 
 
