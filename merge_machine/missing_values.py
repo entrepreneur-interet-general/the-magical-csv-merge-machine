@@ -78,13 +78,15 @@ def mv_from_len_ratio(top_values, score=0.2):
 
 
 def mv_from_not_digit(top_values, score=1):
-    """Check if one value is the only not digit"""
+    """Check if one value is the only not digit (and is only text)"""
     is_digit = pd.Series([x.replace(',', '').replace('.', '').isdigit() 
                         for x in top_values.index], index=top_values.index)
     if len(top_values) >= 3:
         if (~is_digit).sum() == 1:
             mv_value = is_digit[is_digit == False].index[0]
-            return [(mv_value, score/2. + score/2.*(len(top_values) >= 4), 'not_digit')]
+            if mv_value.isalpha():
+                return [(mv_value, score/2. + score/2.*(len(top_values) >= 4), 
+                         'not_digit')]
     return []
 
 
@@ -209,7 +211,7 @@ def infer_mvs(tab, params=None):
     # Look at each column and infer mv
     for col, top_values in all_top_values.items():
         col_mvs[col] = []
-        if top_values.iloc[0] == 1:
+        if (not top_values.any()) or (top_values.iloc[0] == 1):
             continue
         col_mvs[col].extend(mv_from_len_diff(top_values))
         col_mvs[col].extend(mv_from_len_ratio(top_values))
@@ -345,8 +347,11 @@ if __name__ == '__main__':
     
     file_paths = ['../../data/test_dedupe/participants.csv', 
                   '../../data/test/etablissements/bce_data_norm.csv',
-                  'local_test_data/source.csv']
-    file_path = file_paths[-1] # Path to file to test
+                  'local_test_data/source.csv',
+                  'local_test_data/emmanuel_1/equipe.csv',
+                  'local_test_data/emmanuel_1/doctorale.csv',
+                  'local_test_data/emmanuel_1/laboratoire.csv']
+    file_path = file_paths[-3] # Path to file to test
     
     nrows = 100000 # How many lines of the file to read for inference
     encoding = 'utf-8' # Input encoding
