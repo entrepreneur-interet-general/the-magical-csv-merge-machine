@@ -966,13 +966,14 @@ class Field(object):
 				if lt not in PARENT_CHILD_RELS or len(PARENT_CHILD_RELS[lt] & set(lts[i + 1:])) < 1: return lt
 		return None
 	def normalizedFields(self, h, t):
-		return reduce(set.union, [set(cachedNormalization(c, t).keys()) for c in self.cells], set([h.value]))
+		# return reduce(set.union, [set(cachedNormalization(c, t).keys()) for c in self.cells], set([h.value]))
+		return reduce(set.union, [set(c.normalizedValues(t).keys()) for c in self.cells], set([h.value]))
 	def normalizedValues(self, h, t):
 		''' Casts this field with header h into type t and returns its values as a list of augmented
 			(field name, field value) dictionaries (not including the original field with its header). '''
 		for c in self.cells:
 			# Normalized/augmented fields
-			nc = cachedNormalization(c, t)
+			nc = c.normalizedValues(t) # cachedNormalization(c, t)
 			# Original field value
 			nc[h.value] = c.value
 			yield nc
@@ -1080,6 +1081,7 @@ def setAsListOrSingleton(v):
 
 def uniqueCellValue(vs):
 	em = defaultdict(set) # an equivalence map
+	if len(vs) == 1: return next(iter(vs))
 	for v in vs:
 		if v is None or len(v) < 1: continue
 		key = normalizeAndValidatePhrase(v)
@@ -1622,7 +1624,7 @@ def generateValueMatchers(lvl = 0):
 	# Date-time
 	if lvl >= 0: yield RegexMatcher(F_YEAR, "19[0-9]{2}")
 	if lvl >= 0: yield RegexMatcher(F_YEAR, "20[0-9]{2}")
-	if lvl >= 1: yield CustomDateMatcher()
+	if lvl >= 0: yield CustomDateMatcher()
 	yield SubtypeMatcher(F_DATE, [F_YEAR])
 	yield SubtypeMatcher(F_STRUCTURED_TYPE, [F_DATE, F_URL, F_EMAIL, F_PHONE])
 
@@ -1902,7 +1904,6 @@ if __name__ == '__main__':
 	for key in timingInfo:
 		logging.info('TIMING for {}: {} calls, cumulated {} ms'.format(key, countInfo[key], int(timingInfo[key] / 1000)))
 	# Output run info
-	print('fields.modifiedByColumn', fields.modifiedByColumn)
 	columnsReplaced = dict()
 	allFields = []
 	for (h, f) in fields.fields.items():
