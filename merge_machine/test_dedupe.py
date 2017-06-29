@@ -50,6 +50,9 @@ Created on Wed Apr  5 20:11:03 2017
   0.53041018387553041,
   0.557991513437058,
   0.4794908062234795]}
+ 
+Create trees
+ 
 """
 
 import json
@@ -69,7 +72,7 @@ def gen_dedupe_variable_definition(col_matches):
             {"ref": match['ref'][0], "source": match['source'][0]}, "type": "String"})
     return my_variable_definition
 
-project_id = '78246d462d500c1234903cc338c7c495'
+project_id = 'e2c5b874a3c9741d36f16d4bba612712'
 
 proj = UserLinker(project_id)
 
@@ -98,7 +101,7 @@ with open(proj.path_to('dedupe_linker', 'column_certain_matches.json')) as r:
 
 
 props = [x/10. for x in range(1,10)]
-props = [0.9, 0.6, 0.3]
+props = [0.9] #[0.9, 0.6, 0.3]
 match_sizes = []
 distinct_sizes = []
 recalls = {}
@@ -138,7 +141,7 @@ def main_link_test(proj, paths, prop, num_matches, num_distinct, i, column_certa
 
 
 n_jobs = 8
-num_tries = 1
+num_tries = 4
 
 for i in range(num_tries):
     for prop in props:
@@ -148,20 +151,17 @@ for i in range(num_tries):
         print('precision --> ', metrics['perc_precision'])
         
         import os
-        file_path = '/home/m75380/Documents/eig/the-magical-csv-merge-machine'\
-            '/merge_machine/local_test_data/test_results.json'
+        file_path = 'test_results_temp_can_delete.json'
         if os.path.isfile(file_path):
             with open(file_path, 'r') as f:
                 results = json.load(f)
                 if 'metrics' not in results:
                     results['metrics'] = []
-                if 'prop' not in results:
-                    results['prop'] = []
         else:
             results = dict()
             results['metrics'] = []
+            
         results['metrics'].append(metrics)
-        results['prop'].append(prop)
         
         with open(file_path, 'w') as w:
             json.dump(results, w)
