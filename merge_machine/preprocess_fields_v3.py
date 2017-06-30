@@ -1073,8 +1073,10 @@ class Cell(object):
 				else: res[ti.t].add(str(ti.hit))
 		nvs = dict()
 		for (k, v) in res.items():
-			ucv = uniqueCellValue(v)
-			if ucv is not None: nvs[k] = ucv
+			ucvs = uniqueCellValues(v)
+			for i, ucv in enumerate(filter(lambda ucv: ucv is not None and len(ucv) > 0, ucvs)):
+				if i == 0: nvs[k] = ucv
+				else: nvs['{}.{}'.format(k, i + 1)] = ucv
 		return nvs
 
 def setAsListOrSingleton(v):
@@ -1082,6 +1084,16 @@ def setAsListOrSingleton(v):
 	if len(s) < 1: return 0
 	l = list(s)
 	return l[0] if len(l) < 2 else l
+
+def uniqueCellValues(vs, maxListLength = 3):
+	''' Returns a unique value per cell, or None as appropriate. '''
+	em = defaultdict(set) # an equivalence map
+	for v in vs:
+		if v is None or len(v) < 1: continue
+		key = normalizeAndValidatePhrase(v)
+		if key is None: continue
+		em[mergerByTokenList(v)].add(v)
+	return list([selectBestValue(vs) for vs in em.values()])[:maxListLength]
 
 def uniqueCellValue(vs):
 	''' Returns a unique value per cell, or None as appropriate. '''
@@ -1389,7 +1401,7 @@ class CustomAddressMatcher(TypeMatcher):
 		if len(comps) > 0:
 			self.registerFullMatch(c, self.t, 100, ' '.join(comps))
 
-COMMUNE_LEXICON = fileToSet('commune')
+COMMUNE_LEXICON = fileToSet('commune2')
 
 class FrenchAddressMatcher(LabelMatcher):
 	def __init__(self):
@@ -1661,6 +1673,8 @@ def generateValueMatchers(lvl = 0):
 		yield LabelMatcher(F_ACADEMIE, fileToSet('academie'), MATCH_MODE_EXACT)    # SIES/APB
 	if lvl >= 0: 
 		yield VocabMatcher(F_ETAB, fileToSet('etablissement.vocab'), ignoreCase = True, partial = False)
+	if lvl >= 0: 
+		yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('etab_enssup.vocab'), ignoreCase = True, partial = False)
 	etabEnssupLexicon = fileToSet('etab_enssup')
 	if lvl >= 2: 
 		yield TokenizedMatcher(F_ETAB_ENSSUP, etabEnssupLexicon, MATCH_MODE_EXACT, maxTokens = 6)
@@ -1869,6 +1883,8 @@ def sample_types_ilocs(tab, params, sample_params):
 	row_idxs = idxs[:num_rows_to_display]
 	return row_idxs
 
+def outputFieldKey(of): return of.replace('++', '')
+
 ### Main method
 
 if __name__ == '__main__':
@@ -1893,13 +1909,13 @@ if __name__ == '__main__':
 	res = list()
 	for i in range(fields.entries): res.append(dict())
 	types = fields.inferTypes()
-	hofs = set()
+	hofs = list()
 	for (of, vs) in fields.normalizeValues(types):
-		hofs.add(of)
+		hofs.append(of)
 		for i, v in enumerate(vs):
 			res[i][of] = v
 	# Output normalization results
-	ofs = uniq(list(hofs))
+	ofs = sorted(uniq(hofs), key = outputFieldKey)
 	if outputFormat == 'md':
 		print('|{}|'.format('|'.join(ofs)))
 		print('|{}|'.format('|'.join('-' * len(ofs))))
