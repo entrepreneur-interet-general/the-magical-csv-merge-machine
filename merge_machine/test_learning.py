@@ -5,6 +5,7 @@ Created on Thu Jun 29 18:18:51 2017
 
 @author: leo
 """
+from future.utils import viewitems, viewvalues
 
 from collections import defaultdict, deque
 import functools
@@ -13,10 +14,11 @@ import os
 from string import punctuation
 import random
 import dedupe
-from dedupe import sampling
+from dedupe import blocking, predicates, sampling
 import numpy as np
 import pandas as pd
 import unidecode
+
 
 def pd_pre_process(series, remove_punctuation=False):
     '''Applies pre-processing to series using builtin pandas.str'''
@@ -42,22 +44,22 @@ def sort_pair(a, b) :
     else :
         return (a, b)
 
-def blockedSample(sampler, sample_size, predicates, *args) :
+def blockedSample(sampler, sample_size, my_predicates, *args) :
     
     blocked_sample = set()
     remaining_sample = sample_size - len(blocked_sample)
     previous_sample_size = 0
 
-    while remaining_sample and predicates :
-        random.shuffle(predicates)
+    while remaining_sample and my_predicates :
+        random.shuffle(my_predicates)
 
-        new_sample = sampler(remaining_sample, 
-                             predicates,
+        new_sample = sampler(remaining_sample, # change here
+                             my_predicates,
                              *args)
 
-        filtered_sample = (subsample for subsample 
+        filtered_sample = ([(predicate, pair) for pair in subsample] for (predicate, subsample) 
                            in new_sample if subsample)
-
+        
         blocked_sample.update(itertools.chain.from_iterable(filtered_sample))
 
         growth = len(blocked_sample) - previous_sample_size
@@ -71,10 +73,9 @@ def blockedSample(sampler, sample_size, predicates, *args) :
                           "but only able to sample %s"
                           % (sample_size, len(blocked_sample)))
             break
-
-            
-        predicates = [pred for pred, pred_sample 
-                      in zip(predicates, new_sample)
+        
+        my_predicates = [pred for pred, pred_sample 
+                      in zip(my_predicates, new_sample)
                       if pred_sample or pred_sample is None]
         
     return blocked_sample
@@ -140,19 +141,19 @@ def evenSplits(total_size, num_splits) :
         split += avg - int(split)
         yield int(split)
 
-def subsample(total_size, predicates) :
-    splits = evenSplits(total_size, len(predicates))
-    for split, predicate in zip(splits, predicates) :
+def subsample(total_size, my_predicates) :
+    splits = evenSplits(total_size, len(my_predicates))
+    for split, predicate in zip(splits, my_predicates) :
         yield split, predicate
 
-def linkSamplePredicates(sample_size, predicates, items1, items2) :
+def linkSamplePredicates(sample_size, my_predicates, items1, items2) :
     n_1 = len(items1)
     n_2 = len(items2)
 
-    for subsample_size, predicate in subsample(sample_size, predicates) :
+    for subsample_size, predicate in subsample(sample_size, my_predicates) :
         
         if not subsample_size :
-            yield None
+            yield predicate, None # change here
             continue
 
         try:
@@ -168,12 +169,12 @@ def linkSamplePredicates(sample_size, predicates, items1, items2) :
             items1 = deque(reversed(items1))
             items2 = deque(reversed(items2))
 
-        yield linkSamplePredicate(subsample_size, predicate, items1, items2)
+        yield predicate, linkSamplePredicate(subsample_size, predicate, items1, items2) # change here
 
 linkBlockedSample = functools.partial(blockedSample, linkSamplePredicates) 
 
 
-dir_path = '/home/leo/Documents/eig/the-magical-csv-merge-machine/merge_machine/local_test_data'
+dir_path = 'local_test_data'
 
 source = pd.read_csv(os.path.join(dir_path, 'source.csv'), dtype=str)
 ref = pd.read_csv(os.path.join(dir_path, 'ref.csv'), dtype=str)
@@ -197,7 +198,7 @@ fields = [{'crf': True, 'missing_values': True, 'type': 'String', 'field': x} fo
 
 
 for match in match_cols:
-    source[match['source']] = pd_pre_process(source[match['ref']], remove_punctuation=True)
+    source[match['ref']] = pd_pre_process(source[match['ref']], remove_punctuation=True)
     ref[match['ref']] = pd_pre_process(ref[match['ref']], remove_punctuation=True)
 
 # Replace np.nan 's by None 's
@@ -211,17 +212,105 @@ deque_1 = sampling.randomDeque(source_items)
 deque_2 = sampling.randomDeque(ref_items)
 
 datamodel = dedupe.datamodel.DataModel(fields)
-predicates = list(datamodel.predicates(False, False))
+my_predicates = list(datamodel.predicates(index_predicates=True, canopies=True))
 
 blocked_sample_keys = linkBlockedSample(5000,
-                                         predicates,
+                                         my_predicates,
                                          deque_1,
                                          deque_2)
 
 
 
+#candidates = [(source[k1], ref[k2])
+#               for k1, k2
+#               in blocked_sample_keys | random_sample_keys]
+
+candidates = [(source_items[k1], ref_items[k2])
+               for predicate, (k1, k2)
+               in blocked_sample_keys]
 
 
 
+def cover(blocker, pairs, compound_length) : # pragma: no cover
+    cover = coveredPairs(blocker.predicates, pairs)
+    cover = compound(cover, compound_length)
+    cover = remaining_cover(cover)
+    return cover
+
+def coveredPairs(my_predicates, pairs) :
+    cover = {}
+        
+    for predicate in my_predicates :
+        cover[predicate] = {i for i, (record_1, record_2)
+                            in enumerate(pairs)
+                            if (set(predicate(record_1)) &
+                                set(predicate(record_2)))}
+    return cover
+
+def compound(cover, compound_length) :
+    simple_predicates = sorted(cover, key=str)
+    CP = predicates.CompoundPredicate
+
+    for i in range(2, compound_length+1) :
+        compound_predicates = itertools.combinations(simple_predicates, i)
+                                                             
+        for compound_predicate in compound_predicates :
+            a, b = compound_predicate[:-1], compound_predicate[-1]
+            if len(a) == 1 :
+                a = a[0]
+
+            if a in cover:
+                compound_cover = cover[a] & cover[b]
+                if compound_cover:
+                    cover[CP(compound_predicate)] = compound_cover
+
+    return cover
+
+def remaining_cover(coverage, covered=set()):
+    remaining = {}
+    for predicate, uncovered in viewitems(coverage):
+        still_uncovered = uncovered - covered
+        if still_uncovered:
+            if still_uncovered == uncovered:
+                remaining[predicate] = uncovered
+            else:
+                remaining[predicate] = still_uncovered
+
+    return remaining
+
+def unroll(matches) : # pragma: no cover
+    return unique((record for pair in matches for record in pair))
+
+def unique(seq):
+    """Return the unique elements of a collection even if those elements are
+       unhashable and unsortable, like dicts and sets"""
+    cleaned = []
+    for each in seq:
+        if each not in cleaned:
+            cleaned.append(each)
+    return cleaned
 
 
+compound_length = 1
+
+blocker = blocking.Blocker(my_predicates)
+
+blocker.indexAll({i : record
+                       for i, record
+                       in enumerate(unroll(candidates))})
+    
+dupe_cover = cover(blocker, candidates, compound_length)
+
+dupe_cover_count = {key: len(predicates) for key, predicates in dupe_cover.items()}
+
+inv_dupe_cover = defaultdict(set)
+for key, matches in dupe_cover.items():
+    for match_id in matches:
+        inv_dupe_cover[match_id].add(key)
+
+inv_dupe_cover_count = {key: len(predicates) for key, predicates in inv_dupe_cover.items()}
+set(my_predicates) - set(dupe_cover.keys())
+
+import re
+
+word_count = pd.Series(re.findall(r"[\w']+", source.full_name.str.lower().str.cat(sep=' '))).value_counts()
