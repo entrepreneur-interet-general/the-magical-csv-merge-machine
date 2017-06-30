@@ -623,7 +623,7 @@ class LabelMatcher(TypeMatcher):
 				i.e. specific entities, as opposed to a qualified and/or controlled vocabulary. '''
 		super(LabelMatcher, self).__init__(t)
 		self.mm = mm
-		labelsMap = validatedLexiconMap(lexicon) # dictionary from normalized string to list of original strings
+		labelsMap = validatedLexiconMap(lexicon, True) # dictionary from normalized string to list of original strings
 		self.labelsMap = labelsMap
 		if mm == MATCH_MODE_EXACT:
 			logging.info('SET UP exact label matcher for <%s>: lexicon of size %d', self.t, len(labelsMap))
@@ -1071,7 +1071,11 @@ class Cell(object):
 			for ti in self.tis[t]:
 				if isinstance(ti.hit, list): res[ti.t] |= set(ti.hit)
 				else: res[ti.t].add(str(ti.hit))
-		return { k: uniqueCellValue(v) for (k, v) in res.items() }
+		nvs = dict()
+		for (k, v) in res.items():
+			ucv = uniqueCellValue(v)
+			if ucv is not None: nvs[k] = ucv
+		return nvs
 
 def setAsListOrSingleton(v):
 	s = set(v)
@@ -1080,6 +1084,7 @@ def setAsListOrSingleton(v):
 	return l[0] if len(l) < 2 else l
 
 def uniqueCellValue(vs):
+	''' Returns a unique value per cell, or None as appropriate. '''
 	em = defaultdict(set) # an equivalence map
 	if len(vs) == 1: return next(iter(vs))
 	for v in vs:
@@ -1374,7 +1379,7 @@ class CustomAddressMatcher(TypeMatcher):
 				if len(superStr) != len(subStr):
 					superStr = v
 					subStr = value
-				span = ncsub(superStr, subStr) # i1 = superStr.find(subStr)
+				span = ncsub(superStr, subStr)
 				if span is None:
 					logging.warning('%s could not find substring "%s" in original "%s"', self, subStr, superStr)
 				else:
@@ -1519,9 +1524,6 @@ class VariantExpander(TypeMatcher):
 # Misc utilities related to value normalization
 
 def convertCodes(s):
-	# for cc in ["-–", "’'"]:
-	#     s = s.replace(cc[0], cc[1])
-	# return s
 	return reduce(lambda r, c: r.replace(c[0], c[1]), ["-–", "’'"], s)
 def ncsub(superStr, subStr):
 	'''Checks if b is a non-consecutive subsequence of a, and returns the start and end indexes in a. '''
@@ -1624,7 +1626,7 @@ def generateValueMatchers(lvl = 0):
 	# Date-time
 	if lvl >= 0: yield RegexMatcher(F_YEAR, "19[0-9]{2}")
 	if lvl >= 0: yield RegexMatcher(F_YEAR, "20[0-9]{2}")
-	if lvl >= 0: yield CustomDateMatcher()
+	if lvl >= 1: yield CustomDateMatcher()
 	yield SubtypeMatcher(F_DATE, [F_YEAR])
 	yield SubtypeMatcher(F_STRUCTURED_TYPE, [F_DATE, F_URL, F_EMAIL, F_PHONE])
 
@@ -1657,28 +1659,38 @@ def generateValueMatchers(lvl = 0):
 	if lvl >= 0:
 		yield RegexMatcher(F_ACADEMIE, "acad.mie", ignoreCase = True)
 		yield LabelMatcher(F_ACADEMIE, fileToSet('academie'), MATCH_MODE_EXACT)    # SIES/APB
-	if lvl >= 0: yield VocabMatcher(F_ETAB, fileToSet('etablissement.vocab'), ignoreCase = True, partial = False)
-	# yield TokenizedMatcher(F_ETAB, fileToSet('etablissement'),
-	#     maxTokens = 2)
-	if lvl >= 0: yield LabelMatcher(F_ETAB_ENSSUP, fileToSet('etab_enssup'), MATCH_MODE_EXACT)
+	if lvl >= 0: 
+		yield VocabMatcher(F_ETAB, fileToSet('etablissement.vocab'), ignoreCase = True, partial = False)
+	etabEnssupLexicon = fileToSet('etab_enssup')
+	if lvl >= 2: 
+		yield TokenizedMatcher(F_ETAB_ENSSUP, etabEnssupLexicon, MATCH_MODE_EXACT, maxTokens = 6)
+	elif lvl >= 0: 
+		yield LabelMatcher(F_ETAB_ENSSUP, etabEnssupLexicon, MATCH_MODE_EXACT)
 	yield SubtypeMatcher(F_ETAB, [F_ETAB_ENSSUP])
-	if lvl >= 1: yield LabelMatcher(F_APB_MENTION, fileToSet('mention_licence_sise'), MATCH_MODE_EXACT)
-	if lvl >= 2: yield TokenizedMatcher(F_APB_MENTION, fileToSet('mention_licence_apb2017.col'),
-		maxTokens = 5)
-	if lvl >= 2: yield TokenizedMatcher(F_RD_DOMAIN, fileToSet('domaine_recherche.col'),
-		maxTokens = 4)
+	if lvl >= 1: 
+		yield LabelMatcher(F_APB_MENTION, fileToSet('mention_licence_sise'), MATCH_MODE_EXACT)
+	if lvl >= 2: 
+		yield TokenizedMatcher(F_APB_MENTION, fileToSet('mention_licence_apb2017.col'), maxTokens = 5)
+	if lvl >= 2: 
+		yield TokenizedMatcher(F_RD_DOMAIN, fileToSet('domaine_recherche.col'), maxTokens = 4)
 	# yield CategoryMatcher(F_RD_DOMAIN, 'publi')
 	yield SubtypeMatcher(F_MESR, [F_RD, F_APB_MENTION, F_RD_DOMAIN])
 
 	# Geo Domain
-	# yield FrenchAddressMatcher()
-	if lvl >= 2: yield CustomAddressMatcher()
-	if lvl >= 0: yield RegexMatcher(F_ZIP, "[0-9]{5}")
-	if lvl >= 0: yield LabelMatcher(F_COUNTRY, fileToSet('country'), MATCH_MODE_EXACT)
+	# if lvl >= 2: 
+	# 	yield FrenchAddressMatcher()
+	if lvl >= 2: 
+		yield CustomAddressMatcher()
+	if lvl >= 0: 
+		yield RegexMatcher(F_ZIP, "[0-9]{5}")
+	if lvl >= 0: 
+		yield LabelMatcher(F_COUNTRY, fileToSet('country'), MATCH_MODE_EXACT)
 
-	yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT) # MATCH_MODE_CLOSE too imprecise
-	# yield TokenizedMatcher(F_CITY, COMMUNE_LEXICON, maxTokens = 3)
-	if lvl >= 0: yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
+	if lvl >= 2: 
+		yield TokenizedMatcher(F_CITY, COMMUNE_LEXICON, maxTokens = 3)
+	elif lvl >= 0: 
+		yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT) # MATCH_MODE_CLOSE too imprecise
+		yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
 
 	if lvl >= 2:
 		yield TokenizedMatcher(F_DPT, fileToSet('departement'), distinctCount = 7)
@@ -1690,16 +1702,18 @@ def generateValueMatchers(lvl = 0):
 	# Publications
 	# From http://stackoverflow.com/questions/27910/finding-a-doi-in-a-document-or-page
 	PAT_DOI = '\b(10[.][0-9]{4,}(?:[.][0-9]+)*/(?:(?!["&\'<>])\S)+)\b'
-	if lvl >= 0: yield RegexMatcher(F_DOI, PAT_DOI)
+	if lvl >= 0: 
+		yield RegexMatcher(F_DOI, PAT_DOI)
 	PAT_ISSN = '\d{4}-\d{3}[\dxX]$'
-	if lvl >= 0: yield RegexMatcher(F_ISSN, PAT_ISSN)
+	if lvl >= 0: 
+		yield RegexMatcher(F_ISSN, PAT_ISSN)
 	 # TODO see if we should add IdRef
 	yield SubtypeMatcher(F_PUBLI_ID, [F_DOI, F_ISSN])
 	if lvl >= 0:
 		pubTitleLexicon = fileToSet('titre_revue')
 		yield LabelMatcher(F_JOURNAL, pubTitleLexicon, MATCH_MODE_EXACT)
-	if lvl >= 2: yield TokenizedMatcher(F_JOURNAL, pubTitleLexicon,
-		maxTokens = 5, scorer = partial(tokenScorer, minSrcTokenRatio = 90))
+	if lvl >= 2: 
+		yield TokenizedMatcher(F_JOURNAL, pubTitleLexicon, maxTokens = 5, scorer = partial(tokenScorer, minSrcTokenRatio = 90))
 	if lvl >= 2:
 		articleLexicon = fileToSet('article_fr') | fileToSet('article_en')
 		yield TokenizedMatcher(F_ARTICLE, articleLexicon)
@@ -1739,8 +1753,9 @@ def generateValueMatchers(lvl = 0):
 		yield VocabMatcher(F_ENTREPRISE, fileToSet('org_entreprise.vocab'), ignoreCase = True, partial = False)
 		yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('org_enseignement.vocab'), ignoreCase = True, partial = False)
 
-	# Spot acronyms on-the-fly
-	if lvl >= 1: yield AcronymMatcher()
+	# Spot acrnyms on-the-fly
+	if lvl >= 1: 
+		yield AcronymMatcher()
 
 	# Normalize by expanding alternative variants (such as acronyms, abbreviations and synonyms) to their main variant
 	if lvl >= 2:
