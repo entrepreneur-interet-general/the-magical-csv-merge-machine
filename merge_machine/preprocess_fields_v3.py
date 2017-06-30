@@ -1401,7 +1401,7 @@ class CustomAddressMatcher(TypeMatcher):
 		if len(comps) > 0:
 			self.registerFullMatch(c, self.t, 100, ' '.join(comps))
 
-COMMUNE_LEXICON = fileToSet('commune')
+COMMUNE_LEXICON = fileToSet('commune2')
 
 class FrenchAddressMatcher(LabelMatcher):
 	def __init__(self):
@@ -1673,6 +1673,8 @@ def generateValueMatchers(lvl = 0):
 		yield LabelMatcher(F_ACADEMIE, fileToSet('academie'), MATCH_MODE_EXACT)    # SIES/APB
 	if lvl >= 0: 
 		yield VocabMatcher(F_ETAB, fileToSet('etablissement.vocab'), ignoreCase = True, partial = False)
+	if lvl >= 0: 
+		yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('etab_enssup.vocab'), ignoreCase = True, partial = False)
 	etabEnssupLexicon = fileToSet('etab_enssup')
 	if lvl >= 2: 
 		yield TokenizedMatcher(F_ETAB_ENSSUP, etabEnssupLexicon, MATCH_MODE_EXACT, maxTokens = 6)
