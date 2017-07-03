@@ -33,6 +33,8 @@ import unidecode
 
 # variable_definition: see here: https://dedupe.readthedocs.io/en/latest/Variable-definition.html
 
+SAMPLE_SIZE = 5000
+NUM_CORES = 4
 NO_TRAINING_MESSAGE = 'No training file could be found. Use the interface (XXX)' \
                       ', specify a matching ID to generate train (YYY), or ' \
                       'upload a training file using (ZZZ)'
@@ -96,7 +98,7 @@ def exact_matches(data_1, data_2, match_fields):
     return nonexact_1, nonexact_2, exact_pairs
 
 
-def merge_results(ref, source, matched_records):
+def merge_link_results(ref, source, matched_records):
     '''
     Takes the output of of matched records and merges the ref and source files.
     The output is of the same shape as the input source.
@@ -127,9 +129,26 @@ def merge_results(ref, source, matched_records):
     
     for col in ['__SOURCE_IDX', '__REF_IDX']:
         source.drop(col, inplace=True, axis=1)
-
+        
     return source
 
+def merge_dedupe_results(source, matched_records):
+
+
+    source_idx = [y for x in matched_records for y in x[0]]
+    confidence = [y for x in matched_records for y in x[1]]
+    group_id = [i for i, x in enumerate(matched_records) for y in x[0]]
+    matched_records_df = pd.DataFrame(list(zip(source_idx, group_id, confidence)), 
+                            columns = ['__SOURCE_IDX', '__GROUP_ID', '__CONFIDENCE'])
+
+    source = source.merge(matched_records_df, left_index=True, 
+                          right_on='__SOURCE_IDX', how='left')
+    
+    source.drop('__SOURCE_IDX', inplace=True, axis=1)
+
+    source.__GROUP_ID.fillna(-1, inplace=True) # TODO: is this the best solution ?
+    return source
+    
 def get_cols_for_match(my_variable_definition):
     cols_for_match = [var['field']['ref'] for var in my_variable_definition]
     return cols_for_match
@@ -164,11 +183,9 @@ def format_for_dedupe(tab, my_variable_definition, file_role):
     return data
 
 
-def current_load_deduper(data_ref, data_source, my_variable_definition):# 
+def current_load_gazetteer(data_ref, data_source, my_variable_definition):# 
                          #og_len_ref, og_len_source):
     '''Load the dedupe object; TODO: duplicate with code in main dedupe'''
-    
-    SAMPLE_SIZE = 5000
     
     # Get columns for match and change to standard dedupe variable definition
     cols_for_match = get_cols_for_match(my_variable_definition)
@@ -180,53 +197,48 @@ def current_load_deduper(data_ref, data_source, my_variable_definition):#
      nonexact_2,
      exact_pairs) = exact_matches(data_ref, data_source, cols_for_match)
 
-    num_cores = 4 # Fix num cores
     gazetteer = dedupe.Gazetteer(variable_definition=variable_definition, 
-                                 num_cores=num_cores)
+                                 num_cores=NUM_CORES)
 
-    
+    # TODO: take care of original_length   
     gazetteer.sample(data_1=nonexact_1, data_2=nonexact_2, 
-                     sample_size=SAMPLE_SIZE# ,
-#                     original_length_1=og_len_ref,
-#                     original_length_2=og_len_source
+                     sample_size=SAMPLE_SIZE, 
+                     original_length_1=None,
+                     original_length_2=None
                      )
-    
     return gazetteer
 
 
+def current_load_deduper(data_source, my_variable_definition):# 
+                         #og_len_ref, og_len_source):
+    '''Load the dedupe object; TODO: duplicate with code in main dedupe'''
+    
+    # Get columns for match and change to standard dedupe variable definition
+    variable_definition = copy.deepcopy(my_variable_definition)
+    for var in variable_definition:
+        var['field'] = var['field']['ref']    
+    
+    deduper = dedupe.Dedupe(variable_definition=variable_definition, 
+                                 num_cores=NUM_CORES)
 
-def main_dedupe(data_ref, 
+    # TODO: look at original length
+    deduper.sample(data_source, sample_size=SAMPLE_SIZE, original_length=None)
+    return deduper
+
+
+def main_gazetteer(data_ref, 
                 data_source, 
                 my_variable_definition, 
                 train_path, 
                 learned_settings_path):
     '''Computes matches between records'''
-    
-    
-    SAMPLE_SIZE = 5000
-    
-    # Get columns for match and change to standard dedupe variable definition
-    cols_for_match = get_cols_for_match(my_variable_definition)
-    variable_definition = copy.deepcopy(my_variable_definition)
-    for var in variable_definition:
-        var['field'] = var['field']['ref']    
-    
-    (nonexact_1,
-     nonexact_2,
-     exact_pairs) = exact_matches(data_ref, data_source, cols_for_match)
 
-    num_cores = 4
-    gazetteer = dedupe.Gazetteer(variable_definition=variable_definition, 
-                                 num_cores=num_cores)    
 
-    
+    gazetteer = current_load_gazetteer(data_ref, data_source, my_variable_definition)
+
     # Read training
     use_training_cache = True
-    try:
-        # Replace with this in future version
-        #if not os.path.isfile(train_path):
-        #    raise Exception(NO_TRAINING_MESSAGE)
-        
+    try:        
         if use_training_cache and os.path.isfile(train_path):
             with open(train_path) as f:
                 gazetteer.readTraining(f)
@@ -247,12 +259,9 @@ def main_dedupe(data_ref,
      
     # Train on labelled data
     # TODO: Load train data
-    all_predicates = []
-    gazetteer.sample(data_1=nonexact_1, data_2=nonexact_2, sample_size=SAMPLE_SIZE)
     gazetteer.train(recall=0.95, index_predicates=True) # TODO: look into memory usage of index_predicates
     #all_predicates.extend(list(gazetteer.predicates))
     
-    import dedupe.blocking as blocking
     #gazetteer.blocker = blocking.Blocker(all_predicates)
     #gazetteer.predicates = tuple(all_predicates)
         #all_predicates.extend(gazetteer.predicates)
@@ -276,8 +285,58 @@ def main_dedupe(data_ref,
     return matched_records, threshold
     
 
+def main_deduper(data_source, 
+                my_variable_definition, 
+                train_path, 
+                learned_settings_path):
+    '''Finds dupes in file'''
+
+
+    deduper = current_load_deduper(data_source, my_variable_definition)
+
+    # Read training
+    use_training_cache = True
+    try:        
+        if use_training_cache and os.path.isfile(train_path):
+            with open(train_path) as f:
+                deduper.readTraining(f)
+    except:
+        print('Unable to load training data...')
+        pass
+    
+    # Add examples through manual labelling
+    # TODO: remove this when we can train in interface
+    manual_labelling = False
+    if manual_labelling:
+        dedupe.consoleLabel(deduper)
+        
+        # Write training
+        with open(train_path, 'w') as w:
+            deduper.writeTraining(w)
+     
+    # Train on labelled data
+    # TODO: Load train data
+    deduper.train(recall=0.95, index_predicates=True) # TODO: look into memory usage of index_predicates
+    #all_predicates.extend(list(gazetteer.predicates))
+    
+    #gazetteer.blocker = blocking.Blocker(all_predicates)
+    #gazetteer.predicates = tuple(all_predicates)
+        #all_predicates.extend(gazetteer.predicates)
+
+    # Write settings    
+    with open(learned_settings_path, 'wb') as f: # TODO: replaced 'wb' by 'w'
+        deduper.writeSettings(f, index=False)    
+    
+    # Compute threshold
+    recall_weight = 2.5
+    threshold = deduper.threshold(data_source, recall_weight=recall_weight)
+    print('Threshold', threshold)
+
+    matched_records = deduper.match(data_source, threshold=threshold)
+    return matched_records, threshold
+
+
 # TODO: use trainingDataLink for automatic labelling when a common key is available
- 
 def dedupe_linker(paths, params):
     '''
     Takes as inputs file paths and returnes the merge table as a pandas DataFrame
@@ -309,7 +368,7 @@ def dedupe_linker(paths, params):
     del source
     gc.collect()
     
-    matched_records, threshold = main_dedupe(data_ref, 
+    matched_records, threshold = main_gazetteer(data_ref, 
                                              data_source, 
                                              my_variable_definition, 
                                              train_path,
@@ -319,19 +378,52 @@ def dedupe_linker(paths, params):
     source = pd.read_csv(source_path, encoding='utf-8', dtype=str)
     
     # Generate out file
-    source = merge_results(ref, source, matched_records)
-    
-    # Add  results of manual labelling
-    #    if add_labels:
-    #        labels = json.load(open(train_path))
-    #        
-    #        import pdb
-    #        pdb.set_trace()
+    source = merge_link_results(ref, source, matched_records)
     
     # Run info
     run_info = {'threshold': threshold}
     
     return source, run_info
+
+
+def dedupe_deduper(paths, params):
+    '''
+    Takes as inputs file paths and returns the merge table as a pandas DataFrame
+    
+    Sample arguments:
+    
+    paths={'source': 'path_to_source',
+           'train': 'path_to_training_file',
+           'learned_settings': 'path_to_learned_settings'}
+    params={'variable_definition': dict_of_variable_definitions TODO: add this,
+            'selected_columns_from_ref': unknown: TODO: add this}
+    '''
+    source_path = paths['source']    
+    train_path = paths['train']   
+    learned_settings_path = paths['learned_settings']
+    my_variable_definition = params['variable_definition']
+    
+    # Put to dedupe input format
+    source = pd.read_csv(source_path, encoding='utf-8', dtype=str)
+    data_source = format_for_dedupe(source, my_variable_definition, 'source')
+    del source
+    gc.collect()
+    
+    matched_records, threshold = main_deduper(data_source, 
+                                             my_variable_definition, 
+                                             train_path,
+                                             learned_settings_path)
+    
+    source = pd.read_csv(source_path, encoding='utf-8', dtype=str)
+    
+    # Generate out file
+    source = merge_dedupe_results(source, matched_records)
+    
+    # Run info
+    run_info = {'threshold': threshold}
+    
+    return source, run_info
+
 
 
 if __name__ == '__main__':    

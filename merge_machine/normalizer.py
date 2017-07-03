@@ -14,7 +14,7 @@ import pandas as pd
 import unidecode
 from werkzeug.utils import secure_filename
 
-from abstract_data_project import AbstractDataProject
+from abstract_data_project import AbstractDataProject, MINI_PREFIX
 from CONFIG import NORMALIZE_DATA_PATH
 from MODULES import MODULES, NORMALIZE_MODULE_ORDER, NORMALIZE_MODULE_ORDER_log # TODO: think about these...
 
@@ -399,7 +399,8 @@ class Normalizer(AbstractDataProject):
                           
         # Add time to run_info (# TODO: is this the best way?)
         run_info['start_timestamp'] = log['start_timestamp']
-        run_info['end_timestamp'] = log['end_timestamp']        
+        run_info['end_timestamp'] = log['end_timestamp']
+        run_info['params'] = {}
         
         # Update buffers
         self.log_buffer.append(log)
@@ -422,10 +423,13 @@ class Normalizer(AbstractDataProject):
             for module_name in NORMALIZE_MODULE_ORDER:
                 if MODULES['transform'][module_name].get('use_in_full_run', False):
                     try:
-                        params = self.read_config_data(module_name, 'run_info.json')['params']
+                        run_info_name = MINI_PREFIX + self.mem_data_info['file_name'] + '__run_info.json'
+                        params = self.read_config_data(module_name, run_info_name)['params']
                         # Load parameters from config files
                         self.transform(module_name, params)
                     except:
+                        import pdb
+                        pdb.set_trace()
                         print('WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
                         # TODO: warning here
         return
