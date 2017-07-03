@@ -37,7 +37,7 @@ MODULES = {
                            },
                     'concat_with_init': {
                                'desc': 'Merge intial and transformed files (cannot be called)',
-                               'use_in_full_run': False
+                               'use_in_full_run': True
                            }
                     },
         'infer':{
