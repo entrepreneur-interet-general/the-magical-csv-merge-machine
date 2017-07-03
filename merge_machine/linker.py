@@ -34,7 +34,29 @@ class Linker(AbstractDataProject):
             and (self.metadata['current']['ref'] is not None):
             self.load_project_to_merge('source')
             self.load_project_to_merge('ref')
-         
+        
+    def __repr__(self): 
+        string = '{0}; project_id:{1}'.format(self.__class__.__name__, self.project_id)
+        
+        string += ' / source: '
+        if self.source is not None:
+             string += self.source.__repr__()
+        else:
+            string += 'None'
+            
+        string += ' / ref: '
+        if self.ref is not None:
+            string += self.ref.__repr__()
+        return string
+    
+    def __str__(self):
+        string = '{0}; project_id:{1}'.format(self.__class__.__name__, self.project_id)
+        if self.source is not None:
+            string += '\n\n***SOURCE***\n{0}'.format(self.source.__str__())
+        if self.ref is not None:
+            string += '\n\n***REF***\n{0}'.format(self.ref.__str__())   
+        return string
+    
     def load_project_to_merge(self, file_role):
         '''Uses the "current" field in metadata to load source or ref'''        
         self.check_file_role(file_role)

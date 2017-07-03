@@ -52,6 +52,23 @@ class Normalizer(AbstractDataProject):
         metadata['log'] = {}
         return metadata   
     
+    def __repr__(self):
+        string = '{0}; project_id:{1}'.format(self.__class__.__name__, self.project_id)
+        return string
+    
+    def __str__(self):
+        string = self.__repr__()
+        for file_name, logs in self.metadata['log'].items():
+            completed = []
+            not_completed = []
+            for module_name, log in logs.items():
+                if log['completed']:
+                    completed.append(module_name)
+                else:
+                    not_completed.append(module_name)
+            string += '\n\nFile {0}:\n  Completed:\n  {1}\n  Not completed:\n  {2}'.format(file_name, completed, not_completed)                    
+        return string
+
     @staticmethod
     def default_log():
         '''Default log for a (module_name, file_name) tuple if module was never run'''
