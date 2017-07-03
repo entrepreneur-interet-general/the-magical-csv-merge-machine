@@ -44,7 +44,18 @@ def find_common_words(ref_match, cols=None):
     for col in cols:
         all_candidate_words[col] = find_common_words_in_col(ref_match, col)
     return all_candidate_words
-       
+   
+def find_common_words_in_col(ref_match, col):
+    """
+    Finds words that are present in all values of the column specified by col.
+    """
+    all_words = pd.Series(ref_match[col].str.cat(sep=' ').split()).value_counts()
+    sel = all_words >= len(ref_match)
+    common_words = []
+    for word in all_words[sel].index:
+        if ref_match[col].str.contains(word).all():
+            common_words.append(word)
+    return common_words    
 
 def find_common_vals(ref_match, cols=None):
     """
@@ -70,19 +81,6 @@ def find_common_vals(ref_match, cols=None):
         else:
             all_candidate_values[col] = None
     return all_candidate_values
-
-
-def find_common_words_in_col(ref_match, col):
-    """
-    Finds words that are present in all values of the column specified by col.
-    """
-    all_words = pd.Series(ref_match[col].str.cat(sep=' ').split()).value_counts()
-    sel = all_words >= len(ref_match)
-    common_words = []
-    for word in all_words[sel].index:
-        if ref_match[col].str.contains(word).all():
-            common_words.append(word)
-    return common_words
 
 
 def filter_by_words(ref, col_words):
@@ -128,3 +126,17 @@ def filter_by_vals(ref, col_vals):
 # Project specific module
 #==============================================================================
 
+
+if __name__ == '__main__':
+    
+    
+    project_id = '78246d462d500c1234903cc338c7c495'
+    
+    from linker import UserLinker
+    
+    proj = UserLinker(project_id)
+    
+    
+    training = proj.read_config_data('dedupe_linker', 'training.json')
+    
+    training_df = pd.DataFrame()
