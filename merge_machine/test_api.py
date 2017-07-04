@@ -443,10 +443,10 @@ if __name__ == '__main__':
     #==============================================================================
     # Delete projects   
     #==============================================================================
-    for (_type, _id) in [('normalize', source_project_id), 
+    for (type_, id_) in [('normalize', source_project_id), 
                          ('normalize', ref_project_id), 
                          ('link', link_project_id)]:
-        url_to_append = '/api/delete/{0}/{1}'.format(_type, _id)
+        url_to_append = '/api/delete/{0}/{1}'.format(type_, id_)
         resp = get_resp(url_to_append)
 
     #==============================================================================

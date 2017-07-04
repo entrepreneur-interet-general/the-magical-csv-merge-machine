@@ -65,11 +65,10 @@ class Admin():
 if __name__ == '__main__':
     admin = Admin()
     
-    _id = '8b3fbab040534afae137e2ae124ce152'
+    id_ = '8b3fbab040534afae137e2ae124ce152'
     
-    for _id in admin.list_projects():
-        #admin.remove_project(_id)
-        proj = UserProject(_id)
+    for id_ in admin.list_projects():
+        proj = UserNormalizer(id_)
         print(proj.project_id, proj.time_since_last_action())
         print(proj.list_csvs())
             

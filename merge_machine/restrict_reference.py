@@ -42,10 +42,10 @@ def find_common_words(ref_match, cols=None):
     
     all_candidate_words = dict()
     for col in cols:
-        all_candidate_words[col] = find_common_words_in_col(ref_match, col)
+        all_candidate_words[col] = _find_common_words_in_col(ref_match, col)
     return all_candidate_words
    
-def find_common_words_in_col(ref_match, col):
+def _find_common_words_in_col(ref_match, col):
     """
     Finds words that are present in all values of the column specified by col.
     """
@@ -93,12 +93,20 @@ def filter_by_words(ref, col_words):
                     output of find_common_words). Specifies the words to look 
                     for in each column (to keep).
     OUTPUT:
-        -ref: table filtered by words to keep for each column
+        - ref: table filtered by words to keep for each column
+        - run_info: original table length and new length
     """
+    
+    run_info = {'og_len': len(ref)}
+    run_info['has_modifications'] = False
+    
     for col, words in col_words.iteritems():
         for word in words:
             ref = ref[ref[col].str.contains(word)]
-    return ref
+            run_info['has_modifications'] = True            
+            
+    run_info['new_len'] = len(ref)
+    return ref, run_info
 
 
 def filter_by_vals(ref, col_vals):
@@ -111,32 +119,39 @@ def filter_by_vals(ref, col_vals):
                     output of find_common_vals). Specifies the value to look 
                     for in each column (to keep).
     OUTPUT:
-        -ref: table filtered by words to keep for each column
+        - ref: table filtered by words to keep for each column
+        - run_info: original table length and new length
     """
     run_info = {'og_len': len(ref)}
+    run_info['has_modifications'] = False
     
     for col, val in col_vals.iteritems():
         if val is not None:
             ref = ref[ref[col] == val]
+            run_info['has_modifications'] = True 
             
-    run_info['new_len'] = "NOT_YET_IMPLEMENTED"
-    return ref
+    run_info['new_len'] = len(ref)
+    return ref, run_info
 
 #==============================================================================
 # Project specific module
 #==============================================================================
 
+def training_to_ref_df(training):
+    '''
+    Takes as input a dedupe training file and returns a pandas DataFrame with
+    the data corresponding to match samples in the referential.
+    '''
+    training_df = pd.DataFrame([x['__value__'][1] for x in training['match']])
+    return training_df
 
 if __name__ == '__main__':
-    
-    
-    project_id = '78246d462d500c1234903cc338c7c495'
-    
     from linker import UserLinker
     
-    proj = UserLinker(project_id)
+    project_id = '78246d462d500c1234903cc338c7c495'    
+    proj = UserLinker(project_id)    
+    training = proj.read_config_data('dedupe_linker', 'training.json')    
     
-    
-    training = proj.read_config_data('dedupe_linker', 'training.json')
-    
-    training_df = pd.DataFrame()
+    training_df = training_to_ref_df(training)
+    common_words = find_common_words(training_df)
+    common_vals = find_common_vals(training_df)
