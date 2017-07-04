@@ -435,6 +435,7 @@ class Normalizer(AbstractDataProject):
         '''Runs all modules on data in memory. And config from module names'''
         self.check_mem_data()
         
+        all_run_infos = {}
         # Only run all if there is a MINI version of the file # TODO: check that this is valid
         if self.metadata['has_mini']:
             for module_name in NORMALIZE_MODULE_ORDER:
@@ -449,11 +450,13 @@ class Normalizer(AbstractDataProject):
                             params = None
                         
                         # Load parameters from config files
-                        self.transform(module_name, params)
-                    except:
+                        _, run_info = self.transform(module_name, params)
+                    except: 
+                        run_info = {'skipped': True, }
                         print('WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
                         # TODO: warning here
-        return
+                    all_run_infos[module_name] = run_info
+        return all_run_infos
 
 
 

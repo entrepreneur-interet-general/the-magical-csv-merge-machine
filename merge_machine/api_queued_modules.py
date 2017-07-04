@@ -172,11 +172,11 @@ def _run_all_transforms(project_id, data_params, *argv):
     file_name = data_params['file_name']
 
     proj.load_data('INIT', file_name)
-    proj.run_all_transforms()
+    all_run_infos = proj.run_all_transforms()
 
     # Write transformations and logs
     proj.write_data()
-    return {}
+    return all_run_infos
 
 
 def _create_labeller(project_id, *argv):
