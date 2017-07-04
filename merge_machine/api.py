@@ -107,8 +107,10 @@ curl -i http://127.0.0.1:5000/metadata/ -X POST -F "request_json=@sample_downloa
 USES: /python-memcached
 
 """
+import gzip
 import json
 import os
+import shutil
 
 # Change current path to path of api.py
 curdir = os.path.dirname(os.path.realpath(__file__))
@@ -1092,12 +1094,19 @@ def download(project_type, project_id):
                        permitted. Please do not use this service for storage')
         
     if file_type == 'csv':
-        file_path = proj.path_to(module_name, file_name)
         new_file_name = file_name.split('.csv')[0] + '_MMM.csv'
     else:
-        file_path = proj.to_xls(module_name, file_name)
-        new_file_name = file_path.rsplit('/')[-1]
-    return send_file(file_path, as_attachment=True, attachment_filename=new_file_name)
+        new_file_name = proj.to_xls(module_name, file_name)
+    
+    file_path = proj.path_to(module_name, new_file_name)
+
+    # Zip this file and send the zipped file
+    zip_file_name = new_file_name + '.zip'
+    zip_file_path = proj.path_to(module_name, zip_file_name)
+    with open(file_path, 'rb') as f_in, gzip.open(zip_file_path, 'wb') as f_out:
+        shutil.copyfileobj(f_in, f_out)        
+    
+    return send_file(zip_file_path, as_attachment=True, attachment_filename=zip_file_name)
 
 
 # TODO: get this from MODULES ?
