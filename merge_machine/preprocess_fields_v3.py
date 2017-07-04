@@ -534,9 +534,20 @@ def vocabRe(vocab, partial):
 	return '({}).*$'.format(j if partial else j)
 
 class VocabMatcher(RegexMatcher):
-	def __init__(self, t, vocab, ignoreCase = False, partial = False, validator = None, neg = False):
+	''' When matcher is not None, the matching will be dispatched to it, which is useful when normalization is far costlier 
+		than type detection. '''
+	def __init__(self, t, vocab, ignoreCase = False, partial = False, validator = None, neg = False, matcher = None):
 		super(VocabMatcher, self).__init__(t, vocabRe(vocab, partial),
 			g = 0, ignoreCase = ignoreCase, partial = partial, validator = validator, neg = neg)
+		self.matcher = matcher
+	@timed
+	def match(self, c):
+		if self.matcher is not None:
+			logging.debug('%s normalizing "%s" from %s', self, c, self.matcher)
+			self.matcher.match(c)
+		if self.matcher is None or self.t not in c.notExcludedTypes():
+			logging.debug('%s normalizing "%s" from vocab only', self, c)
+			super(VocabMatcher, self).match(c)
 
 # Tokenization-based matcher-normalizer class
 
@@ -1674,12 +1685,9 @@ def generateValueMatchers(lvl = 0):
 	if lvl >= 0: 
 		yield VocabMatcher(F_ETAB, fileToSet('etablissement.vocab'), ignoreCase = True, partial = False)
 	if lvl >= 0: 
-		yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('etab_enssup.vocab'), ignoreCase = True, partial = False)
-	etabEnssupLexicon = fileToSet('etab_enssup')
-	if lvl >= 2: 
-		yield TokenizedMatcher(F_ETAB_ENSSUP, etabEnssupLexicon, MATCH_MODE_EXACT, maxTokens = 6)
-	elif lvl >= 0: 
-		yield LabelMatcher(F_ETAB_ENSSUP, etabEnssupLexicon, MATCH_MODE_EXACT)
+		etabEnssupLexicon = fileToSet('etab_enssup')
+		etabEnssupMatcher = TokenizedMatcher(F_ETAB_ENSSUP, etabEnssupLexicon, maxTokens = 6)
+		yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('etab_enssup.vocab'), ignoreCase = True, partial = True, matcher = etabEnssupMatcher)
 	yield SubtypeMatcher(F_ETAB, [F_ETAB_ENSSUP])
 	if lvl >= 1: 
 		yield LabelMatcher(F_APB_MENTION, fileToSet('mention_licence_sise'), MATCH_MODE_EXACT)
@@ -1763,25 +1771,20 @@ def generateValueMatchers(lvl = 0):
 	# The top-level data type for organizations
 	yield SubtypeMatcher(F_INSTITUTION, [F_RD_STRUCT, F_ETAB, F_ENTREPRISE])
 
+	# Normalize by expanding alternative variants (such as acronyms, abbreviations and synonyms) to their main variant
 	if lvl >= 0:
-		yield VocabMatcher(F_ENTREPRISE, fileToSet('org_entreprise.vocab'), ignoreCase = True, partial = False)
-		yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('org_enseignement.vocab'), ignoreCase = True, partial = False)
+		yield VocabMatcher(F_ENTREPRISE, fileToSet('org_entreprise.vocab'), ignoreCase = True, partial = False,
+			matcher = VariantExpander(fileToVariantMap('org_entreprise.syn'), F_ENTREPRISE, True))
+		yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('org_enseignement.vocab'), ignoreCase = True, partial = False,
+			matcher = VariantExpander(fileToVariantMap('etab_enssup.syn'), F_MESR, False, targetType = F_ETAB_ENSSUP))
 
-	# Spot acrnyms on-the-fly
+	if lvl >= 0:
+		yield VocabMatcher(F_RD_STRUCT, fileToSet('org_rnsr.vocab'), ignoreCase = True, partial = False,
+			matcher = VariantExpander(fileToVariantMap('org_rnsr.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT))
+
+	# Spot acronyms on-the-fly
 	if lvl >= 1: 
 		yield AcronymMatcher()
-
-	# Normalize by expanding alternative variants (such as acronyms, abbreviations and synonyms) to their main variant
-	if lvl >= 2:
-		# Those for which we keep surrounding context, because their variants correspond to generic
-		# terms (denominations and the like)
-		yield VariantExpander(fileToVariantMap('org_societe.syn'), F_ENTREPRISE, True)
-		yield VariantExpander(fileToVariantMap('org_entreprise.syn'), F_ENTREPRISE, True)
-		# Those for which we only keep the main variant associated to the extracted alt variant, because said variants
-		# correspond to specific entities
-		yield VariantExpander(fileToVariantMap('org_rnsr.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT)
-		yield VariantExpander(fileToVariantMap('org_hal.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT)
-		yield VariantExpander(fileToVariantMap('etab_enssup.syn'), F_MESR, False, targetType = F_ETAB_ENSSUP)
 
 def allDatatypes():
 	''' Returns a map of categories (including a default one for orphan data types) to a list of data types 
