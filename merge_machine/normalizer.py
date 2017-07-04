@@ -197,6 +197,41 @@ class Normalizer(AbstractDataProject):
         return secure_filename(file_name)
         #return "".join([c for c in file_name[:-4] if c.isalpha() or c.isdigit() or c==' ']).rstrip() + ext
     
+    @staticmethod
+    def read_csv(file, chars_to_replace):
+        ENCODINGS = ['utf-8', 'windows-1252']
+        SEPARATORS = [',', ';', '\t']
+        
+        could_read = False
+        for encoding in ENCODINGS:
+            for sep in SEPARATORS:
+                try:
+                    tab = pd.read_csv(file, sep=sep, encoding=encoding, dtype=str)
+                    for char in chars_to_replace:
+                        tab.columns = [unidecode.unidecode(x.replace(char, '_')) \
+                                                 for x in tab.columns]
+                    could_read = True
+                    break
+                except Exception as e:
+                    print(e)
+                    file.seek(0)
+            if could_read:
+                break
+            
+        if not could_read:
+            raise Exception('Separator and/or Encoding not detected. Try uploading \
+                            a csv with "," as separator with utf-8 encoding')            
+            
+        return tab, sep, encoding
+    
+    @staticmethod
+    def read_excel(file, chars_to_replace):
+        tab = pd.read_excel(file, dtype=str)
+        for char in chars_to_replace:
+            tab.columns = [unidecode.unidecode(x.replace(char, '_')) \
+                                     for x in tab.columns]
+        return tab, None, None
+
 
     def upload_init_data(self, file, file_name, user_given_name=None):
         # TODO: deal with og_file_name, file_id, display_name, user_given_name
@@ -208,19 +243,22 @@ class Normalizer(AbstractDataProject):
         specified in CHARS_TO_REPLACE will be replaced by "_" in the header.
         """
         CHARS_TO_REPLACE = [' ', ',', '.', '(', ')', '\'', '\"', '/']
-        ENCODINGS = ['utf-8', 'windows-1252']
-        SEPARATORS = [',', ';', '\t']
+
         
         # Check that 
         if self.metadata['files']:
             raise Exception('Cannot upload multiple files to the same project anymore :(')
         
+
+        
         # Check that user given name is not illegal
         if user_given_name is not None:
-            if (len(user_given_name) < 4) or (user_given_name[-4:] != '.csv'):
-                raise Exception('user given name should end with .csv')
-            if any(x in user_given_name[:-4] for x in CHARS_TO_REPLACE):
-                raise Exception('user_given_name sould be alphanumeric or underscores (+.csv)')
+            base_name = user_given_name.rsplit('.')[0]
+            extension = user_given_name.rsplit('.')[-1]    
+            if extension not in ['csv', 'xls', 'xlsx']:
+                raise Exception('user given name should end with .csv , .xls , or .xlsx or .zip')
+            if any(x in base_name for x in CHARS_TO_REPLACE):
+                raise Exception('user_given_name sould be alphanumeric or underscores (+.csv or .xls or .xlsx)')
                 
         # TODO: Check that file is not already present
         self.mem_data_info = {
@@ -230,6 +268,9 @@ class Normalizer(AbstractDataProject):
     
         if user_given_name is not None:
             file_name = user_given_name
+        else:
+            base_name = file_name.rsplit('.')[0]
+            extension = file_name.rsplit('.')[-1]    
             
         file_name = secure_filename(file_name)
         self.mem_data_info['file_name'] = file_name
@@ -241,26 +282,15 @@ class Normalizer(AbstractDataProject):
                              + 'or choose another name'.format(file_name))
         
         log = self.init_log('INIT', 'transform')
-        could_read = False
-        for encoding in ENCODINGS:
-            for sep in SEPARATORS:
-                try:
-                    self.mem_data = pd.read_csv(file, sep=sep, encoding=encoding, dtype=str)
-                    for char in CHARS_TO_REPLACE:
-                        self.mem_data.columns = [unidecode.unidecode(x.replace(char, '_')) \
-                                                 for x in self.mem_data.columns]
-                    could_read = True
-                    break
-                except Exception as e:
-                    print(e)
-                    file.seek(0)
-            if could_read:
-                break        
             
-        if not could_read:
-            raise Exception('Separator and/or Encoding not detected. Try uploading \
-                            a csv with "," as separator with utf-8 encoding')
-            
+        if extension == 'csv':
+            self.mem_data, sep, encoding = self.read_csv(file, CHARS_TO_REPLACE)
+            file_type = 'csv'
+        else:
+            self.mem_data, sep, encoding = self.read_excel(file, CHARS_TO_REPLACE)
+            file_type = 'excel'
+
+
         if len(set(self.mem_data.columns)) != self.mem_data.shape[1]:
             raise Exception('Column names should all be different')
 
@@ -280,9 +310,8 @@ class Normalizer(AbstractDataProject):
             assert list(self.mem_data.columns) == self.metadata['column_tracker']['original']
         
         # Create new empty log in metadata
+        self.mem_data_info['file_name'] = secure_filename(base_name) + '.csv'
         self.metadata['log'][file_name] = {module_name: self.default_log() for module_name in NORMALIZE_MODULE_ORDER_log}
-        
-        
         self.write_metadata()
         
         # Complete log
@@ -293,6 +322,7 @@ class Normalizer(AbstractDataProject):
         
         # Write configuration (sep, encoding) to INIT dir
         config_dict = {
+                        'file_type': file_type, 
                         'sep': sep, 
                         'encoding': encoding, 
                         'nrows': self.mem_data.shape[0], 
