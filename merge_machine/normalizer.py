@@ -53,7 +53,7 @@ class Normalizer(AbstractDataProject):
         return metadata   
     
     def __repr__(self):
-        string = '{0}; project_id:{1}'.format(self.__class__.__name__, self.project_id)
+        string = '{0}({1})'.format(self.__class__.__name__, self.project_id)
         return string
     
     def __str__(self):
@@ -441,12 +441,16 @@ class Normalizer(AbstractDataProject):
                 if MODULES['transform'][module_name].get('use_in_full_run', False):
                     try:
                         run_info_name = MINI_PREFIX + self.mem_data_info['file_name'] + '__run_info.json'
-                        params = self.read_config_data(module_name, run_info_name)['params']
+                        
+                        # TODO: deal with this
+                        if module_name != 'concat_with_init':
+                            params = self.read_config_data(module_name, run_info_name)['params']
+                        else:
+                            params = None
+                        
                         # Load parameters from config files
                         self.transform(module_name, params)
                     except:
-                        import pdb
-                        pdb.set_trace()
                         print('WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
                         # TODO: warning here
         return
