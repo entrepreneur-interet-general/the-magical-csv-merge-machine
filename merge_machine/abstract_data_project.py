@@ -22,7 +22,6 @@ METHODS:
     - infer(self, module_name, params)
 
 """
-
 import csv
 import gc
 import os
@@ -96,8 +95,8 @@ class AbstractDataProject(AbstractProject):
 
     def to_xls(self, module_name, file_name):
         '''
-        Takes the file in memory and writes an xls in the same directory with 
-        the same name.
+        Takes the file specified by module and file names and writes an xls in 
+        the same directory with the same name (changing the file extension).
         
         Columns of the original file will be written in the first sheet.
         Columns containing "__" will be written the second sheet
@@ -107,8 +106,9 @@ class AbstractDataProject(AbstractProject):
         
         file_path = self.path_to(module_name, file_name)
         
-        assert file_path[-4:] == '.csv'
-        new_file_path = file_path[:-4] + '.xlsx'
+        assert file_name[-4:] == '.csv'
+        new_file_name = file_name[:-4] + '.xlsx'
+        new_file_path = self.path_to(module_name, new_file_name)
         
         tab = pd.read_csv(file_path, encoding='utf-8', dtype=str)
         
@@ -119,10 +119,9 @@ class AbstractDataProject(AbstractProject):
         writer = pd.ExcelWriter(new_file_path)
         tab[columns_og].to_excel(writer, 'original_file', index=False)
         tab[columns_new].to_excel(writer, 'normalization', index=False)
-        writer.save()
-        
-        return new_file_path
-        
+        writer.save()        
+        return new_file_name
+
 
     def get_sample(self, sampler_module_name, module_params, sample_params):
         '''
