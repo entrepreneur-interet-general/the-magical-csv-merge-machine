@@ -1771,10 +1771,12 @@ def generateValueMatchers(lvl = 0):
 	# The top-level data type for organizations
 	yield SubtypeMatcher(F_INSTITUTION, [F_RD_STRUCT, F_ETAB, F_ENTREPRISE])
 
+	# Normalize by expanding alternative variants (such as acronyms, abbreviations and synonyms) to their main variant
 	if lvl >= 0:
 		yield VocabMatcher(F_ENTREPRISE, fileToSet('org_entreprise.vocab'), ignoreCase = True, partial = False,
 			matcher = VariantExpander(fileToVariantMap('org_entreprise.syn'), F_ENTREPRISE, True))
-		yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('org_enseignement.vocab'), ignoreCase = True, partial = False)
+		yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('org_enseignement.vocab'), ignoreCase = True, partial = False,
+			matcher = VariantExpander(fileToVariantMap('etab_enssup.syn'), F_MESR, False, targetType = F_ETAB_ENSSUP))
 
 	if lvl >= 0:
 		yield VocabMatcher(F_RD_STRUCT, fileToSet('org_rnsr.vocab'), ignoreCase = True, partial = False,
@@ -1783,12 +1785,6 @@ def generateValueMatchers(lvl = 0):
 	# Spot acronyms on-the-fly
 	if lvl >= 1: 
 		yield AcronymMatcher()
-
-	# Normalize by expanding alternative variants (such as acronyms, abbreviations and synonyms) to their main variant
-	if lvl >= 2:
-		# Those for which we only keep the main variant associated to the extracted alt variant, because said variants
-		# correspond to specific entities
-		yield VariantExpander(fileToVariantMap('etab_enssup.syn'), F_MESR, False, targetType = F_ETAB_ENSSUP)
 
 def allDatatypes():
 	''' Returns a map of categories (including a default one for orphan data types) to a list of data types 
