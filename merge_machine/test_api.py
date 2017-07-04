@@ -298,7 +298,9 @@ def normalize_pipeline(params):
     url_to_append = '/api/download/normalize/{0}'.format(project_id)
     body = {
             'data_params': {
-                'module_name': 'concat_with_init'}
+                'module_name': 'concat_with_init'},
+            'module_params': {
+                'file_type': 'xls'}
             }
     PRINT = False
     resp = post_download(url_to_append, body)    

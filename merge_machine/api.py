@@ -1047,14 +1047,17 @@ def download(project_type, project_id):
         - project_type
         
     POST:
-        - module_name: Module from which to fetch the file
-        - file_name
+        data_params:
+            - module_name: Module from which to fetch the file
+            - file_name
+        module_params:
+            - file_type: ['csv' or 'xls']
     
     '''
     project_id = secure_filename(project_id)
 
     proj = _init_project(project_type, project_id)
-    data_params, _ = _parse_request()
+    data_params, module_params = _parse_request()
     
     if data_params is None:
         data_params = {}
@@ -1069,6 +1072,17 @@ def download(project_type, project_id):
         module_name = secure_filename(module_name)
     if file_name is not None:
         file_name = secure_filename(file_name)
+        
+    
+    if module_params is None:
+        file_type = 'csv'
+    else:
+        file_type = module_params.get('file_type', 'csv')
+    
+    if file_type not in ['csv', 'xls', 'xlsx']:
+        raise ValueError('Download file type should be csv, xls or xlsx')
+        
+        
 
     (module_name, file_name) = proj.get_last_written(module_name, file_name)
 
@@ -1076,9 +1090,13 @@ def download(project_type, project_id):
         return jsonify(error=True,
                message='No changes were made since upload. Download is not \
                        permitted. Please do not use this service for storage')
-
-    file_path = proj.path_to(module_name, file_name)
-    new_file_name = file_name.split('.csv')[0] + '_MMM.csv'
+        
+    if file_type == 'csv':
+        file_path = proj.path_to(module_name, file_name)
+        new_file_name = file_name.split('.csv')[0] + '_MMM.csv'
+    else:
+        file_path = proj.to_xls(module_name, file_name)
+        new_file_name = file_path.rsplit('/')[-1]
     return send_file(file_path, as_attachment=True, attachment_filename=new_file_name)
 
 
