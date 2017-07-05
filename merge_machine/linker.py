@@ -73,8 +73,9 @@ class Linker(AbstractDataProject):
             self.__dict__[file_role] = None
             #raise Exception('Normalizer project with id {0} could not be found'.format(project_id))
          
-
-    def check_file_role(self, file_role):
+    
+    @staticmethod
+    def check_file_role(file_role):
         if file_role not in ['ref', 'source']:
             raise Exception('file_role should be either "source" or "ref"')
 
@@ -84,13 +85,18 @@ class Linker(AbstractDataProject):
             if self.metadata['current'][file_role] is None:
                 raise Exception('{0} is not defined for this linking project'.format(file_role))
 
+    
     def create_metadata(self, description=None, display_name=None):
         metadata = super().create_metadata()
         metadata['current'] = {'source': None, 'ref': None} # {'source': {internal: False, project_id: "ABC123", file_name: "source.csv.csv"}, 'ref': None}
         return metadata   
 
     def add_col_matches(self, column_matches):
-        '''column_matches is a json file as dict'''
+        '''
+        Adds a configuration file with the column matches between source and
+        referential.
+        column_matches is a json file as dict
+        '''
         # TODO: add checks on file
         
         # Add matches
@@ -104,6 +110,10 @@ class Linker(AbstractDataProject):
         self.ref.add_selected_columns(ref_cols) 
         
     def read_col_matches(self, add_created=True):
+        '''
+        Read the column_matches config file and interprets the columns looking
+        for processed (normalized) columns
+        '''
         config = self.read_config_data('dedupe_linker', 'column_matches.json')
         
         if not config:
@@ -152,27 +162,7 @@ class Linker(AbstractDataProject):
         if not config:
             config = []
         return config
- 
-    def init_log(self, module_name, module_type):
-        '''
-        Initiate a log (before a module call). Use end_log to complete log message
-        '''
-        # TODO: change this
-        # TODO: look where to load source and ref
-        assert module_type in ['infer', 'link']
-        log = { 
-                # Data being modified
-               'file_name': self.mem_data_info.get('file_name'), 
-               'origin': self.mem_data_info.get('module_name'),
-               
-                # Modification at hand                        
-               'module_name': module_name, # Module to be executed
-               'module_type': module_type, # Type (transform, infer, or dedupe)
-               'start_timestamp': time.time(),
-               'end_timestamp': None, 'error':None, 'error_msg':None, 'written': False
-               }
-        return log
-    
+
 
     def add_selected_project(self, file_role, internal, project_id):
         '''
@@ -242,14 +232,14 @@ class Linker(AbstractDataProject):
         self.mem_data_info['file_role'] = 'link' # Role of file being modified
         self.mem_data_info['file_name'] = 'm3_result.csv' # File being modified
         
-        log = self.init_log(module_name, 'link')
+        log = self.init_active_log(module_name, 'link')
 
         self.mem_data, run_info = MODULES['link'][module_name]['func'](paths, params)
         
         self.mem_data_info['module_name'] = module_name
         
         # Complete log
-        log = self.end_log(log, error=False)
+        log = self.end_active_log(log, error=False)
                           
         # Update buffers
         self.log_buffer.append(log)        

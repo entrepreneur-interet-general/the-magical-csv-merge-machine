@@ -70,23 +70,8 @@ class Normalizer(AbstractDataProject):
         return string
 
 
-    def init_log(self, module_name, module_type):
-        '''
-        Initiate a log (before a module call). Use end_log to complete log message
-        '''
-        assert module_type in ['transform', 'infer']
-        log = { 
-                # Data being modified
-               'file_name': self.mem_data_info.get('file_name'), 
-               'origin': self.mem_data_info.get('module_name'),
-               
-                # Modification at hand                        
-               'module_name': module_name, # Module to be executed
-               'module_type': module_type, # Type (transform, infer, or dedupe)
-               'start_timestamp': time.time(),
-               'end_timestamp': None, 'error':None, 'error_msg':None, 'written': False
-               }
-        return log
+
+
         
     def load_data(self, module_name, file_name, nrows=None, columns=None, restrict_to_selected=True):
         assert (columns is None) or (not restrict_to_selected)
@@ -274,7 +259,7 @@ class Normalizer(AbstractDataProject):
             raise Exception('File: {0} already exists. Delete this file ' \
                              + 'or choose another name'.format(file_name))
         
-        log = self.init_log('INIT', 'transform')
+        log = self.init_active_log('INIT', 'transform')
             
         if extension == 'csv':
             self.mem_data, sep, encoding = self.read_csv(file, CHARS_TO_REPLACE)
@@ -308,7 +293,7 @@ class Normalizer(AbstractDataProject):
         self.write_metadata()
         
         # Complete log
-        log = self.end_log(log, error=False)
+        log = self.end_active_log(log, error=False)
                           
         # Update log buffer
         self.log_buffer.append(log)
@@ -421,7 +406,7 @@ class Normalizer(AbstractDataProject):
         self.check_mem_data()
         
         # Initiate log
-        log = self.init_log('concat_with_init', 'transform')
+        log = self.init_active_log('concat_with_init', 'transform')
     
         og_file_name = self.mem_data_info['file_name']
         og_file_path = self.path_to('INIT', og_file_name)
@@ -435,7 +420,7 @@ class Normalizer(AbstractDataProject):
         run_info = {} # TODO: check specifications for run_info
 
         # Complete log
-        log = self.end_log(log, error=False)
+        log = self.end_active_log(log, error=False)
                           
         # Add time to run_info (# TODO: is this the best way?)
         run_info['start_timestamp'] = log['start_timestamp']

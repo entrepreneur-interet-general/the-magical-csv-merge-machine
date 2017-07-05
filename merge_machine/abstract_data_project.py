@@ -9,8 +9,8 @@ AbstractDataProject
 
 METHODS:
     
-    - init_log(self, module_name, module_type)
-    - end_log(self, log, error=False)
+    - init_active_log(self, module_name, module_type)
+    - end_active_log(self, log, error=False)
     - check_mem_data(self)
     - load_data(self, module_name, file_name, nrows=None, columns=None)
     - get_header(self, module_name, file_name)
@@ -65,23 +65,39 @@ class AbstractDataProject(AbstractProject):
     def default_log(self):
         '''Default log for a new file'''
         return {module_name: self.default_module_log for module_name in NORMALIZE_MODULE_ORDER_log}
-    
-    def init_log(self, module_name, module_type):
-        raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
         
     def upload_init_data(self, file, file_name, user_given_name=None):
         raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
 
-    def end_log(self, log, error=False):
+    def end_active_log(self, log, error=False):
         '''
-        Close a log mesage started with init_log (right after module call)
+        Close a log mesage started with init_active_log (right after module call)
         '''
         log['end_timestamp'] = time.time()
         log['error'] = error
         if not error:
             log['completed'] = True
         return log    
-    
+
+    def init_active_log(self, module_name, module_type):
+        '''
+        Initiate a log (before a module call). Use end_active_log to complete log message
+        '''
+        # TODO: change this
+        # TODO: look where to load source and ref (linker)
+        log = { 
+                # Data being modified
+               'file_name': self.mem_data_info.get('file_name'), 
+               'origin': self.mem_data_info.get('module_name'),
+               
+                # Modification at hand                        
+               'module_name': module_name, # Module to be executed
+               'module_type': module_type, # Type (transform, infer, or dedupe)
+               'start_timestamp': time.time(),
+               'end_timestamp': None, 'error':None, 'error_msg':None, 'written': False
+               }
+        return log
+
     def check_mem_data(self):
         '''Check that there is data loaded in memory'''
         if self.mem_data is None:
@@ -219,7 +235,7 @@ class AbstractDataProject(AbstractProject):
             self.clean_after('INIT', new_file_name) # TODO: check module_name for clean_after
             
             # Initiate log
-            log = self.init_log('INIT', 'transform')  # TODO: hack here: module_name should be 'make_mini'
+            log = self.init_active_log('INIT', 'transform')  # TODO: hack here: module_name should be 'make_mini'
             
             if randomize:
                 sample_index = self.mem_data.index[:sample_size]
@@ -236,7 +252,6 @@ class AbstractDataProject(AbstractProject):
             # Create new empty log in metadata # TODO: make class method
             self.metadata['log'][new_file_name] = self.default_log()
         
-        
             log['og_file_name'] = log['file_name']
             log['file_name'] = new_file_name
             log['completed'] = True
@@ -244,7 +259,7 @@ class AbstractDataProject(AbstractProject):
             # TODO: think if transformation should / should not be complete
     
             # Complete log
-            log = self.end_log(log, error=False) 
+            log = self.end_active_log(log, error=False) 
                               
             # Update buffers
             self.log_buffer.append(log) # TODO: change for dict
@@ -335,7 +350,7 @@ class AbstractDataProject(AbstractProject):
         self.check_mem_data()  
         
         # Initiate log
-        log = self.init_log(module_name, 'infer')
+        log = self.init_active_log(module_name, 'infer')
         
         infered_params = MODULES['infer'][module_name]['func'](self.mem_data, params)
         
@@ -358,7 +373,7 @@ class AbstractDataProject(AbstractProject):
         self.clean_after(module_name, self.mem_data_info['file_name'])
         
         # Initiate log
-        log = self.init_log(module_name, 'transform')
+        log = self.init_active_log(module_name, 'transform')
 
         # TODO: catch module errors and add to log
         # Run module on pandas DataFrame 
@@ -366,7 +381,7 @@ class AbstractDataProject(AbstractProject):
         self.mem_data_info['module_name'] = module_name
 
         # Complete log
-        log = self.end_log(log, error=False)
+        log = self.end_active_log(log, error=False)
                           
         # Add time to run_info (# TODO: is this the best way?)
         run_info['file_name'] = self.mem_data_info['file_name']
