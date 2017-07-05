@@ -43,6 +43,9 @@ class AbstractDataProject(AbstractProject):
     Allows loading and writing of data objects (pandas DataFrames) and 
     anticipates usage of transformations and writing them to log
     '''    
+    default_module_log = {'completed': False, 'skipped': False}
+    
+    
     def __init__(self, 
                  project_id=None, 
                  create_new=False, 
@@ -58,7 +61,10 @@ class AbstractDataProject(AbstractProject):
         self.run_info_buffer = dict()
         self.log_buffer = [] # List of logs not yet written to metadata.json    
         self.last_written = {}
-    
+
+    def default_log(self):
+        '''Default log for a new file'''
+        return {module_name: self.default_module_log for module_name in NORMALIZE_MODULE_ORDER_log}
     
     def init_log(self, module_name, module_type):
         raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
@@ -228,11 +234,12 @@ class AbstractDataProject(AbstractProject):
             self.mem_data_info['file_name'] = new_file_name
             
             # Create new empty log in metadata # TODO: make class method
-            self.metadata['log'][new_file_name] = {module_name: self.default_log() for module_name in NORMALIZE_MODULE_ORDER_log}
+            self.metadata['log'][new_file_name] = self.default_log()
         
         
             log['og_file_name'] = log['file_name']
             log['file_name'] = new_file_name
+            log['completed'] = True
             
             # TODO: think if transformation should / should not be complete
     
@@ -275,8 +282,11 @@ class AbstractDataProject(AbstractProject):
                        
         # Add buffer to metadata
         for log in self.log_buffer:
-            self.metadata['log'][log['file_name']][log['module_name']].update(log)
-    
+            try:
+                self.metadata['log'][log['file_name']][log['module_name']].update(log)
+            except:
+                import pdb; pdb.set_trace()
+            
         # Write metadata and clear log buffer
         self.write_metadata()
         self.log_buffer = []

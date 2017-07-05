@@ -69,13 +69,6 @@ class Normalizer(AbstractDataProject):
             string += '\n\nFile {0}:\n  Completed:\n  {1}\n  Not completed:\n  {2}'.format(file_name, completed, not_completed)                    
         return string
 
-    @staticmethod
-    def default_log():
-        '''Default log for a (module_name, file_name) tuple if module was never run'''
-        return {
-                'completed': False,
-                'skipped': False
-                }
 
     def init_log(self, module_name, module_type):
         '''
@@ -311,7 +304,7 @@ class Normalizer(AbstractDataProject):
         
         # Create new empty log in metadata
         self.mem_data_info['file_name'] = secure_filename(base_name) + '.csv'
-        self.metadata['log'][file_name] = {module_name: self.default_log() for module_name in NORMALIZE_MODULE_ORDER_log}
+        self.metadata['log'][file_name] = self.default_log()
         self.write_metadata()
         
         # Complete log
@@ -386,7 +379,7 @@ class Normalizer(AbstractDataProject):
             if file_name == _file_name:
                 self.remove(module_name, file_name)
         
-        self.metadata['log'][file_name] = {module_name: self.default_log() for module_name in NORMALIZE_MODULE_ORDER_log}
+        self.metadata['log'][file_name] = self.default_log()
         self.write_metadata()
 
     def clean_after(self, module_name, file_name, include_current_module=True):
@@ -413,7 +406,7 @@ class Normalizer(AbstractDataProject):
                 pass
             
             try:
-                self.metadata['log'][file_name][iter_module_name] = self.default_log()
+                self.metadata['log'][file_name][iter_module_name] = self.default_module_log
             except:
                 pass
             self.write_metadata()

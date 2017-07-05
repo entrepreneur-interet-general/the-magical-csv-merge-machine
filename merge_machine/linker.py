@@ -36,7 +36,7 @@ class Linker(AbstractDataProject):
             self.load_project_to_merge('ref')
         
     def __repr__(self): 
-        string = '{0}; project_id:{1}'.format(self.__class__.__name__, self.project_id)
+        string = '{0}({1})'.format(self.__class__.__name__, self.project_id)
         
         string += ' / source: '
         if self.source is not None:
@@ -108,7 +108,6 @@ class Linker(AbstractDataProject):
         
         if not config:
             config = []
-        #        
         #        def expand(cols_to_expand, ref_cols, sep='___'):
         #            new_cols = []
         #            for col in cols_to_expand:
@@ -118,7 +117,6 @@ class Linker(AbstractDataProject):
         #        new_config = []
         #        for match in config:
             
-
         return config
 
     def add_col_certain_matches(self, column_matches):
