@@ -136,7 +136,7 @@ def main_link_test(proj, paths, prop, num_matches, num_distinct, i, column_certa
     # Explore results    
     certain_col_matches = proj.read_col_certain_matches()
     use_lower = True
-    metrics = proj.infer('results_analysis', {'col_matches': certain_col_matches, 'lower':use_lower})
+    metrics = proj.infer('link_results_analyzer', {'col_matches': certain_col_matches, 'lower':use_lower})
     return metrics
 
 

@@ -7,7 +7,7 @@ Created on Mon Apr 24 17:18:28 2017
 """
 
 from dedupe_linker import dedupe_linker
-from performance import results_analysis
+from results_analyzer import link_results_analyzer
 from missing_values import infer_mvs, replace_mvs, sample_mvs_ilocs
 from preprocess_fields_v3 import inferTypes, normalizeValues, sample_types_ilocs
 
@@ -15,7 +15,7 @@ from preprocess_fields_v3 import inferTypes, normalizeValues, sample_types_ilocs
 NORMALIZE_MODULE_ORDER_log = ['INIT', 'make_mini', 'add_selected_columns', 'infer_mvs', 'replace_mvs', 'infer_types','recode_types', 'concat_with_init']
 NORMALIZE_MODULE_ORDER = ['INIT', 'make_mini', 'replace_mvs', 'recode_types', 'concat_with_init']
 
-LINK_MODULE_ORDER_log = ['add_selected_columns', 'load_labeller', 'train', 'upload_train', 'dedupe_linker']
+LINK_MODULE_ORDER_log = ['add_selected_columns', 'load_labeller', 'train', 'upload_train', 'dedupe_linker', 'link_results_analyzer']
 
 MODULES = {
         'transform':{
@@ -52,10 +52,10 @@ MODULES = {
                                'write_to': 'recode_types',
                                'desc': inferTypes.__doc__
                            },
-                'results_analysis': {
-                                'func': results_analysis,
+                'link_results_analyzer': {
+                                'func': link_results_analyzer,
                                 'write_to': 'results_analysis',
-                                'desc': results_analysis.__doc__
+                                'desc': link_results_analyzer.__doc__
                             }
                 },
         'link': {

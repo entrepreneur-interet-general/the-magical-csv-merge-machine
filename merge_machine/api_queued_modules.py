@@ -240,6 +240,30 @@ def _linker(project_id, *argv):
 
     return {}
 
+def _link_results_analyzer(project_id, data_params, *argv):
+    '''
+    Runs the link results analyzer module
+    
+    wrapper around UserNormalizer.infer ?
+    
+    ARGUMENTS (GET):
+        project_id: ID for "normalize" project
+
+    ARGUMENTS (POST):
+        - data_params: {
+                "module_name": module to fetch from
+                "file_name": file to fetch
+                }    
+    '''
+    proj = UserLinker(project_id=project_id)
+    proj.load_data(data_params['module_name'], data_params['file_name'])    
+    result = proj.infer('link_results_analyzer', {})
+    
+    # Write log
+    proj.write_log_buffer(False)
+    return result
+
+
 def _test_long(*argv):
     print('-->>>>  STARTED JOB')
     import time

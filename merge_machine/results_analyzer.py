@@ -6,7 +6,7 @@ Created on Mon Apr 10 19:54:21 2017
 @author: leo
 """
 
-def results_analysis(tab, params={}):
+def link_results_analyzer(tab, params={}):
     '''
     Takes a merged table, and a pair of columns that constitute a certain match. 
     Returns statistics on the number of good matches found etc...
@@ -21,6 +21,8 @@ def results_analysis(tab, params={}):
     '''
     
     if '__CONFIDENCE' not in tab.columns:
+        import pdb
+        pdb.set_trace()
         raise Exception('Column __CONFIDENCE could not be found. Are you sure \
                         this is the result of a dedupe merge?')
     

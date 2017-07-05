@@ -833,7 +833,7 @@ def web_view_results(project_type, project_id):
 
     certain_col_matches = proj.read_col_certain_matches()
     use_lower = True
-    metrics = proj.infer('results_analysis', {'col_matches': certain_col_matches, 'lower':use_lower})
+    metrics = proj.infer('link_results_analyzer', {'col_matches': certain_col_matches, 'lower':use_lower})
 
     # Choose the columns to display # TODO: Absolutely move this
     col_matches = proj.read_col_matches() # TODO: API this
@@ -1448,7 +1448,8 @@ def add_columns_to_return(project_id, file_role):
 
 # TODO: get this from MODULES ?
 API_MODULE_NAMES = ['infer_mvs', 'replace_mvs', 'infer_types', 'recode_types', 
-                    'concat_with_init', 'run_all_transforms', 'create_labeller', 'linker']
+                    'concat_with_init', 'run_all_transforms', 'create_labeller', 
+                    'linker', 'link_results_analyzer']
 
 @app.route('/api/schedule/<job_name>/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
