@@ -15,6 +15,7 @@ from preprocess_fields_v3 import inferTypes, normalizeValues, sample_types_ilocs
 NORMALIZE_MODULE_ORDER_log = ['INIT', 'make_mini', 'add_selected_columns', 'infer_mvs', 'replace_mvs', 'infer_types','recode_types', 'concat_with_init']
 NORMALIZE_MODULE_ORDER = ['INIT', 'make_mini', 'replace_mvs', 'recode_types', 'concat_with_init']
 
+LINK_MODULE_ORDER_log = ['add_selected_columns', 'load_labeller', 'train', 'upload_train', 'dedupe_linker']
 
 MODULES = {
         'transform':{

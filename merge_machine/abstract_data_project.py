@@ -32,7 +32,7 @@ import pandas as pd
 
 from abstract_project import AbstractProject, NOT_IMPLEMENTED_MESSAGE
 
-from MODULES import MODULES, NORMALIZE_MODULE_ORDER_log # TODO: absolutely move this
+from MODULES import MODULES # TODO: absolutely move this
 
 
 
@@ -63,9 +63,8 @@ class AbstractDataProject(AbstractProject):
         self.last_written = {}
 
     def default_log(self):
-        '''Default log for a new file'''
-        return {module_name: self.default_module_log for module_name in NORMALIZE_MODULE_ORDER_log}
-        
+        raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
+
     def upload_init_data(self, file, file_name, user_given_name=None):
         raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
 
@@ -297,11 +296,16 @@ class AbstractDataProject(AbstractProject):
                        
         # Add buffer to metadata
         for log in self.log_buffer:
-            try:
-                self.metadata['log'][log['file_name']][log['module_name']].update(log)
-            except:
-                import pdb; pdb.set_trace()
+            file_name = log['file_name']
+            module_name = log['module_name']
             
+            #            if file_name not in self.metadata['log']:
+            #                raise ValueError('file name {0} was not initialized in log'.format(file_name))
+            #            if module_name in self.metadata['log'][file_name]:
+            #                raise ValueError('module name {0} was not initialized in log for file {1}'.format(module_name, file_name))
+
+            self.metadata['log'][file_name][module_name].update(log)
+
         # Write metadata and clear log buffer
         self.write_metadata()
         self.log_buffer = []

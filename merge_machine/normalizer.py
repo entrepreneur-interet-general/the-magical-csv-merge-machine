@@ -70,8 +70,9 @@ class Normalizer(AbstractDataProject):
         return string
 
 
-
-
+    def default_log(self):
+        '''Default log for a new file'''
+        return {module_name: self.default_module_log for module_name in NORMALIZE_MODULE_ORDER_log}
         
     def load_data(self, module_name, file_name, nrows=None, columns=None, restrict_to_selected=True):
         assert (columns is None) or (not restrict_to_selected)

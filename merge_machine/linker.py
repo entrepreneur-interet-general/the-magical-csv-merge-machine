@@ -6,6 +6,7 @@ Created on Mon Apr 24 15:46:00 2017
 @author: leo
 """
 import gc
+import os
 import pickle
 import time
 
@@ -17,10 +18,9 @@ from labeller import Labeller, DummyLabeller
 from normalizer import InternalNormalizer, UserNormalizer
 
 from CONFIG import LINK_DATA_PATH
-from MODULES import MODULES
+from MODULES import MODULES, LINK_MODULE_ORDER_log
 
-class Linker(AbstractDataProject):
-    
+class Linker(AbstractDataProject):    
     def __init__(self, 
                  project_id=None, 
                  create_new=False, 
@@ -34,7 +34,7 @@ class Linker(AbstractDataProject):
             and (self.metadata['current']['ref'] is not None):
             self.load_project_to_merge('source')
             self.load_project_to_merge('ref')
-        
+
     def __repr__(self): 
         string = '{0}({1})'.format(self.__class__.__name__, self.project_id)
         
@@ -57,6 +57,15 @@ class Linker(AbstractDataProject):
             string += '\n\n***REF***\n{0}'.format(self.ref.__str__())   
         return string
     
+    @staticmethod
+    def output_file_name(source_file_name):
+        '''Name of the file to output'''
+        return source_file_name
+
+    def default_log(self):
+        '''Default log for a new file'''
+        return {module_name: self.default_module_log for module_name in LINK_MODULE_ORDER_log}
+    
     def load_project_to_merge(self, file_role):
         '''Uses the "current" field in metadata to load source or ref'''        
         self.check_file_role(file_role)
@@ -72,7 +81,7 @@ class Linker(AbstractDataProject):
         except:
             self.__dict__[file_role] = None
             #raise Exception('Normalizer project with id {0} could not be found'.format(project_id))
-         
+        
     
     @staticmethod
     def check_file_role(file_role):
@@ -204,7 +213,11 @@ class Linker(AbstractDataProject):
         self.metadata['current'][file_role] = {'internal': internal, 
                                              'project_id': project_id,
                                              'module_name': module_name,
-                                             'file_name': file_name}  
+                                             'file_name': file_name}
+        
+        if file_role == 'source':
+            self.metadata['log'][self.output_file_name(file_name)] = self.default_log()
+        
         self.write_metadata()
         self.load_project_to_merge(file_role)
        
@@ -230,7 +243,7 @@ class Linker(AbstractDataProject):
         
         # Initiate log # TODO: move hardcode of file name
         self.mem_data_info['file_role'] = 'link' # Role of file being modified
-        self.mem_data_info['file_name'] = 'm3_result.csv' # File being modified
+        self.mem_data_info['file_name'] = self.output_file_name(os.path.split(paths['source'])[-1]) # File being modified
         
         log = self.init_active_log(module_name, 'link')
 
