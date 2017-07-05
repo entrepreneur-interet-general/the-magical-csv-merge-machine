@@ -32,9 +32,6 @@ import pandas as pd
 
 from abstract_project import AbstractProject, NOT_IMPLEMENTED_MESSAGE
 
-from MODULES import MODULES # TODO: absolutely move this
-
-
 
 MINI_PREFIX = 'MINI__'
 
@@ -43,8 +40,7 @@ class AbstractDataProject(AbstractProject):
     Allows loading and writing of data objects (pandas DataFrames) and 
     anticipates usage of transformations and writing them to log
     '''    
-    default_module_log = {'completed': False, 'skipped': False}
-    
+    default_module_log = {'completed': False, 'skipped': False}    
     
     def __init__(self, 
                  project_id=None, 
@@ -178,7 +174,7 @@ class AbstractDataProject(AbstractProject):
         
         sample_ilocs = []
         if sampler_module_name != 'standard':
-            sample_ilocs = MODULES['sample'][sampler_module_name]['func'](self.mem_data, 
+            sample_ilocs = self.MODULES['sample'][sampler_module_name]['func'](self.mem_data, 
                                                               module_params, sample_params)
         
         # If default sampler was selected custom sampler returned no rows
@@ -303,8 +299,8 @@ class AbstractDataProject(AbstractProject):
             #                raise ValueError('file name {0} was not initialized in log'.format(file_name))
             #            if module_name in self.metadata['log'][file_name]:
             #                raise ValueError('module name {0} was not initialized in log for file {1}'.format(module_name, file_name))
-
-            self.metadata['log'][file_name][module_name].update(log)
+            if file_name is not None: # TODO: burn this heresy
+                self.metadata['log'][file_name][module_name].update(log)
 
         # Write metadata and clear log buffer
         self.write_metadata()
@@ -351,15 +347,18 @@ class AbstractDataProject(AbstractProject):
         Runs the module on pandas DataFrame data in memory and 
         returns answer + writes to appropriate location
         '''
-        self.check_mem_data()  
+        
+        # Check that memory is loaded (if necessary)
+        if not params.get('NO_MEM_DATA', False):
+            self.check_mem_data()  
         
         # Initiate log
         log = self.init_active_log(module_name, 'infer')
         
-        infered_params = MODULES['infer'][module_name]['func'](self.mem_data, params)
+        infered_params = self.MODULES['infer'][module_name]['func'](self.mem_data, params)
         
         # Write result of inference
-        module_to_write_to = MODULES['infer'][module_name]['write_to']
+        module_to_write_to = self.MODULES['infer'][module_name]['write_to']
         self.upload_config_data(infered_params, module_to_write_to, 'infered_config.json')
         
         # Update log buffer
@@ -381,7 +380,7 @@ class AbstractDataProject(AbstractProject):
 
         # TODO: catch module errors and add to log
         # Run module on pandas DataFrame 
-        self.mem_data, run_info = MODULES['transform'][module_name]['func'](self.mem_data, params)
+        self.mem_data, run_info = self.MODULES['transform'][module_name]['func'](self.mem_data, params)
         self.mem_data_info['module_name'] = module_name
 
         # Complete log

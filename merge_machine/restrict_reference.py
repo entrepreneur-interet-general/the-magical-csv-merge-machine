@@ -100,7 +100,7 @@ def filter_by_words(ref, col_words):
     run_info = {'og_len': len(ref)}
     run_info['has_modifications'] = False
     
-    for col, words in col_words.iteritems():
+    for col, words in col_words.items():
         for word in words:
             ref = ref[ref[col].str.contains(word)]
             run_info['has_modifications'] = True            
@@ -125,7 +125,7 @@ def filter_by_vals(ref, col_vals):
     run_info = {'og_len': len(ref)}
     run_info['has_modifications'] = False
     
-    for col, val in col_vals.iteritems():
+    for col, val in col_vals.items():
         if val is not None:
             ref = ref[ref[col] == val]
             run_info['has_modifications'] = True 
@@ -144,6 +144,41 @@ def training_to_ref_df(training):
     '''
     training_df = pd.DataFrame([x['__value__'][1] for x in training['match']])
     return training_df
+
+def infer_restriction(_, params):
+    ''' #TODO: document '''
+    training = params['training']
+    filter_by_vals = params.get('filter_by_vals', True)
+    filter_by_words = params.get('filter_by_words', True)
+
+    if not training:
+        raise ValueError('training has no values (minimum 1)')
+    
+    training_df = training_to_ref_df(training)
+    
+    to_return = dict()
+    if filter_by_vals:
+        to_return['col_words'] = find_common_words(training_df)
+    if filter_by_words:
+        to_return['col_vals'] = find_common_vals(training_df)
+        
+    to_return['filter_by_words'] = filter_by_words
+    to_return['filter_by_vals'] = filter_by_vals
+
+    return to_return
+
+def perform_restriction(ref, params):
+    ''' #TODO: document '''
+    run_info = dict()
+
+    if params['filter_by_vals']:
+        ref, run_info['filter_by_vals'] = filter_by_vals(ref, params['col_vals'])    
+    
+    if params['filter_by_words']:
+        ref, run_info['filter_by_words'] = filter_by_words(ref, params['col_words'])
+
+    return ref, run_info
+
 
 if __name__ == '__main__':
     from linker import UserLinker

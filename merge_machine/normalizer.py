@@ -16,7 +16,7 @@ from werkzeug.utils import secure_filename
 
 from abstract_data_project import AbstractDataProject, MINI_PREFIX
 from CONFIG import NORMALIZE_DATA_PATH
-from MODULES import MODULES, NORMALIZE_MODULE_ORDER, NORMALIZE_MODULE_ORDER_log # TODO: think about these...
+from MODULES import NORMALIZE_MODULES, NORMALIZE_MODULE_ORDER, NORMALIZE_MODULE_ORDER_log # TODO: think about these...
 
 class Normalizer(AbstractDataProject):
     """
@@ -34,6 +34,7 @@ class Normalizer(AbstractDataProject):
     In short: Objects stored in memory are:
         - TODO: write this
     """
+    MODULES = NORMALIZE_MODULES
     
 #==============================================================================
 # Actual class

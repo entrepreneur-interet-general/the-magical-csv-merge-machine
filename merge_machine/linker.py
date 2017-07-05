@@ -16,11 +16,14 @@ from abstract_data_project import AbstractDataProject
 from dedupe_linker import format_for_dedupe, current_load_gazetteer
 from labeller import Labeller, DummyLabeller
 from normalizer import InternalNormalizer, UserNormalizer
+from restrict_reference import perform_restriction
 
 from CONFIG import LINK_DATA_PATH
-from MODULES import MODULES, LINK_MODULE_ORDER_log
+from MODULES import LINK_MODULES, LINK_MODULE_ORDER_log
 
-class Linker(AbstractDataProject):    
+class Linker(AbstractDataProject):
+    MODULES = LINK_MODULES
+    
     def __init__(self, 
                  project_id=None, 
                  create_new=False, 
@@ -81,7 +84,6 @@ class Linker(AbstractDataProject):
         except:
             self.__dict__[file_role] = None
             #raise Exception('Normalizer project with id {0} could not be found'.format(project_id))
-        
     
     @staticmethod
     def check_file_role(file_role):
@@ -93,7 +95,6 @@ class Linker(AbstractDataProject):
         for file_role in ['source', 'ref']:
             if self.metadata['current'][file_role] is None:
                 raise Exception('{0} is not defined for this linking project'.format(file_role))
-
     
     def create_metadata(self, description=None, display_name=None):
         metadata = super().create_metadata()
@@ -227,6 +228,11 @@ class Linker(AbstractDataProject):
         '''
         return self.metadata['current']
     
+    def infer(self, module_name, params):
+        '''Overwrite to allow restrict_reference'''
+        if module_name == 'infer_restriction':
+            params['NO_MEM_DATA'] = True
+        return super().infer(module_name, params)
 
     def linker(self, module_name, paths, params):
         '''
@@ -247,7 +253,7 @@ class Linker(AbstractDataProject):
         
         log = self.init_active_log(module_name, 'link')
 
-        self.mem_data, run_info = MODULES['link'][module_name]['func'](paths, params)
+        self.mem_data, run_info = self.MODULES['link'][module_name]['func'](paths, params)
         
         self.mem_data_info['module_name'] = module_name
         
@@ -260,7 +266,7 @@ class Linker(AbstractDataProject):
         return 
 
     #==========================================================================
-    #  Module specific
+    #  Module specific: Dedupe Linker
     #==========================================================================
 
     def _gen_paths_dedupe(self):        
@@ -364,6 +370,74 @@ class Linker(AbstractDataProject):
             
         return labeller
 
+    #==========================================================================
+    #  Module specific: Dedupe Linker
+    #==========================================================================
+
+#    training_df = training_to_ref_df(training)
+#    common_words = find_common_words(training_df)
+#    common_vals = find_common_vals(training_df)    
+    
+    def restrict_reference(self, params):
+        '''Writes a new file with the path restricted reference'''
+        
+        current_module_name = 'restriction'
+        
+        # Initiate log
+        self.mem_data_info['file_role'] = 'link' # Role of file being modified
+        
+        log = self.init_active_log(current_module_name, 'link')
+        
+        # TODO: Move this
+        self.load_project_to_merge('ref')
+        module_name = self.metadata['current']['ref']['module_name']
+        file_name = self.metadata['current']['ref']['file_name']
+        self.ref.load_data(module_name, file_name)        
+        
+        
+        self.mem_data, run_info = perform_restriction(self.ref.mem_data, params)
+        
+        # Complete log
+        self.log_buffer.append(self.end_active_log(log, error=False))    
+        
+        self.mem_data_info['file_name'] = self.ref.mem_data_info['file_name']
+        self.mem_data_info['module_name'] = current_module_name
+        
+        
+        # TODO: fix fishy:
+        self.run_info_buffer[(current_module_name, '__REF__')] = {}
+        self.run_info_buffer[(current_module_name, '__REF__')][current_module_name] = run_info # TODO: fishy
+        
+        # TODO: write new_ref to "restriction"
+        
+        self.write_data()
+        self.clear_memory()
+
+        # TODO: Add to current reference
+
+        # TODO: Return smth
+
+#    
+#
+#        
+#        
+#        self.mem_data_info['file_role'] = 'link' # Role of file being modified
+#        self.mem_data_info['file_name'] = self.output_file_name(os.path.split(paths['source'])[-1]) # File being modified
+#        
+#        log = self.init_active_log(module_name, 'link')
+#
+#        self.mem_data, run_info = MODULES['link'][module_name]['func'](paths, params)
+#        
+#        self.mem_data_info['module_name'] = module_name
+#        
+#        # Complete log
+#        log = self.end_active_log(log, error=False)
+#                          
+#        # Update buffers
+#        self.log_buffer.append(log)        
+#        self.run_info_buffer[(module_name, self.mem_data_info['file_name'])] = run_info
+#        return 
+
 class UserLinker(Linker):
     def path_to(self, module_name='', file_name=''):
         return self._path_to(LINK_DATA_PATH, module_name, file_name)
@@ -432,15 +506,21 @@ if __name__ == '__main__':
 
     # Add training data
     with open('local_test_data/integration_1/training.json') as f:
-        config_dict = json.load(f)
-    proj.upload_config_data(config_dict, 'dedupe_linker', 'training.json')
+        training = json.load(f)
+    proj.upload_config_data(training, 'dedupe_linker', 'training.json')
 
-    # 
+
+    # Restrict reference
+    params = proj.infer('infer_restriction', {'training': training})
+    
+    proj.restrict_reference(params)
+    
     # proj.transform()
     
     # Perform linking
     proj.linker('dedupe_linker', paths, params)
     proj.write_data()   
+
     
     import pprint
     pprint.pprint(proj.metadata)
