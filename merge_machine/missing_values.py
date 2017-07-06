@@ -270,12 +270,15 @@ def replace_mvs(tab, params):
     run_info['has_modifications'] = False
     run_info['replace_num'] = {'all': dict(), 'columns': dict()}
 
+    # modified = pd.Series(False, index=tab.index)
+
     for mv in mvs_dict['all']:
         val, score = mv['val'], mv['score']
         run_info['replace_num']['all'][val] = 0
         if score >= thresh:
             # Metrics
-            col_count = (tab == val).sum()
+            modified_here = tab == val
+            col_count = modified.sum()
             run_info['modified_columns'] = run_info['modified_columns'].extend(list(col_count[col_count != 0].index))
             run_info['has_modifications'] = run_info['has_modifications'] or (col_count.sum() >= 1)
             run_info['replace_num']['all'][val] = int(col_count.sum())

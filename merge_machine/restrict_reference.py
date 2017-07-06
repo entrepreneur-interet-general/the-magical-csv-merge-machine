@@ -199,6 +199,15 @@ def perform_restriction(ref, params):
 
     return ref, run_info
 
+#def sample_restriction(ref, params, sample_params):
+#    '''    
+#    IN:
+#        - tab: the pandas DataFrame from which to sample
+#        - params: the parameters returned by infer_restriction
+#        - sample_parameters: parameters contolling sample size etc.
+#    '''
+#    
+#    TODO: This
 
 if __name__ == '__main__':
     from linker import UserLinker
@@ -210,3 +219,5 @@ if __name__ == '__main__':
     training_df = training_to_ref_df(training)
     common_words = find_common_words(training_df)
     common_vals = find_common_vals(training_df)
+    
+    params = infer_restriction(None, {'training': training})

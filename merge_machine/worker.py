@@ -20,13 +20,25 @@ from normalizer import UserNormalizer
 from linker import UserLinker
 
 
-# 
-listen = ['default']
+VALID_QUEUES = ['high', 'low']
+
 redis_url = os.getenv('REDISTOGO_URL', 'redis://localhost:6379')
 
 conn = redis.from_url(redis_url)
 
 if __name__ == '__main__':
+    
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('listen', type=str, nargs='*', default=VALID_QUEUES,
+                        help='list of queues to listen to')
+    
+    args = parser.parse_args()
+    listen = args.listen
+    
+    print(listen)
+    
     with Connection(conn):
         worker = Worker(list(map(Queue, listen)))
         worker.work()

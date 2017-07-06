@@ -127,13 +127,13 @@ from werkzeug.utils import secure_filename
 # Redis imports
 from rq import cancel_job as rq_cancel_job, Queue
 from rq.job import Job
-from worker import conn
+from worker import conn, VALID_QUEUES
 
 import api_queued_modules
 
 from admin import Admin
 from my_json_encoder import MyEncoder
-from normalizer import UserNormalizer
+from normalizer import UserNormalizer, MINI_PREFIX
 from linker import UserLinker
 
 #==============================================================================
@@ -158,7 +158,9 @@ app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024 # Check that files are
 socketio = SocketIO(app)       
 
 # Redis connection
-q = Queue(connection=conn, default_timeout=1800)
+q = dict()
+for q_name in VALID_QUEUES:
+    q[q_name] = Queue(q_name, connection=conn, default_timeout=1800)
 
 #==============================================================================
 # HELPER FUNCTIONS
@@ -1446,11 +1448,48 @@ def add_columns_to_return(project_id, file_role):
 # TODO: job_id does not allow to call all steps of a pipeline at once
 # TODO: put all job schedulers in single api (assert to show possible methods) or use @job   
 
-# TODO: get this from MODULES ?
-API_MODULE_NAMES = ['infer_mvs', 'replace_mvs', 'infer_types', 'recode_types', 
-                    'concat_with_init', 'run_all_transforms', 'create_labeller', 
-                    'infer_restriction', 'perform_restriction',
-                    'linker', 'link_results_analyzer']
+## TODO: get this from MODULES ?
+#API_MODULE_NAMES = ['infer_mvs', 'replace_mvs', 'infer_types', 'recode_types', 
+#                    'concat_with_init', 'run_all_transforms', 'create_labeller', 
+#                    'infer_restriction', 'perform_restriction',
+#                    'linker', 'link_results_analyzer']
+
+SCHEDULED_JOBS = {
+                    'infer_mvs': {'project_type': 'normalize'}, 
+                    'replace_mvs': {'project_type': 'normalize'}, 
+                    'infer_types': {'project_type': 'normalize'}, 
+                    'recode_types': {'project_type': 'normalize'}, 
+                    'concat_with_init': {'project_type': 'normalize'}, 
+                    'run_all_transforms': {'project_type': 'normalize'}, 
+                    'create_labeller': {'project_type': 'link', 
+                                        'priority': 'high'}, 
+                    'infer_restriction': {'project_type': 'link', 
+                                          'priority': 'high'}, 
+                    'perform_restriction': {'project_type': 'link'},
+                    'linker': {'project_type': 'link'}, 
+                    'link_results_analyzer': {'project_type': 'link'}
+                    }
+
+def choose_queue(job_name, project_id, data_params):
+    '''
+    Priority is low by default. It is high if specified in SCHEDULED_MODULES
+    or if performing on a __MINI or file that doesn't have __MINI
+    # TODO: MAKE impossible to overwrite metadata
+    '''
+    project_type = SCHEDULED_JOBS[job_name]['project_type']
+    try:
+        proj = _init_project(project_type=project_type, project_id=project_id)  
+    except:
+        import pdb; pdb.set_trace()
+    
+    if data_params and data_params is not None:
+        if (project_type=='normalize') and (
+                    (MINI_PREFIX in data_params['file_name']) 
+                    or (not proj.metadata['has_mini'])):
+            return 'high'
+    
+    return SCHEDULED_JOBS[job_name].get('priority', 'low')
+    
 
 @app.route('/api/schedule/<job_name>/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
@@ -1462,29 +1501,21 @@ def schedule_job(job_name, project_id):
         - job_name: name of module to run (full list in API_MODULE_NAMES)
         - project_id
     POST:
+    
         - data_params: the data to transform (see specific module docs)
         - module_params: how to transform the data (see spectific module docs)
     
     ex: '/api/schedule/infer_mvs/<project_id>/'
     '''
-    assert job_name in API_MODULE_NAMES
+    assert job_name in SCHEDULED_JOBS
     data_params, module_params = _parse_request()
+
+    q_priority = choose_queue(job_name, project_id, data_params)
+    assert q_priority in VALID_QUEUES
     
     job_id = project_id + '_' + job_name
-    
-    
-    #    job_name = 'test_long'
-    #    import time
-    #    
-    #    for x in range(3): job = q.enqueue_call(func='api_queued_modules._' + job_name, args=(project_id, data_params, module_params), result_ttl=5000, job_id='test')
-    #        
-    #    time.sleep(1)
-    #    job.cancel(); print(q.jobs)
-    #    
-    #    import pdb; pdb.set_trace()
-    
     #TODO: remove and de-comment unfer
-    job = q.enqueue_call(
+    job = q[q_priority].enqueue_call(
             func='api_queued_modules._' + job_name,
             args=(project_id, data_params, module_params), 
             result_ttl=5000, 
