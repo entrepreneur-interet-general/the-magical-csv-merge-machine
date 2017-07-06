@@ -1449,6 +1449,7 @@ def add_columns_to_return(project_id, file_role):
 # TODO: get this from MODULES ?
 API_MODULE_NAMES = ['infer_mvs', 'replace_mvs', 'infer_types', 'recode_types', 
                     'concat_with_init', 'run_all_transforms', 'create_labeller', 
+                    'infer_restriction', 'perform_restriction',
                     'linker', 'link_results_analyzer']
 
 @app.route('/api/schedule/<job_name>/<project_id>/', methods=['GET', 'POST'])

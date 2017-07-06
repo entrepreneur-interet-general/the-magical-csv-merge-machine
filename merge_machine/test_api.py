@@ -365,6 +365,37 @@ def link_pipeline(params):
             'module_params': training_params}
     resp = post_resp(url_to_append, body)
     
+    
+    #==============================================================================
+    # Infer restriction parameters
+    #==============================================================================
+    url_to_append = '/api/schedule/infer_restriction/{0}/'.format(project_id)
+    body = {}
+    resp = post_resp(url_to_append, body)
+    job_id = resp['job_id']
+    
+    #==============================================================================
+    # --> Wait for job result
+    #==============================================================================
+    url_to_append = '/queue/result/{0}'.format(job_id)
+    infer_restriction_resp = wait_get_resp(url_to_append, max_wait=20)
+    
+    #==============================================================================
+    # Perform restriction
+    #==============================================================================
+    url_to_append = '/api/schedule/perform_restriction/{0}/'.format(project_id)
+    body = {
+            'module_params': infer_restriction_resp['result']
+            }
+    resp = post_resp(url_to_append, body)
+    job_id = resp['job_id']
+
+    #==============================================================================
+    # --> Wait for job result
+    #==============================================================================
+    url_to_append = '/queue/result/{0}'.format(job_id)
+    resp = wait_get_resp(url_to_append)    
+    
     #==============================================================================
     # Create labeller
     #==============================================================================

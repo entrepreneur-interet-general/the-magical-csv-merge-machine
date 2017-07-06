@@ -214,7 +214,8 @@ class Linker(AbstractDataProject):
         self.metadata['current'][file_role] = {'internal': internal, 
                                              'project_id': project_id,
                                              'module_name': module_name,
-                                             'file_name': file_name}
+                                             'file_name': file_name,
+                                             'restricted': False}
         
         if file_role == 'source':
             self.metadata['log'][self.output_file_name(file_name)] = self.default_log()
@@ -285,8 +286,11 @@ class Linker(AbstractDataProject):
         
         # Get path to ref
         file_name = self.metadata['current']['ref']['file_name']
-        ref_path = self.ref.path_to_last_written(module_name=None, 
-                    file_name=file_name)
+        if self.metadata['current']['ref']['restricted']:
+            ref_path = self.path_to('restriction', file_name)
+        else:
+            ref_path = self.ref.path_to_last_written(module_name=None, 
+                        file_name=file_name)
         
         # Add paths
         paths = {
@@ -313,6 +317,12 @@ class Linker(AbstractDataProject):
         paths = self._gen_paths_dedupe()
         return DummyLabeller(paths, use_previous=True)
 
+
+#        if self.metadata['current']['ref']['restricted']:
+#            file_path = self.path_to('restriction', file_name)
+#            self.ref.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
+#                                            usecols=columns)
+
     def _gen_dedupe_labeller(self):
         '''Return a Labeller object'''
         # TODO: Add extra config page
@@ -324,23 +334,17 @@ class Linker(AbstractDataProject):
         
         # Put to dedupe input format
         print('loading ref')
-        self.load_project_to_merge('ref')
-        module_name = self.metadata['current']['ref']['module_name']
-        file_name = self.metadata['current']['ref']['file_name']
-        self.ref.load_data(module_name, file_name)
-        data_ref = format_for_dedupe(self.ref.mem_data, my_variable_definition, 'ref') 
-        self.ref.clear_memory()
+        ref = pd.read_csv(paths['ref'], encoding='utf-8', dtype=str)
+        data_ref = format_for_dedupe(ref, my_variable_definition, 'ref')
+        del ref
         gc.collect()
         print('loaded ref')
         
         # Put to dedupe input format
         print('loading source')
-        self.load_project_to_merge('source')
-        module_name = self.metadata['current']['source']['module_name']
-        file_name = self.metadata['current']['source']['file_name']
-        self.source.load_data(module_name, file_name)
-        data_source = format_for_dedupe(self.source.mem_data, my_variable_definition, 'source') 
-        self.source.clear_memory()
+        source = pd.read_csv(paths['source'], encoding='utf-8', dtype=str)
+        data_source = format_for_dedupe(source, my_variable_definition, 'source')
+        del source
         gc.collect()
         print('loaded source')
         
@@ -378,8 +382,12 @@ class Linker(AbstractDataProject):
 #    common_words = find_common_words(training_df)
 #    common_vals = find_common_vals(training_df)    
     
-    def restrict_reference(self, params):
-        '''Writes a new file with the path restricted reference'''
+    def perform_restriction(self, params):
+        '''
+        Writes a new file with the path restricted reference
+        
+        /!\ Contrary to infer or transform, the log is written directly.
+        '''
         
         current_module_name = 'restriction'
         
@@ -394,27 +402,28 @@ class Linker(AbstractDataProject):
         file_name = self.metadata['current']['ref']['file_name']
         self.ref.load_data(module_name, file_name)        
         
-        
         self.mem_data, run_info = perform_restriction(self.ref.mem_data, params)
         
         # Complete log
         self.log_buffer.append(self.end_active_log(log, error=False))    
-        
         self.mem_data_info['file_name'] = self.ref.mem_data_info['file_name']
-        self.mem_data_info['module_name'] = current_module_name
-        
+        self.mem_data_info['module_name'] = current_module_name        
         
         # TODO: fix fishy:
         self.run_info_buffer[(current_module_name, '__REF__')] = {}
         self.run_info_buffer[(current_module_name, '__REF__')][current_module_name] = run_info # TODO: fishy
         
-        # TODO: write new_ref to "restriction"
+        # Add restricted to current for restricted
+        self.metadata['current']['ref']['restricted'] = True
         
+        # TODO: write new_ref to "restriction"
         self.write_data()
         self.clear_memory()
+        
+        return run_info
 
         # TODO: Add to current reference
-
+        
         # TODO: Return smth
 
 #    
@@ -500,24 +509,22 @@ if __name__ == '__main__':
     selected_columns_from_ref = ['numero_uai', 'patronyme_uai', 
                                  'localite_acheminement_uai']
     
-    #                          
-    params = {'variable_definition': my_variable_definition,
-              'selected_columns_from_ref': selected_columns_from_ref}
-
     # Add training data
     with open('local_test_data/integration_1/training.json') as f:
         training = json.load(f)
     proj.upload_config_data(training, 'dedupe_linker', 'training.json')
-
-
+    
     # Restrict reference
     params = proj.infer('infer_restriction', {'training': training})
-    
-    proj.restrict_reference(params)
+    proj.perform_restriction(params)
     
     # proj.transform()
     
     # Perform linking
+    params = {'variable_definition': my_variable_definition,
+              'selected_columns_from_ref': selected_columns_from_ref}
+           
+    
     proj.linker('dedupe_linker', paths, params)
     proj.write_data()   
 

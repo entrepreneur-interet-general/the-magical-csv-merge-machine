@@ -103,10 +103,12 @@ class AbstractDataProject(AbstractProject):
         '''Load data as pandas DataFrame to memory. Overwritten in normalize'''
         file_path = self.path_to(module_name, file_name)
         if nrows is not None:
-            print('Nrows is : ', nrows)
-            self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, nrows=nrows, usecols=columns)
+            print('Nrows is: ', nrows)
+            self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
+                                        nrows=nrows, usecols=columns)
         else:
-            self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, usecols=columns)
+            self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
+                                        usecols=columns)
         self.mem_data_info = {'file_name': file_name,
                               'module_name': module_name}
 
@@ -338,7 +340,7 @@ class AbstractDataProject(AbstractProject):
     def clear_memory(self):
         '''Removes the table loaded in memory'''
         self.mem_data = None
-        self.mem_data_info = None
+        self.mem_data_info = dict()
         gc.collect()
         
         

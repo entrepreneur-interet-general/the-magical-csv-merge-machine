@@ -197,6 +197,52 @@ def _create_labeller(project_id, *argv):
     proj.write_labeller(labeller)
     return
 
+def _infer_restriction(project_id, _, module_params):
+    '''
+    Runs the training data and infers possible restrictions that can be made
+    on the referential.
+    
+    ARGUMENTS (GET):
+        project_id: ID for "link" project
+
+    ARGUMENTS (POST):
+        - data_params: none
+        - module_params: {#TODO: fill with params from restrict}
+    '''
+    if module_params is None:
+        module_params = dict()
+    
+    proj = UserLinker(project_id=project_id)
+    training = proj.read_config_data('dedupe_linker', 'training.json')
+    if not training:
+        raise Exception('No training file was found in this project')
+    module_params['training'] = training
+    
+    result = proj.infer('infer_restriction', module_params)
+        
+    # Write log
+    proj.write_log_buffer(False)
+    return result
+
+def _perform_restriction(project_id, _, module_params):
+    '''
+    Creates a restricted version of the file set as reference in the link
+    project and writes it in the link project.
+    
+    ARGUMENTS (GET):
+        project_id: ID for "link" project
+
+    ARGUMENTS (POST):
+        - data_params: none
+        - module_params: same as result of infer_mvs
+    '''
+    proj = UserLinker(project_id=project_id)
+    
+    run_info = proj.perform_restriction(module_params)
+    
+    return run_info
+
+
 # In test_linker
 def _linker(project_id, *argv):
     '''
