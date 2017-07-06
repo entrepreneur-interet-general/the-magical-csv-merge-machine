@@ -417,6 +417,14 @@ class Normalizer(AbstractDataProject):
         self.mem_data.columns = [x + '__MMM_NORMALIZED' for x in self.mem_data.columns]
         self.mem_data = pd.concat([og_tab, self.mem_data], 1)
         
+        # Re-order columns
+        columns = []
+        for col in og_tab.columns:
+            columns.append(col)
+            modified_cols = filter(lambda x: col + '__' in x, og_tab.columns)
+            columns.extend(modified_cols)
+        self.mem_data = self.mem_data[columns]
+        
         self.mem_data_info['module_name'] = 'concat_with_init'
         
         run_info = {} # TODO: check specifications for run_info
