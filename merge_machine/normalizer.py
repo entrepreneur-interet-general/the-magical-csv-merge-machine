@@ -449,7 +449,7 @@ class Normalizer(AbstractDataProject):
         # Only run all if there is a MINI version of the file # TODO: check that this is valid
         if self.metadata['has_mini']:
             for module_name in NORMALIZE_MODULE_ORDER:
-                if MODULES['transform'][module_name].get('use_in_full_run', False):
+                if self.MODULES['transform'][module_name].get('use_in_full_run', False):
                     try:
                         run_info_name = MINI_PREFIX + self.mem_data_info['file_name'] + '__run_info.json'
                         

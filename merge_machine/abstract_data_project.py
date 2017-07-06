@@ -349,7 +349,7 @@ class AbstractDataProject(AbstractProject):
         '''
         
         # Check that memory is loaded (if necessary)
-        if not params.get('NO_MEM_DATA', False):
+        if (params is not None) and (not params.get('NO_MEM_DATA', False)):
             self.check_mem_data()  
         
         # Initiate log
