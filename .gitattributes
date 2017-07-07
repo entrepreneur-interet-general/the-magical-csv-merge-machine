@@ -1,2 +1,2 @@
-external static
-external resource
+external static/*
+external resource/*
