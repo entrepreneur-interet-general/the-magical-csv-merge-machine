@@ -22,8 +22,10 @@ METHODS:
     - infer(self, module_name, params)
 
 """
+from collections import defaultdict
 import csv
 import gc
+from itertools import tee
 import os
 import time
 
@@ -100,17 +102,30 @@ class AbstractDataProject(AbstractProject):
                         mandatory after dedupe)')
         
     def load_data(self, module_name, file_name, nrows=None, columns=None):
-        '''Load data as pandas DataFrame to memory. Overwritten in normalize'''
+        '''
+        Load data as pandas DataFrame to memory. Overwritten in normalize
+        
+        Returns a 2-element tuple:
+            - first element is a generator which generates pandas DataFrames
+            - second element is a 
+        '''
         file_path = self.path_to(module_name, file_name)
         if nrows is not None:
             print('Nrows is: ', nrows)
             self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
-                                        nrows=nrows, usecols=columns)
+                                nrows=nrows, usecols=columns, chunksize=1000)
         else:
             self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
-                                        usecols=columns)
+                                        usecols=columns, chunksize=1000)
         self.mem_data_info = {'file_name': file_name,
-                              'module_name': module_name}
+                              'module_name': module_name,
+                              'nrows': nrows, 
+                              'columns': columns}
+
+    def reload(self):
+        '''
+        Loads data with the parameters 
+        '''
 
     def to_xls(self, module_name, file_name):
         '''
@@ -329,8 +344,20 @@ class AbstractDataProject(AbstractProject):
             os.makedirs(dir_path)        
         file_path = self.path_to(self.mem_data_info['module_name'], 
                                  self.mem_data_info['file_name'])
-        self.mem_data.to_csv(file_path, encoding='utf-8', index=False, 
-                             quoting=csv.QUOTE_NONNUMERIC)
+        
+#        try:
+        with open(file_path, 'w') as w:
+            # Enumerate to know whether or not to write header (i==0)
+            for i, part_tab in enumerate(self.mem_data):
+                self.mem_data.to_csv(w, encoding='utf-8', 
+                                     index=False,  
+                                     header=i==0, 
+                                     quoting=csv.QUOTE_NONNUMERIC)
+#        except Exception as e:
+#            if os.path.isfile(file_path):
+#                os.remove(file_path)
+#            raise e
+            
         print('Wrote to ', file_path)
         
         self.write_log_buffer(True)
@@ -357,7 +384,10 @@ class AbstractDataProject(AbstractProject):
         # Initiate log
         log = self.init_active_log(module_name, 'infer')
         
-        infered_params = self.MODULES['infer'][module_name]['func'](self.mem_data, params)
+        # We duplicate the generator to load a full version of the table and
+        # while leaving self.mem_data unchanged
+        self.mem_data, tab_gen = tee(self.mem_data)        
+        infered_params = self.MODULES['infer'][module_name]['func'](pd.concat(tab_gen), params)
         
         # Write result of inference
         module_to_write_to = self.MODULES['infer'][module_name]['write_to']
@@ -368,6 +398,40 @@ class AbstractDataProject(AbstractProject):
         
         return infered_params
     
+    @staticmethod
+    def count_modifications(modified):
+        '''
+        Counts the number of modified values per column
+        
+        INPUT:
+            - modified: pandas DataFrame with booleans to indicate if the value
+                        was modified
+        OUTPUT:
+            - mod_count: dictionary with keys: the columns of the dataframe
+                        and values: the number of "True" per column
+        '''
+        mod_count = modified.sum().to_dict()
+        return mod_count
+    
+    @staticmethod
+    def add_mod(mod_count, new_mod_count):
+        '''
+        Updates the modification count
+        '''
+        for col, count in new_mod_count.items():
+            mod_count[col] += count
+        return mod_count        
+    
+    def run_transform_module(self, module_name, partial_data, params):
+        # Apply module transformation
+        new_partial_data, modified = self.MODULES['transform'][module_name] \
+                                               ['func'](partial_data, params)
+                                               
+        # Store modificiations in run_info_buffer
+        self.run_info_buffer[(module_name, self.mem_data_info['file_name'])]['mod_count'] = \
+            self.add_mod(self.run_info_buffer[(module_name, self.mem_data_info['file_name'])]['mod_count'],\
+                         self.count_modifications(modified))
+        return new_partial_data
     
     def transform(self, module_name, params):
         '''
@@ -380,23 +444,29 @@ class AbstractDataProject(AbstractProject):
         # Initiate log
         log = self.init_active_log(module_name, 'transform')
 
+        # Initiate run_info
+        run_info = dict()
+        run_info['file_name'] = self.mem_data_info['file_name']
+        run_info['module_name'] = module_name
+        run_info['params'] = params
+        run_info['mod_count'] = defaultdict(int)
+        self.run_info_buffer[(module_name, run_info['file_name'])] = run_info
+
         # TODO: catch module errors and add to log
         # Run module on pandas DataFrame 
-        self.mem_data, run_info = self.MODULES['transform'][module_name]['func'](self.mem_data, params)
+        self.mem_data = (self.run_transform_module(module_name, data, params) \
+                                                 for data in self.mem_data)
         self.mem_data_info['module_name'] = module_name
 
         # Complete log
         log = self.end_active_log(log, error=False)
                           
-        # Add time to run_info (# TODO: is this the best way?)
-        run_info['file_name'] = self.mem_data_info['file_name']
-        run_info['module_name'] = module_name
-        run_info['params'] = params
-        run_info['start_timestamp'] = log['start_timestamp']
-        run_info['end_timestamp'] = log['end_timestamp']
+        # Add time to run_info (# TODO: is this the best way?) 
+#        run_info['start_timestamp'] = log['start_timestamp']
+#        run_info['end_timestamp'] = log['end_timestamp']
         
         # Update buffers
         self.log_buffer.append(log)
-        self.run_info_buffer[(module_name, self.mem_data_info['file_name'])] = run_info
+        
         
         return log, run_info

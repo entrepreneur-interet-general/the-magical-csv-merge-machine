@@ -265,46 +265,29 @@ def replace_mvs(tab, params):
     assert sorted(list(mvs_dict.keys())) == ['all', 'columns']
 
     # Run information
-    run_info = dict()
-    run_info['modified_columns'] = []
-    run_info['has_modifications'] = False
-    run_info['replace_num'] = {'all': dict(), 'columns': dict()}
-
-    # modified = pd.Series(False, index=tab.index)
+    modified = pd.Series(False, index=tab.index)
 
     for mv in mvs_dict['all']:
         val, score = mv['val'], mv['score']
-        run_info['replace_num']['all'][val] = 0
+        #        run_info['replace_num']['all'][val] = 0
         if score >= thresh:
             # Metrics
-            modified_here = tab == val
-            col_count = modified.sum()
-            run_info['modified_columns'] = run_info['modified_columns'].extend(list(col_count[col_count != 0].index))
-            run_info['has_modifications'] = run_info['has_modifications'] or (col_count.sum() >= 1)
-            run_info['replace_num']['all'][val] = int(col_count.sum())
+            modified = modified | (tab == val)
             
             # Do transformation
             tab.replace(val, np.nan, inplace=True)
     
     for col, mv_values in mvs_dict['columns'].items():
-        run_info['replace_num']['columns'][col] = dict()
         for mv in mv_values:
             val, score = mv['val'], mv['score']
-            run_info['replace_num']['columns'][col][val] = 0
             if score >= thresh:
                 # Metrics
-                count = (tab[col] == val).sum()
-                if count:
-                    run_info['modified_columns'].append(col)
-                    run_info['has_modifications'] = run_info['has_modifications'] or (count >= 1)
-                run_info['replace_num']['columns'][col][val] = int(count)      
+                modified[col] = modified[col] | (tab[col] == val)
                 
                 # Do transformation
                 tab[col].replace(val, np.nan, inplace=True)
-
-    run_info['modified_columns'] = list(set(run_info['modified_columns']))
     
-    return tab, run_info
+    return tab, modified
 
 
 def sample_mvs_ilocs(tab, params, sample_params):

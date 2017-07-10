@@ -516,6 +516,8 @@ if __name__ == '__main__':
     # Load source data to memory
     proj.load_data(module_name='INIT' , file_name=user_given_name)
     
+    
+    assert False
     inferredTypes = proj.infer('infer_types', params = None)
     
     print('Inferred data types:', inferredTypes)
