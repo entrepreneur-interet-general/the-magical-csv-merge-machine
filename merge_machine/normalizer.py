@@ -235,8 +235,6 @@ class Normalizer(AbstractDataProject):
         if user_given_name is not None:
             base_name = user_given_name.rsplit('.')[0]
             extension = user_given_name.rsplit('.')[-1]    
-            if extension not in ['csv', 'xls', 'xlsx']:
-                raise Exception('user given name should end with .csv , .xls , or .xlsx or .zip')
             if any(x in base_name for x in CHARS_TO_REPLACE):
                 raise Exception('user_given_name sould be alphanumeric or underscores (+.csv or .xls or .xlsx)')
                 
@@ -251,6 +249,9 @@ class Normalizer(AbstractDataProject):
         else:
             base_name = file_name.rsplit('.')[0]
             extension = file_name.rsplit('.')[-1]    
+
+        if extension not in ['csv', 'xls', 'xlsx']:
+            raise Exception('file name (and user given name) should end with .csv , .xls , or .xlsx or .zip')
             
         file_name = secure_filename(file_name)
         self.mem_data_info['file_name'] = file_name
@@ -266,10 +267,9 @@ class Normalizer(AbstractDataProject):
         if extension == 'csv':
             self.mem_data, sep, encoding = self.read_csv(file, CHARS_TO_REPLACE)
             file_type = 'csv'
-        else:
+        elif extension in ['xls', 'xlsx']:
             self.mem_data, sep, encoding = self.read_excel(file, CHARS_TO_REPLACE)
             file_type = 'excel'
-
 
         if len(set(self.mem_data.columns)) != self.mem_data.shape[1]:
             raise Exception('Column names should all be different')
