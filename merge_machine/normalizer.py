@@ -35,6 +35,7 @@ class Normalizer(AbstractDataProject):
         - TODO: write this
     """
     MODULES = NORMALIZE_MODULES
+    CHARS_TO_REPLACE = [' ', ',', '.', '(', ')', '\'', '\"', '/']
     
 #==============================================================================
 # Actual class
@@ -178,7 +179,14 @@ class Normalizer(AbstractDataProject):
         #return "".join([c for c in file_name[:-4] if c.isalpha() or c.isdigit() or c==' ']).rstrip() + ext
     
     @staticmethod
-    def read_csv(file, chars_to_replace):
+    def rename_columns(tab, chars_to_replace):
+        '''Replaces characters in table header'''
+        for char in chars_to_replace:
+            tab.columns = [unidecode.unidecode(x.replace(char, '_')) \
+                                     for x in tab.columns]        
+        return tab
+        
+    def read_csv(self, file, chars_to_replace):
         ENCODINGS = ['utf-8', 'windows-1252']
         SEPARATORS = [',', ';', '\t']
         
@@ -186,10 +194,21 @@ class Normalizer(AbstractDataProject):
         for encoding in ENCODINGS:
             for sep in SEPARATORS:
                 try:
-                    tab = pd.read_csv(file, sep=sep, encoding=encoding, dtype=str)
-                    for char in chars_to_replace:
-                        tab.columns = [unidecode.unidecode(x.replace(char, '_')) \
-                                                 for x in tab.columns]
+                    # Just read column name
+                    tab_it = pd.read_csv(file, sep=sep, encoding=encoding, 
+                                         dtype=str, chunksize=1)
+                    columns = next(tab_it).columns
+                    
+                    try:
+                        file.seek(0)
+                    except:
+                        pass # TODO: really? try except? really??
+                    
+                    # Create actual generator
+                    tab_it = pd.read_csv(file, sep=sep, encoding=encoding, 
+                                        dtype=str, chunksize=1000)
+                    tab = (self.rename_columns(sub_tab, chars_to_replace) 
+                                        for sub_tab in tab_it)
                     could_read = True
                     break
                 except Exception as e:
@@ -202,11 +221,12 @@ class Normalizer(AbstractDataProject):
             raise Exception('Separator and/or Encoding not detected. Try uploading \
                             a csv with "," as separator with utf-8 encoding')            
             
-        return tab, sep, encoding
+        return tab, sep, encoding, columns
     
     @staticmethod
     def read_excel(file, chars_to_replace):
-        tab = pd.read_excel(file, dtype=str)
+        # TODO: add iterator and return columns
+        tab = pd.read_excel(file, dtype=str, chunksize=1000)
         for char in chars_to_replace:
             tab.columns = [unidecode.unidecode(x.replace(char, '_')) \
                                      for x in tab.columns]
@@ -222,8 +242,7 @@ class Normalizer(AbstractDataProject):
         The file will be re-coded in utf-8 with a "," separator. Also, chars
         specified in CHARS_TO_REPLACE will be replaced by "_" in the header.
         """
-        CHARS_TO_REPLACE = [' ', ',', '.', '(', ')', '\'', '\"', '/']
-
+        chars_to_replace = self.CHARS_TO_REPLACE
         
         # Check that 
         if self.metadata['files']:
@@ -237,7 +256,7 @@ class Normalizer(AbstractDataProject):
             extension = user_given_name.rsplit('.')[-1]    
             if extension not in ['csv', 'xls', 'xlsx']:
                 raise Exception('user given name should end with .csv , .xls , or .xlsx or .zip')
-            if any(x in base_name for x in CHARS_TO_REPLACE):
+            if any(x in base_name for x in chars_to_replace):
                 raise Exception('user_given_name sould be alphanumeric or underscores (+.csv or .xls or .xlsx)')
                 
         # TODO: Check that file is not already present
@@ -264,14 +283,14 @@ class Normalizer(AbstractDataProject):
         log = self.init_active_log('INIT', 'transform')
             
         if extension == 'csv':
-            self.mem_data, sep, encoding = self.read_csv(file, CHARS_TO_REPLACE)
+            self.mem_data, sep, encoding, columns = self.read_csv(file, chars_to_replace)
             file_type = 'csv'
         else:
-            self.mem_data, sep, encoding = self.read_excel(file, CHARS_TO_REPLACE)
+            self.mem_data, sep, encoding = self.read_excel(file, chars_to_replace)
             file_type = 'excel'
 
 
-        if len(set(self.mem_data.columns)) != self.mem_data.shape[1]:
+        if len(set(columns)) != len(columns):
             raise Exception('Column names should all be different')
 
 
@@ -283,8 +302,8 @@ class Normalizer(AbstractDataProject):
                                             }
         
         if self.metadata['column_tracker'] is None:
-            self.metadata['column_tracker'] = {'original': list(self.mem_data.columns),
-                                              'selected': list(self.mem_data.columns), 
+            self.metadata['column_tracker'] = {'original': list(columns),
+                                              'selected': list(columns), 
                                               'created': []}
         else:
             assert list(self.mem_data.columns) == self.metadata['column_tracker']['original']
@@ -292,7 +311,7 @@ class Normalizer(AbstractDataProject):
         # Create new empty log in metadata
         self.mem_data_info['file_name'] = secure_filename(base_name) + '.csv'
         self.metadata['log'][file_name] = self.default_log()
-        self.write_metadata()
+        # self.write_metadata() Delete this line if evth is working fine
         
         # Complete log
         log = self.end_active_log(log, error=False)
@@ -305,19 +324,18 @@ class Normalizer(AbstractDataProject):
                         'file_type': file_type, 
                         'sep': sep, 
                         'encoding': encoding, 
-                        'nrows': self.mem_data.shape[0], 
-                        'ncols': self.mem_data.shape[1]
+                        'ncols': len(columns)
                     }
         self.run_info_buffer[('INIT', file_name)] = config_dict
         # TODO: duplicate with run_info and infered_config.json        
         
         # write data and log
-        self.write_data()
+        config_dict['nrows'] = self.write_data()
 
 
         self.upload_config_data(config_dict, 'INIT', 'infered_config.json')
 
-        # self.clear_memory()    
+        self.clear_memory()    
         
         return None, config_dict
 
@@ -404,6 +422,7 @@ class Normalizer(AbstractDataProject):
         
         TODO: merge with transform
         '''
+        chars_to_replace = self.CHARS_TO_REPLACE
         
         self.check_mem_data()
         
@@ -412,18 +431,28 @@ class Normalizer(AbstractDataProject):
     
         og_file_name = self.mem_data_info['file_name']
         og_file_path = self.path_to('INIT', og_file_name)
-        og_tab = pd.read_csv(og_file_path, encoding='utf-8', dtype=str)
-        assert len(og_tab) == len(self.mem_data)
-        self.mem_data.columns = [x + '__MMM_NORMALIZED' for x in self.mem_data.columns]
-        self.mem_data = pd.concat([og_tab, self.mem_data], 1)
+        og_tab, _, _, og_columns = self.read_csv(og_file_path, chars_to_replace)
+            
+        def rename_column(col):
+            if '__' in col:
+                return col
+            else:
+                return col + '__NORMALIZED'
+    
+        def my_concat(og_data, data):
+            data.columns = [rename_column(col) for col in data.columns]
+            data = pd.concat([og_data, data], 1)
         
-        # Re-order columns
-        columns = []
-        for col in og_tab.columns:
-            columns.append(col)
-            modified_cols = filter(lambda x: col + '__' in x, og_tab.columns)
-            columns.extend(modified_cols)
-        self.mem_data = self.mem_data[columns]
+            # Re-order columns
+            columns = []
+            for col in og_data.columns:
+                columns.append(col)
+                modified_cols = filter(lambda x: col + '__' in x, og_data.columns)
+                columns.extend(modified_cols)
+            data = data[columns]
+            return data
+        
+        self.mem_data = (my_concat(og_data, data) for og_data, data in zip(og_tab, self.mem_data))
         
         self.mem_data_info['module_name'] = 'concat_with_init'
         
@@ -493,7 +522,7 @@ class InternalNormalizer(Normalizer):
 if __name__ == '__main__':
     import logging
 
-    source_file_name = 'ref.csv' # 'SIREN_FUI.col' # 'abes.csv'
+    source_file_name = 'source.csv' # 'SIREN_FUI.col' # 'abes.csv'
     user_given_name = 'second_file.csv'
 
     logging.basicConfig(filename = 'log/preprocess_fields.log', level = logging.DEBUG)
@@ -508,35 +537,33 @@ if __name__ == '__main__':
         proj.upload_init_data(f, source_file_name, user_given_name)
 
     # Select only interesting columns
-    proj.add_selected_columns([
-                                'numero_uai', 'patronyme_uai',
-                               'localite_acheminement_uai', 'departement',
-                               'code_postal_uai'])
+    #    proj.add_selected_columns([
+    #                                'numero_uai', 'patronyme_uai',
+    #                               'localite_acheminement_uai', 'departement',
+    #                               'code_postal_uai'])
+
 
     # Load source data to memory
     proj.load_data(module_name='INIT' , file_name=user_given_name)
     
     
-    assert False
-    inferredTypes = proj.infer('infer_types', params = None)
+    infered_mvs = proj.infer('infer_mvs', params=None)
     
-    print('Inferred data types:', inferredTypes)
-
-    # Try transformation
-    params = { 'dataTypes': {
-    'TEL': 'Téléphone',
-    'EMAIL': 'Email',
-    'WEB': 'URL',
-    'ADPHYSIQUE': 'Voie',
-    'VILLE': 'Commune',
-    'CDPOSTAL': 'Code Postal',
-    'PAYS': 'Pays' } }
-    proj.transform('recode_types', params)
+    proj.transform('replace_mvs', params=infered_mvs)
+    
+    #    inferredTypes = proj.infer('infer_types', params = None)
+    #    
+    #    print('Inferred data types:', inferredTypes)
+    #
+    #    proj.transform('recode_types', inferredTypes)
     
     # Write transformed file
-    proj.write_data()
-    proj.write_log_buffer(written=True)
-    proj.write_run_info_buffer()
+#    assert False
+#    print('Rows written', proj.write_data())
+#    proj.write_log_buffer(written=True)
+#    proj.write_run_info_buffer()
+#    
+#    assert False
     
     # Concat with init
     proj.concat_with_init()

@@ -346,13 +346,15 @@ class AbstractDataProject(AbstractProject):
                                  self.mem_data_info['file_name'])
         
 #        try:
+        nrows = 0
         with open(file_path, 'w') as w:
             # Enumerate to know whether or not to write header (i==0)
             for i, part_tab in enumerate(self.mem_data):
-                self.mem_data.to_csv(w, encoding='utf-8', 
+                part_tab.to_csv(w, encoding='utf-8', 
                                      index=False,  
                                      header=i==0, 
                                      quoting=csv.QUOTE_NONNUMERIC)
+                nrows += len(part_tab)
 #        except Exception as e:
 #            if os.path.isfile(file_path):
 #                os.remove(file_path)
@@ -362,6 +364,11 @@ class AbstractDataProject(AbstractProject):
         
         self.write_log_buffer(True)
         self.write_run_info_buffer()
+        
+        if nrows == 0:
+            raise Exception('No data was written, make sure you loaded data before'
+                           + ' calling write_data')
+        return nrows
 
         
     def clear_memory(self):
@@ -386,7 +393,7 @@ class AbstractDataProject(AbstractProject):
         
         # We duplicate the generator to load a full version of the table and
         # while leaving self.mem_data unchanged
-        self.mem_data, tab_gen = tee(self.mem_data)        
+        self.mem_data, tab_gen = tee(self.mem_data)
         infered_params = self.MODULES['infer'][module_name]['func'](pd.concat(tab_gen), params)
         
         # Write result of inference
@@ -424,12 +431,21 @@ class AbstractDataProject(AbstractProject):
     
     def run_transform_module(self, module_name, partial_data, params):
         # Apply module transformation
+        valid_columns = [col for col in partial_data if '__' not in col] # TODO: test on upload      
         new_partial_data, modified = self.MODULES['transform'][module_name] \
-                                               ['func'](partial_data, params)
-                                               
+                                    ['func'](partial_data[valid_columns], params)
+        
+        # Add modifications tracker to data
+        modified.columns = [col + '__MODIFIED' for col in modified.columns]
+        for col in modified.columns:
+            if col in new_partial_data:
+                new_partial_data[col] = new_partial_data[col] | modified[col]
+            else:
+                new_partial_data[col] = modified[col]
+
         # Store modificiations in run_info_buffer
         self.run_info_buffer[(module_name, self.mem_data_info['file_name'])]['mod_count'] = \
-            self.add_mod(self.run_info_buffer[(module_name, self.mem_data_info['file_name'])]['mod_count'],\
+            self.add_mod(self.run_info_buffer[(module_name, self.mem_data_info['file_name'])]['mod_count'], \
                          self.count_modifications(modified))
         return new_partial_data
     

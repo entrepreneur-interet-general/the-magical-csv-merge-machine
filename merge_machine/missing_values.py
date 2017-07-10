@@ -265,7 +265,7 @@ def replace_mvs(tab, params):
     assert sorted(list(mvs_dict.keys())) == ['all', 'columns']
 
     # Run information
-    modified = pd.Series(False, index=tab.index)
+    modified = pd.DataFrame(False, index=tab.index, columns=tab.columns)
 
     for mv in mvs_dict['all']:
         val, score = mv['val'], mv['score']
