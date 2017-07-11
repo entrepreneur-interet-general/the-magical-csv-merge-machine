@@ -235,17 +235,23 @@ def normalizeAndValidatePhrase(value,
 	return ' '.join(tokens) if len(tokens) > 0 else None
 
 def validatedLexicon(lexicon, tokenize = False):
-	return set(filter(lambda v: v is not None,
-		[(normalizeAndValidatePhrase(s) if tokenize else caseToken(s, False)) for s in lexicon]))
+	return set(filter(lambda v: v is not None, [normalizeOrNot(s, tokenize) for s in lexicon]))
 
-def validatedLexiconMap(lexicon, tokenize = False, stopWords = None):
+def validatedLexiconMap(lexicon, tokenize = False, stopWords = None, synMap = None):
 	''' Returns a dictionary from normalized string to list of original strings. '''
 	lm = defaultdict(list)
 	for s in lexicon:
-		k = normalizeAndValidatePhrase(s, stopWords = stopWords) if tokenize else caseToken(s, False)
-		if k is None: continue
-		lm[k].append(s)
+		addToLexiconMap(lm, s, stopWords, tokenize)
+	if synMap is not None:
+		for (mainVariant, altVariants) in synMap.items():
+			addToLexiconMap(lm, mainVariant, stopWords, tokenize)
+			# for altVariant in altVariants: addToLexiconMap(lm, altVariant, stopWords, tokenize)
 	return lm
+
+def addToLexiconMap(lm, s, stopWords, tokenize):
+	k = normalizeAndValidatePhrase(s, stopWords = stopWords) if tokenize else caseToken(s, False)
+	if k is None: return
+	lm[k].append(s)
 
 # Loading CSV and raw (one entry per line) text files
 
@@ -262,7 +268,7 @@ def fileRowIterator(fileName, sep, path = RESOURCE_PATH):
 def fileColumnToList(fileName, c, sep = '\t', includeInvalid = True):
 	return [r[c] for r in fileRowIterator(fileName, sep) if len(r) > c and (includeInvalid or isValidValue(r[c]))]
 
-def fileToVariantMap(fileName, sep = '|', includeSelf = False):
+def fileToVariantMap(fileName, sep = '|', includeSelf = False, tokenize = False):
 	''' The input format is pipe-separated, column 1 is the main variant, column 2 an alternative variant.
 
 		Returns a reverse index, namely a map from original alternative variant to original main variant
@@ -273,11 +279,16 @@ def fileToVariantMap(fileName, sep = '|', includeSelf = False):
 	'''
 	otherToMain = defaultdict(list)
 	mainToOther = defaultdict(list)
-	for r in fileRowIterator(fileName, sep):
-		if len(r) < 2: continue
-		main, alts = r[0], r[1:]
+	for row in fileRowIterator(fileName, sep):
+		if len(row) < 2: continue
+		r = list([normalizeOrNot(e, tokenize = tokenize)  for e in row])
+		main, alts = r[0], set(r[1:])
+		alts.discard(main)
 		for alt in alts: otherToMain[alt].append(main)
-		mainToOther[main].extend(alts)
+		mainToOther[main].extend(list(alts))
+	logging.debug('Main variant collisions from {}:'.format(fileName))
+	for (other, main) in otherToMain.items():
+		if len(main) > 1: logging.debug(other + ' --> ' + '|'.join(main))
 	l = list([(other, next(iter(main))) for (other, main) in otherToMain.items() if len(main) < 2])
 	if includeSelf: l = list([(main, main) for main in mainToOther.keys()]) + l
 	return dict(l)
@@ -450,7 +461,7 @@ TYPE_TAGS = {
 
 # Stop words specific to certain data types
 
-STOP_WORDS_CITY = ['cedex', 'cdx']
+STOP_WORDS_CITY = ['commune', 'cedex', 'cdx']
 
 # Base class for all type matchers
 
@@ -636,8 +647,10 @@ def fssScore(r, l = 1024):
 	elif l > 4: return (r[1], 20) if len(r[1]) > 0 else (r[2], 10)
 	else: return (r[1], 5) if len(r[1]) > 0 else ([], 0)
 
+def normalizeOrNot(v, tokenize = False, stopWords = None): return normalizeAndValidatePhrase(v, stopWords = stopWords) if tokenize else justCase(v)
+
 class LabelMatcher(TypeMatcher):
-	def __init__(self, t, lexicon, mm, stopWords = None):
+	def __init__(self, t, lexicon, mm, stopWords = None, synMap = None):
 		''' Parameters:
 			diversity specifies the min number of distinct reference values to qualify a column-wide match
 				(it is essential to have this constraint when the labels in question represent singleton instances,
@@ -645,7 +658,10 @@ class LabelMatcher(TypeMatcher):
 		super(LabelMatcher, self).__init__(t)
 		self.mm = mm
 		self.stopWords = prepStopWordList(stopWords)
-		labelsMap = validatedLexiconMap(lexicon, tokenize = True, stopWords = self.stopWords) # dictionary from normalized string to list of original strings
+		self.synMap = synMap
+		self.tokenize = synMap is not None
+		# dictionary from normalized string to list of original strings
+		labelsMap = validatedLexiconMap(lexicon, tokenize = self.tokenize, stopWords = self.stopWords, synMap = synMap) 
 		self.labelsMap = labelsMap
 		if mm == MATCH_MODE_EXACT:
 			logging.info('SET UP exact label matcher for <%s>: lexicon of size %d', self.t, len(labelsMap))
@@ -656,8 +672,10 @@ class LabelMatcher(TypeMatcher):
 		return math.log(len(self.labelsMap), 1.8)
 	@timed
 	def match(self, c):
-		v = normalizeAndValidatePhrase(c.value, stopWords = self.stopWords)
+		v = normalizeOrNot(c.value, stopWords = self.stopWords, tokenize = self.tokenize)
 		if not v: return
+		if self.synMap is not None and v in self.synMap: # Check for synonyms
+			v = self.synMap[v]
 		if self.mm == MATCH_MODE_EXACT:
 			if v in self.labelsMap:
 				self.registerFullMatch(c, self.t, 100, self.labelsMap[v])
@@ -1609,6 +1627,8 @@ def generateValueMatchers(lvl = 0):
 		Parameter:
 		lvl 0 for lightweight matching, 2 for the heaviest variants, 1 as an intermediate level
 		'''
+	yield LabelMatcher(F_COUNTRY, fileToSet('country'), MATCH_MODE_EXACT, synMap = fileToVariantMap('country_latin.syn'))
+	return
 
 	# Identifiers (typically but not necessarily unique)
 	# yield TemplateMatcher('Identifiant', 90) # TODO distinguish unique vs. non-unique
@@ -1691,7 +1711,7 @@ def generateValueMatchers(lvl = 0):
 	yield SubtypeMatcher(F_RD, [F_RD_STRUCT, F_RD_PARTNER, F_CLINICALTRIAL_COLLAB])
 	if lvl >= 0:
 		yield RegexMatcher(F_ACADEMIE, "acad.mie", ignoreCase = True)
-		yield LabelMatcher(F_ACADEMIE, fileToSet('academie'), MATCH_MODE_EXACT)    # SIES/APB
+		yield LabelMatcher(F_ACADEMIE, fileToSet('academie'), MATCH_MODE_EXACT, stopWords = ['académie'])    # SIES/APB
 	if lvl >= 0: 
 		yield VocabMatcher(F_ETAB, fileToSet('etablissement.vocab'), ignoreCase = True, partial = False)
 	if lvl >= 0: 
@@ -1715,7 +1735,10 @@ def generateValueMatchers(lvl = 0):
 		yield CustomAddressMatcher()
 	if lvl >= 0: 
 		yield RegexMatcher(F_ZIP, "[0-9]{5}")
-	if lvl >= 0: 
+
+	if lvl >= 1:
+		yield VariantExpander(fileToVariantMap('country.syn'), F_COUNTRY, False)
+	elif lvl >= 0:
 		yield LabelMatcher(F_COUNTRY, fileToSet('country'), MATCH_MODE_EXACT)
 
 	if lvl >= 2: 
