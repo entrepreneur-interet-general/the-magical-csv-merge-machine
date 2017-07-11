@@ -210,37 +210,39 @@ def justCase(phrase, keepAcronyms = False):
 def splitAndCase(phrase, keepAcronyms):
 	return map(lambda t: caseToken(t, keepAcronyms), str.split(preSplit(phrase)))
 
-def validateTokens(phrase, keepAcronyms, tokenValidator, phraseValidator):
+def validateTokens(phrase, keepAcronyms, tokenValidator, phraseValidator, stopWords = None):
 	if phrase:
 		tokens = splitAndCase(phrase, keepAcronyms)
 		validTokens = []
 		for token in tokens:
-			if tokenValidator(token): validTokens.append(token)
+			if tokenValidator(token) and (stopWords is None or token not in stopWords): validTokens.append(token)
 		if phraseValidator(validTokens): return validTokens
 	return []
 
 def normalizeAndValidateTokens(value,
-	keepAcronyms = False, tokenValidator = isValidToken, phraseValidator = isValidPhrase):
+	keepAcronyms = False, tokenValidator = isValidToken, phraseValidator = isValidPhrase, stopWords = None):
 	''' Returns a list of normalized, valid tokens for the input phrase (an empty list
 		if no valid tokens were found) '''
-	return validateTokens(value, keepAcronyms, tokenValidator, phraseValidator)
+	return validateTokens(value, keepAcronyms, 
+		tokenValidator, phraseValidator, stopWords)
 
 def normalizeAndValidatePhrase(value,
-	keepAcronyms = False, tokenValidator = isValidToken, phraseValidator = isValidPhrase):
+	keepAcronyms = False, tokenValidator = isValidToken, phraseValidator = isValidPhrase, stopWords = None):
 	''' Returns a string that joins normalized, valid tokens for the input phrase
 		(None if no valid tokens were found) '''
-	tokens = normalizeAndValidateTokens(value, keepAcronyms, tokenValidator, phraseValidator)
+	tokens = normalizeAndValidateTokens(value, keepAcronyms = keepAcronyms, tokenValidator = tokenValidator, 
+		phraseValidator = phraseValidator, stopWords = stopWords)
 	return ' '.join(tokens) if len(tokens) > 0 else None
 
 def validatedLexicon(lexicon, tokenize = False):
 	return set(filter(lambda v: v is not None,
 		[(normalizeAndValidatePhrase(s) if tokenize else caseToken(s, False)) for s in lexicon]))
 
-def validatedLexiconMap(lexicon, tokenize = False):
+def validatedLexiconMap(lexicon, tokenize = False, stopWords = None):
 	''' Returns a dictionary from normalized string to list of original strings. '''
 	lm = defaultdict(list)
 	for s in lexicon:
-		k = normalizeAndValidatePhrase(s) if tokenize else caseToken(s, False)
+		k = normalizeAndValidatePhrase(s, stopWords = stopWords) if tokenize else caseToken(s, False)
 		if k is None: continue
 		lm[k].append(s)
 	return lm
@@ -446,6 +448,10 @@ TYPE_TAGS = {
 	F_BIOMEDICAL: [u'Médecine']
 }
 
+# Stop words specific to certain data types
+
+STOP_WORDS_CITY = ['cedex', 'cdx']
+
 # Base class for all type matchers
 
 class TypeMatcher(object):
@@ -561,17 +567,21 @@ def tokenScorer(matchedSrcTokens, srcTokens, matchedRefPhrase, refPhrase,
 	refCharRatio = 100 * len(matchedRefPhrase) / len(refPhrase)
 	return 0 if refCharRatio < minRefCharRatio else refCharRatio
 
+def prepStopWordList(stopWords): 
+	return [] if stopWords is None else list([caseToken(s, False) for s in stopWords])
+
 DTC = 6 # Dangerous Token Count (becomes prohibitive to tokenize many source strings above this!)
 class TokenizedMatcher(TypeMatcher):
-	def __init__(self, t, lexicon, maxTokens = 0, scorer = tokenScorer, distinctCount = 0):
+	def __init__(self, t, lexicon, maxTokens = 0, scorer = tokenScorer, distinctCount = 0, stopWords = None):
 		super(TokenizedMatcher, self).__init__(t)
 		currentMax = maxTokens
 		self.scorer = scorer
 		self.phrasesMap = validatedLexiconMap(lexicon)
 		self.tokenIdx = dict()
 		self.distinctCount = distinctCount
+		self.stopWords = prepStopWordList(stopWords)
 		for np in self.phrasesMap.keys():
-			tokens = np.split(' ')
+			tokens = list([t for t in np.split(' ') if t not in self.stopWords])
 			if len(tokens) < 1: continue
 			if maxTokens < 1 and len(tokens) > currentMax:
 				currentMax = len(tokens)
@@ -587,7 +597,7 @@ class TokenizedMatcher(TypeMatcher):
 		return self.distinctCount if self.distinctCount > 0 else math.log(len(self.phrasesMap), 1.5)
 	@timed
 	def match(self, c):
-		tokens = normalizeAndValidateTokens(c.value)
+		tokens = normalizeAndValidateTokens(c.value, tokenValidator = lambda t: isValidToken(t) and t not in self.stopWords)
 		if tokens is not None:
 			for k2 in range(self.maxTokens, 0, -1):
 				for k1 in range(0, len(tokens) + 1 - k2):
@@ -627,14 +637,15 @@ def fssScore(r, l = 1024):
 	else: return (r[1], 5) if len(r[1]) > 0 else ([], 0)
 
 class LabelMatcher(TypeMatcher):
-	def __init__(self, t, lexicon, mm):
+	def __init__(self, t, lexicon, mm, stopWords = None):
 		''' Parameters:
 			diversity specifies the min number of distinct reference values to qualify a column-wide match
 				(it is essential to have this constraint when the labels in question represent singleton instances,
 				i.e. specific entities, as opposed to a qualified and/or controlled vocabulary. '''
 		super(LabelMatcher, self).__init__(t)
 		self.mm = mm
-		labelsMap = validatedLexiconMap(lexicon, True) # dictionary from normalized string to list of original strings
+		self.stopWords = prepStopWordList(stopWords)
+		labelsMap = validatedLexiconMap(lexicon, tokenize = True, stopWords = self.stopWords) # dictionary from normalized string to list of original strings
 		self.labelsMap = labelsMap
 		if mm == MATCH_MODE_EXACT:
 			logging.info('SET UP exact label matcher for <%s>: lexicon of size %d', self.t, len(labelsMap))
@@ -645,7 +656,7 @@ class LabelMatcher(TypeMatcher):
 		return math.log(len(self.labelsMap), 1.8)
 	@timed
 	def match(self, c):
-		v = normalizeAndValidatePhrase(c.value)
+		v = normalizeAndValidatePhrase(c.value, stopWords = self.stopWords)
 		if not v: return
 		if self.mm == MATCH_MODE_EXACT:
 			if v in self.labelsMap:
@@ -1582,7 +1593,6 @@ def headerMatchers():
 		yield HeaderMatcher(r[0], set(r))
 		logging.info('Registered matcher for <%s> header with %d variants', r[0], len(r))
 
-
 VALUE_MATCHERS = list()
 @timed
 def valueMatchers():
@@ -1709,9 +1719,9 @@ def generateValueMatchers(lvl = 0):
 		yield LabelMatcher(F_COUNTRY, fileToSet('country'), MATCH_MODE_EXACT)
 
 	if lvl >= 2: 
-		yield TokenizedMatcher(F_CITY, COMMUNE_LEXICON, maxTokens = 3)
+		yield TokenizedMatcher(F_CITY, COMMUNE_LEXICON, maxTokens = 3, stopWords = STOP_WORDS_CITY)
 	elif lvl >= 0: 
-		yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT) # MATCH_MODE_CLOSE too imprecise
+		yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT, stopWords = STOP_WORDS_CITY)
 		yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
 
 	if lvl >= 2:
