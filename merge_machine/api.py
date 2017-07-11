@@ -1166,15 +1166,13 @@ def get_sample(project_type, project_id):
 
     sample_params.setdefault('randomize', True)
     print('2', sample_params)
-    sample_params.setdefault('num_rows', min(50, proj.mem_data.shape[0]))
+    sample_params.setdefault('num_rows', 50) # TODO: figure out how to put back min(50, proj.mem_data.shape[0]))
     print('3', sample_params)
 
     if (sampler_module_name is not None) and (sampler_module_name not in API_SAMPLE_NAMES):
         raise ValueError('Requested sampler_module_name {0} is not valid. Valid'\
                          + 'modules are: {1}'.format(sampler_module_name, API_SAMPLE_NAMES))
-    
-
-    
+        
     sample = proj.get_sample(sampler_module_name, module_params, sample_params)
     return jsonify(sample=sample)
 
@@ -1316,6 +1314,7 @@ def upload(project_id):
         
     # Make mini
     if make_mini:
+        proj.load_data('INIT', run_info['file_name'])
         proj.make_mini(module_params)
         
         # Write transformations and log

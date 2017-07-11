@@ -174,13 +174,16 @@ class AbstractDataProject(AbstractProject):
         '''
         self.check_mem_data()
         
+        self.mem_data, tab_gen = tee(self.mem_data)
+        part_tab = next(tab_gen)
+        
         sample_params.setdefault('randomize', True)
         
-        num_rows = sample_params.setdefault('num_rows', min(50, self.mem_data.shape[0]))
+        num_rows = sample_params.setdefault('num_rows', min(50, part_tab.shape[0]))
         
         # TODO
         if sample_params['randomize']:
-            indexes = np.random.permutation(range(self.mem_data.shape[0]))[:num_rows]
+            indexes = np.random.permutation(range(part_tab.shape[0]))[:num_rows]
             sample_params.setdefault('sample_ilocs', indexes)
         else:
             sample_params.setdefault('sample_ilocs', range(num_rows))
@@ -191,7 +194,7 @@ class AbstractDataProject(AbstractProject):
         
         sample_ilocs = []
         if sampler_module_name != 'standard':
-            sample_ilocs = self.MODULES['sample'][sampler_module_name]['func'](self.mem_data, 
+            sample_ilocs = self.MODULES['sample'][sampler_module_name]['func'](part_tab, 
                                                               module_params, sample_params)
         
         # If default sampler was selected custom sampler returned no rows
@@ -202,8 +205,8 @@ class AbstractDataProject(AbstractProject):
         #        if isinstance(sample_ilocs, int):
         #            sample_ilocs = range(sample_ilocs)
 
-        cols_to_display = sample_params.get('cols_to_display', self.mem_data.columns)
-        sub_tab = self.mem_data.iloc[sample_ilocs].loc[:, cols_to_display]
+        cols_to_display = sample_params.get('cols_to_display', part_tab.columns)
+        sub_tab = part_tab.iloc[sample_ilocs].loc[:, cols_to_display]
 
         
         if sample_params.get('drop_duplicates', True):
@@ -235,13 +238,18 @@ class AbstractDataProject(AbstractProject):
         # TODO: Current for normalize ?        
         self.check_mem_data()
         
+    
          # Set defaults
         sample_size = params.get('sample_size', 5000)
         randomize = params.get('randomize', True)       
         new_file_name = MINI_PREFIX + self.mem_data_info['file_name']
+       
+        
+        self.mem_data, tab_gen = tee(self.mem_data)
+        part_tab = next(tab_gen)
         
         # Only create file if it is larger than sample size
-        if self.mem_data.shape[0] > sample_size:            
+        if part_tab.shape[0] > sample_size:            
             if self.mem_data_info['module_name'] != 'INIT':
                 raise Exception('make_mini can only be called on data in memory from the INIT module')
             self.clean_after('INIT', new_file_name) # TODO: check module_name for clean_after
@@ -250,12 +258,12 @@ class AbstractDataProject(AbstractProject):
             log = self.init_active_log('INIT', 'transform')  # TODO: hack here: module_name should be 'make_mini'
             
             if randomize:
-                sample_index = self.mem_data.index[:sample_size]
-            else:
                 sample_index = np.random.permutation(self.mem_data.index)[:sample_size]
+            else:
+                sample_index = part_tab.index[:sample_size]
             
             # Replace data in memory
-            self.mem_data = self.mem_data.loc[sample_index, :]
+            self.mem_data = (x for x in (part_tab.loc[sample_index, :]))
             
             # Update metadata and log
             self.metadata['has_mini'] = True

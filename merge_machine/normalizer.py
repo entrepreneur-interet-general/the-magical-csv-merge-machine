@@ -248,8 +248,6 @@ class Normalizer(AbstractDataProject):
         if self.metadata['files']:
             raise Exception('Cannot upload multiple files to the same project anymore :(')
         
-
-        
         # Check that user given name is not illegal
         if user_given_name is not None:
             base_name = user_given_name.rsplit('.')[0]
@@ -281,7 +279,7 @@ class Normalizer(AbstractDataProject):
                              + 'or choose another name'.format(file_name))
         
         log = self.init_active_log('INIT', 'transform')
-            
+
         if extension == 'csv':
             self.mem_data, sep, encoding, columns = self.read_csv(file, chars_to_replace)
             file_type = 'csv'
@@ -289,10 +287,8 @@ class Normalizer(AbstractDataProject):
             self.mem_data, sep, encoding = self.read_excel(file, chars_to_replace)
             file_type = 'excel'
 
-
         if len(set(columns)) != len(columns):
             raise Exception('Column names should all be different')
-
 
         # Add file to metadata
         self.metadata['files'][file_name] = {
@@ -321,6 +317,7 @@ class Normalizer(AbstractDataProject):
         
         # Write configuration (sep, encoding) to INIT dir
         config_dict = {
+                        'file_name': file_name,
                         'file_type': file_type, 
                         'sep': sep, 
                         'encoding': encoding, 
@@ -331,7 +328,6 @@ class Normalizer(AbstractDataProject):
         
         # write data and log
         config_dict['nrows'] = self.write_data()
-
 
         self.upload_config_data(config_dict, 'INIT', 'infered_config.json')
 
