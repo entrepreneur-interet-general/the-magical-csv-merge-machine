@@ -212,7 +212,7 @@ class Normalizer(AbstractDataProject):
                                          sep=sep, 
                                          encoding=encoding, 
                                          dtype=str, 
-                                         chunksize=1000)
+                                         chunksize=self.CHUNKSIZE)
                     
                     tab = (self.rename_columns(sub_tab, chars_to_replace) 
                                         for sub_tab in tab_it)
@@ -233,7 +233,7 @@ class Normalizer(AbstractDataProject):
     @staticmethod
     def read_excel(file, chars_to_replace):
         # TODO: add iterator and return columns
-        tab = pd.read_excel(file, dtype=str, chunksize=1000)
+        tab = pd.read_excel(file, dtype=str, chunksize=self.CHUNKSIZE)
         for char in chars_to_replace:
             tab.columns = [unidecode.unidecode(x.replace(char, '_')) \
                                      for x in tab.columns]

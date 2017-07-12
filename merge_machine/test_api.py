@@ -343,8 +343,9 @@ def link_pipeline(params):
     # Add certain column matches
     #==============================================================================
     url_to_append = '/api/link/add_column_certain_matches/{0}/'.format(project_id)
-    body = params['column_certain_matches']
-    resp = post_resp(url_to_append, body)
+    body = params.get('column_certain_matches')
+    if body is not None:
+        resp = post_resp(url_to_append, body)
     
     # TODO: Add method to automatically add training data
     
@@ -455,7 +456,10 @@ def link_pipeline(params):
     return project_id
 
 
-if __name__ == '__main__':    
+if __name__ == '__main__':
+    
+    import argparse 
+    
     dir_path = os.path.join('local_test_data', 'integration_1')
     
     # Parameters

@@ -238,6 +238,7 @@ class Linker(AbstractDataProject):
     def linker(self, module_name, paths, params):
         '''
         # TODO: This is not optimal. Find way to change paths to smt else
+        # TODO: at least take source in mem_data to make iterable
         '''
         
         # Add module-specific paths
@@ -255,6 +256,9 @@ class Linker(AbstractDataProject):
         log = self.init_active_log(module_name, 'link')
 
         self.mem_data, run_info = self.MODULES['link'][module_name]['func'](paths, params)
+        
+        # TODO: inconsistent with transform
+        self.mem_data = (x for x in [self.mem_data])
         
         self.mem_data_info['module_name'] = module_name
         
@@ -402,7 +406,8 @@ class Linker(AbstractDataProject):
         file_name = self.metadata['current']['ref']['file_name']
         self.ref.load_data(module_name, file_name)        
         
-        self.mem_data, run_info = perform_restriction(self.ref.mem_data, params)
+        self.mem_data = (perform_restriction(part_tab, params)[0] \
+                                   for part_tab in self.ref.mem_data) # TODO: no run info !
         
         # Complete log
         self.log_buffer.append(self.end_active_log(log, error=False))    
@@ -410,8 +415,8 @@ class Linker(AbstractDataProject):
         self.mem_data_info['module_name'] = current_module_name        
         
         # TODO: fix fishy:
-        self.run_info_buffer[(current_module_name, '__REF__')] = {}
-        self.run_info_buffer[(current_module_name, '__REF__')][current_module_name] = run_info # TODO: fishy
+        #        self.run_info_buffer[(current_module_name, '__REF__')] = {}
+        #        self.run_info_buffer[(current_module_name, '__REF__')][current_module_name] = run_info # TODO: fishy
         
         # Add restricted to current for restricted
         self.metadata['current']['ref']['restricted'] = True
@@ -420,7 +425,7 @@ class Linker(AbstractDataProject):
         self.write_data()
         self.clear_memory()
         
-        return run_info
+        return {} #run_info
 
         # TODO: Add to current reference
         

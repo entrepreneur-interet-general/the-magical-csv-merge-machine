@@ -192,12 +192,14 @@ def perform_restriction(ref, params):
     run_info = dict()
     
     if params['filter_by_vals']:
-        ref, run_info['filter_by_vals'] = filter_by_vals(ref, params['col_vals'], pre_process_func=pd_pre_process)    
+        ref, run_info['filter_by_vals'] = filter_by_vals(ref, params['col_vals'], 
+                                                 pre_process_func=pd_pre_process)    
     
     if params['filter_by_words']:
-        ref, run_info['filter_by_words'] = filter_by_words(ref, params['col_words'], pre_process_func=pd_pre_process)
-
-    return ref, run_info
+        ref, run_info['filter_by_words'] = filter_by_words(ref, params['col_words'], 
+                                                 pre_process_func=pd_pre_process)
+        
+    return ref, None #run_info
 
 #def sample_restriction(ref, params, sample_params):
 #    '''    

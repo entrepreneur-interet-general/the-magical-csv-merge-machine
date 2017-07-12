@@ -44,6 +44,8 @@ class AbstractDataProject(AbstractProject):
     '''    
     default_module_log = {'completed': False, 'skipped': False}    
     
+    CHUNKSIZE = 2000
+    
     def __init__(self, 
                  project_id=None, 
                  create_new=False, 
@@ -113,10 +115,10 @@ class AbstractDataProject(AbstractProject):
         if nrows is not None:
             print('Nrows is: ', nrows)
             self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
-                                nrows=nrows, usecols=columns, chunksize=1000)
+                                nrows=nrows, usecols=columns, chunksize=self.CHUNKSIZE)
         else:
             self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
-                                        usecols=columns, chunksize=1000)
+                                        usecols=columns, chunksize=self.CHUNKSIZE)
         self.mem_data_info = {'file_name': file_name,
                               'module_name': module_name,
                               'nrows': nrows, 
@@ -239,16 +241,19 @@ class AbstractDataProject(AbstractProject):
         self.check_mem_data()
     
         # Set defaults
-        sample_size = params.get('sample_size', 5000)
+        sample_size = params.get('sample_size', self.CHUNKSIZE - 1)
         randomize = params.get('randomize', True)       
         new_file_name = MINI_PREFIX + self.mem_data_info['file_name']
+
+
+        if self.mem_data_info['module_name'] != 'INIT':
+            raise Exception('make_mini can only be called on data in memory from the INIT module')
        
         part_tab = next(self.mem_data)
         
         # Only create file if it is larger than sample size
         if part_tab.shape[0] > sample_size:            
-            if self.mem_data_info['module_name'] != 'INIT':
-                raise Exception('make_mini can only be called on data in memory from the INIT module')
+
             self.clean_after('INIT', new_file_name) # TODO: check module_name for clean_after
             
             # Initiate log
@@ -260,7 +265,7 @@ class AbstractDataProject(AbstractProject):
                 sample_index = part_tab.index[:sample_size]
             
             # Replace data in memory
-            self.mem_data = (x for x in (part_tab.loc[sample_index, :]))
+            self.mem_data = (x for x in [part_tab.loc[sample_index, :]])
             
             # Update metadata and log
             self.metadata['has_mini'] = True
@@ -354,6 +359,7 @@ class AbstractDataProject(AbstractProject):
         nrows = 0
         with open(file_path, 'w') as w:
             # Enumerate to know whether or not to write header (i==0)
+            self.mem_data, temp = tee(self.mem_data)
             try:
                 for i, part_tab in enumerate(self.mem_data):
                     print(i)
@@ -362,7 +368,9 @@ class AbstractDataProject(AbstractProject):
                                          header=i==0, 
                                          quoting=csv.QUOTE_NONNUMERIC)
                     nrows += len(part_tab)
-            except:
+                    
+            except Exception as e:
+                print('At error here:', e)
                 import pdb
                 pdb.set_trace()
 #        except Exception as e:
@@ -395,16 +403,19 @@ class AbstractDataProject(AbstractProject):
         '''
         
         # Check that memory is loaded (if necessary)
-        if (params is not None) and (not params.get('NO_MEM_DATA', False)):
-            self.check_mem_data()  
-        
+        if (params is not None) and params.get('NO_MEM_DATA', False):
+            data = None
+        else:
+            self.check_mem_data()
+            self.mem_data, tab_gen = tee(self.mem_data)
+            data = pd.concat(tab_gen)
+            
         # Initiate log
         log = self.init_active_log(module_name, 'infer')
         
         # We duplicate the generator to load a full version of the table and
         # while leaving self.mem_data unchanged
-        self.mem_data, tab_gen = tee(self.mem_data)
-        infered_params = self.MODULES['infer'][module_name]['func'](pd.concat(tab_gen), params)
+        infered_params = self.MODULES['infer'][module_name]['func'](data, params)
         
         # Write result of inference
         module_to_write_to = self.MODULES['infer'][module_name]['write_to']
@@ -440,6 +451,10 @@ class AbstractDataProject(AbstractProject):
         return mod_count        
     
     def run_transform_module(self, module_name, partial_data, params):
+        '''
+        Runs the selected module on the dataframe in partial_data and stores
+        modifications in the run_info buffer
+        '''       
         # Apply module transformation
         valid_columns = [col for col in partial_data if '__' not in col] # TODO: test on upload      
         new_partial_data, modified = self.MODULES['transform'][module_name] \

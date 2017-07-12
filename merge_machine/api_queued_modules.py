@@ -148,7 +148,7 @@ def _concat_with_init(project_id, data_params, *argv):
     # TODO: there was a pdb here. is everything alright ?
     
     _, run_info = proj.transform('concat_with_init', None)
-    
+
     # Write transformations and logs
     proj.write_data()
     return run_info
