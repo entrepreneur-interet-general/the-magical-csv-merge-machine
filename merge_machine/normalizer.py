@@ -185,6 +185,7 @@ class Normalizer(AbstractDataProject):
             tab.columns = [unidecode.unidecode(x.replace(char, '_')) \
                                      for x in tab.columns]        
         return tab
+
         
     def read_csv(self, file, chars_to_replace):
         ENCODINGS = ['utf-8', 'windows-1252']
@@ -194,10 +195,12 @@ class Normalizer(AbstractDataProject):
         for encoding in ENCODINGS:
             for sep in SEPARATORS:
                 try:
-                    # Just read column name
-                    tab_it = pd.read_csv(file, sep=sep, encoding=encoding, 
-                                         dtype=str, chunksize=1)
-                    columns = next(tab_it).columns
+                    # Just read column name and first few lines for encoding
+                    tab_part = pd.read_csv(file, 
+                                           sep=sep, 
+                                           encoding=encoding, 
+                                           dtype=str)
+                    columns = tab_part.columns
                     
                     try:
                         file.seek(0)
@@ -205,8 +208,12 @@ class Normalizer(AbstractDataProject):
                         pass # TODO: really? try except? really??
                     
                     # Create actual generator
-                    tab_it = pd.read_csv(file, sep=sep, encoding=encoding, 
-                                        dtype=str, chunksize=1000)
+                    tab_it = pd.read_csv(file, 
+                                         sep=sep, 
+                                         encoding=encoding, 
+                                         dtype=str, 
+                                         chunksize=1000)
+                    
                     tab = (self.rename_columns(sub_tab, chars_to_replace) 
                                         for sub_tab in tab_it)
                     could_read = True

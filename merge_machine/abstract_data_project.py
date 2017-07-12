@@ -237,16 +237,13 @@ class AbstractDataProject(AbstractProject):
         # TODO: Change current 
         # TODO: Current for normalize ?        
         self.check_mem_data()
-        
     
-         # Set defaults
+        # Set defaults
         sample_size = params.get('sample_size', 5000)
         randomize = params.get('randomize', True)       
         new_file_name = MINI_PREFIX + self.mem_data_info['file_name']
        
-        
-        self.mem_data, tab_gen = tee(self.mem_data)
-        part_tab = next(tab_gen)
+        part_tab = next(self.mem_data)
         
         # Only create file if it is larger than sample size
         if part_tab.shape[0] > sample_size:            
@@ -258,7 +255,7 @@ class AbstractDataProject(AbstractProject):
             log = self.init_active_log('INIT', 'transform')  # TODO: hack here: module_name should be 'make_mini'
             
             if randomize:
-                sample_index = np.random.permutation(self.mem_data.index)[:sample_size]
+                sample_index = np.random.permutation(part_tab.index)[:sample_size]
             else:
                 sample_index = part_tab.index[:sample_size]
             
@@ -357,12 +354,17 @@ class AbstractDataProject(AbstractProject):
         nrows = 0
         with open(file_path, 'w') as w:
             # Enumerate to know whether or not to write header (i==0)
-            for i, part_tab in enumerate(self.mem_data):
-                part_tab.to_csv(w, encoding='utf-8', 
-                                     index=False,  
-                                     header=i==0, 
-                                     quoting=csv.QUOTE_NONNUMERIC)
-                nrows += len(part_tab)
+            try:
+                for i, part_tab in enumerate(self.mem_data):
+                    print(i)
+                    part_tab.to_csv(w, encoding='utf-8', 
+                                         index=False,  
+                                         header=i==0, 
+                                         quoting=csv.QUOTE_NONNUMERIC)
+                    nrows += len(part_tab)
+            except:
+                import pdb
+                pdb.set_trace()
 #        except Exception as e:
 #            if os.path.isfile(file_path):
 #                os.remove(file_path)

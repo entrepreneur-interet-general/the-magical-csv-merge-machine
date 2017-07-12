@@ -105,8 +105,8 @@ NOTES:
 curl -i http://127.0.0.1:5000/metadata/ -X POST -F "request_json=@sample_download_request.json;type=application/json"
 
 USES: /python-memcached
-
 """
+
 import gzip
 import json
 import os
@@ -153,7 +153,8 @@ Session(app)
 
 app.debug = True
 app.config['SECRET_KEY'] = open('secret_key.txt').read()
-app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024 # Check that files are not too big (2GB)
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024 # Check that files are not too big (10GB)
+app.config['ALLOWED_EXTENSIONS'] = ['csv', 'xls', 'xlsx', 'zip']
 
 socketio = SocketIO(app)       
 
@@ -1282,7 +1283,7 @@ def upload(project_id):
     '''
     Uploads files to a normalization project. (NB: cannot upload directly to 
     a link type project). 
-    
+                                               
     Also creates the mini version of the project
     
     GET:
@@ -1317,8 +1318,11 @@ def upload(project_id):
         proj.load_data('INIT', run_info['file_name'])
         proj.make_mini(module_params)
         
-        # Write transformations and log
-        proj.write_data()    
+        # Write transformations and log # TODO: not clean
+        if proj.metadata['has_mini']:
+            proj.write_data()
+        else:
+            proj.write_metadata()
 
     return jsonify(run_info=run_info, project_id=proj.project_id)
 
@@ -1476,11 +1480,8 @@ def choose_queue(job_name, project_id, data_params):
     # TODO: MAKE impossible to overwrite metadata
     '''
     project_type = SCHEDULED_JOBS[job_name]['project_type']
-    try:
-        proj = _init_project(project_type=project_type, project_id=project_id)  
-    except:
-        import pdb; pdb.set_trace()
-    
+    proj = _init_project(project_type=project_type, project_id=project_id)  
+
     if data_params and data_params is not None:
         if (project_type=='normalize') and (
                     (MINI_PREFIX in data_params['file_name']) 
