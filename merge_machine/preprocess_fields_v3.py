@@ -210,40 +210,49 @@ def justCase(phrase, keepAcronyms = False):
 def splitAndCase(phrase, keepAcronyms):
     return map(lambda t: caseToken(t, keepAcronyms), str.split(preSplit(phrase)))
 
-def validateTokens(phrase, keepAcronyms, tokenValidator, phraseValidator):
-    if phrase:
-        tokens = splitAndCase(phrase, keepAcronyms)
-        validTokens = []
-        for token in tokens:
-            if tokenValidator(token): validTokens.append(token)
-        if phraseValidator(validTokens): return validTokens
-    return []
+
+def validateTokens(phrase, keepAcronyms, tokenValidator, phraseValidator, stopWords = None):
+	if phrase:
+		tokens = splitAndCase(phrase, keepAcronyms)
+		validTokens = []
+		for token in tokens:
+			if tokenValidator(token) and (stopWords is None or token not in stopWords): validTokens.append(token)
+		if phraseValidator(validTokens): return validTokens
+	return []
 
 def normalizeAndValidateTokens(value,
-    keepAcronyms = False, tokenValidator = isValidToken, phraseValidator = isValidPhrase):
-    ''' Returns a list of normalized, valid tokens for the input phrase (an empty list
-        if no valid tokens were found) '''
-    return validateTokens(value, keepAcronyms, tokenValidator, phraseValidator)
+	keepAcronyms = False, tokenValidator = isValidToken, phraseValidator = isValidPhrase, stopWords = None):
+	''' Returns a list of normalized, valid tokens for the input phrase (an empty list
+		if no valid tokens were found) '''
+	return validateTokens(value, keepAcronyms, 
+		tokenValidator, phraseValidator, stopWords)
 
 def normalizeAndValidatePhrase(value,
-    keepAcronyms = False, tokenValidator = isValidToken, phraseValidator = isValidPhrase):
-    ''' Returns a string that joins normalized, valid tokens for the input phrase
-        (None if no valid tokens were found) '''
-    tokens = normalizeAndValidateTokens(value, keepAcronyms, tokenValidator, phraseValidator)
-    return ' '.join(tokens) if len(tokens) > 0 else None
+	keepAcronyms = False, tokenValidator = isValidToken, phraseValidator = isValidPhrase, stopWords = None):
+	''' Returns a string that joins normalized, valid tokens for the input phrase
+		(None if no valid tokens were found) '''
+	tokens = normalizeAndValidateTokens(value, keepAcronyms = keepAcronyms, tokenValidator = tokenValidator, 
+		phraseValidator = phraseValidator, stopWords = stopWords)
+	return ' '.join(tokens) if len(tokens) > 0 else None
 
 def validatedLexicon(lexicon, tokenize = False):
-    return set(filter(lambda v: v is not None,
-        [(normalizeAndValidatePhrase(s) if tokenize else caseToken(s, False)) for s in lexicon]))
+	return set(filter(lambda v: v is not None, [normalizeOrNot(s, tokenize) for s in lexicon]))
 
-def validatedLexiconMap(lexicon, tokenize = False):
-    ''' Returns a dictionary from normalized string to list of original strings. '''
-    lm = defaultdict(list)
-    for s in lexicon:
-        k = normalizeAndValidatePhrase(s) if tokenize else caseToken(s, False)
-        if k is None: continue
-        lm[k].append(s)
-    return lm
+def validatedLexiconMap(lexicon, tokenize = False, stopWords = None, synMap = None):
+	''' Returns a dictionary from normalized string to list of original strings. '''
+	lm = defaultdict(list)
+	for s in lexicon:
+		addToLexiconMap(lm, s, stopWords, tokenize)
+	if synMap is not None:
+		for (mainVariant, altVariants) in synMap.items():
+			addToLexiconMap(lm, mainVariant, stopWords, tokenize)
+			# for altVariant in altVariants: addToLexiconMap(lm, altVariant, stopWords, tokenize)
+	return lm
+
+def addToLexiconMap(lm, s, stopWords, tokenize):
+	k = normalizeAndValidatePhrase(s, stopWords = stopWords) if tokenize else caseToken(s, False)
+	if k is None: return
+	lm[k].append(s)
 
 # Loading CSV and raw (one entry per line) text files
 
@@ -260,25 +269,31 @@ def fileRowIterator(fileName, sep, path = RESOURCE_PATH):
 def fileColumnToList(fileName, c, sep = '\t', includeInvalid = True):
     return [r[c] for r in fileRowIterator(fileName, sep) if len(r) > c and (includeInvalid or isValidValue(r[c]))]
 
-def fileToVariantMap(fileName, sep = '|', includeSelf = False):
-    ''' The input format is pipe-separated, column 1 is the main variant, column 2 an alternative variant.
 
-        Returns a reverse index, namely a map from original alternative variant to original main variant
+def fileToVariantMap(fileName, sep = '|', includeSelf = False, tokenize = False):
+	''' The input format is pipe-separated, column 1 is the main variant, column 2 an alternative variant.
 
-        Parameters:
-        includeSelf if True, then the main variant will be included in the list of alternative variants
-            (so as to enable partial matching simultaneously).
-    '''
-    otherToMain = defaultdict(list)
-    mainToOther = defaultdict(list)
-    for r in fileRowIterator(fileName, sep):
-        if len(r) < 2: continue
-        main, alts = r[0], r[1:]
-        for alt in alts: otherToMain[alt].append(main)
-        mainToOther[main].extend(alts)
-    l = list([(other, next(iter(main))) for (other, main) in otherToMain.items() if len(main) < 2])
-    if includeSelf: l = list([(main, main) for main in mainToOther.keys()]) + l
-    return dict(l)
+		Returns a reverse index, namely a map from original alternative variant to original main variant
+
+		Parameters:
+		includeSelf if True, then the main variant will be included in the list of alternative variants
+			(so as to enable partial matching simultaneously).
+	'''
+	otherToMain = defaultdict(list)
+	mainToOther = defaultdict(list)
+	for row in fileRowIterator(fileName, sep):
+		if len(row) < 2: continue
+		r = list([normalizeOrNot(e, tokenize = tokenize)  for e in row])
+		main, alts = r[0], set(r[1:])
+		alts.discard(main)
+		for alt in alts: otherToMain[alt].append(main)
+		mainToOther[main].extend(list(alts))
+	logging.debug('Main variant collisions from {}:'.format(fileName))
+	for (other, main) in otherToMain.items():
+		if len(main) > 1: logging.debug(other + ' --> ' + '|'.join(main))
+	l = list([(other, next(iter(main))) for (other, main) in otherToMain.items() if len(main) < 2])
+	if includeSelf: l = list([(main, main) for main in mainToOther.keys()]) + l
+	return dict(l)
 
 FRENCH_LEXICON = fileColumnToList('most_common_tokens_fr', 0, '|')
 
@@ -446,6 +461,10 @@ TYPE_TAGS = {
     F_BIOMEDICAL: [u'Médecine']
 }
 
+# Stop words specific to certain data types
+
+STOP_WORDS_CITY = ['commune', 'cedex', 'cdx']
+
 # Base class for all type matchers
 
 class TypeMatcher(object):
@@ -561,54 +580,58 @@ def tokenScorer(matchedSrcTokens, srcTokens, matchedRefPhrase, refPhrase,
     refCharRatio = 100 * len(matchedRefPhrase) / len(refPhrase)
     return 0 if refCharRatio < minRefCharRatio else refCharRatio
 
+def prepStopWordList(stopWords): 
+	return [] if stopWords is None else list([caseToken(s, False) for s in stopWords])
+
 DTC = 6 # Dangerous Token Count (becomes prohibitive to tokenize many source strings above this!)
 class TokenizedMatcher(TypeMatcher):
-    def __init__(self, t, lexicon, maxTokens = 0, scorer = tokenScorer, distinctCount = 0):
-        super(TokenizedMatcher, self).__init__(t)
-        currentMax = maxTokens
-        self.scorer = scorer
-        self.phrasesMap = validatedLexiconMap(lexicon)
-        self.tokenIdx = dict()
-        self.distinctCount = distinctCount
-        for np in self.phrasesMap.keys():
-            tokens = np.split(' ')
-            if len(tokens) < 1: continue
-            if maxTokens < 1 and len(tokens) > currentMax:
-                currentMax = len(tokens)
-                if currentMax > DTC:
-                    logging.warning('Full tokenization of lexicon: encountered token of length {}, above DTC!'.format(currentMax))
-            matchedRefPhrase = ' '.join(tokens[:currentMax])
-            if matchedRefPhrase not in self.tokenIdx or len(self.tokenIdx[matchedRefPhrase]) < len(np):
-                self.tokenIdx[matchedRefPhrase] = np
-        self.maxTokens = currentMax
-        logging.info('SET UP %d-token matcher (%s-defined length) for <%s> with lexicon of size %d, total variants %d',
-            self.maxTokens, 'user' if maxTokens > 0 else 'data', self.t, len(self.phrasesMap), len(self.tokenIdx))
-    def diversity(self):
-        return self.distinctCount if self.distinctCount > 0 else math.log(len(self.phrasesMap), 1.5)
-    @timed
-    def match(self, c):
-        tokens = normalizeAndValidateTokens(c.value)
-        if tokens is not None:
-            for k2 in range(self.maxTokens, 0, -1):
-                for k1 in range(0, len(tokens) + 1 - k2):
-                    matchSrcTokens = tokens[k1:k1 + k2]
-                    matchRefPhrase = ' '.join(matchSrcTokens)
-                    if matchRefPhrase in self.tokenIdx:
-                        nm = self.tokenIdx[matchRefPhrase]
-                        score = self.scorer(matchSrcTokens, tokens, matchRefPhrase, nm)
-                        if nm not in self.phrasesMap:
-                            raise RuntimeError('Normalized phrase {} not found in phrases map'.format(nm))
-                            continue
-                        hit = self.phrasesMap[nm]
-                        v = justCase(c.value)
-                        # The next line joins on '' and not on ' ' because non-pure space chars might have been transformed
-                        # during tokenization (hyphens, punctuation, etc.)
-                        subStr = ''.join(matchSrcTokens)
-                        span = ncsub(v, subStr)
-                        if span is None:
-                            logging.warning('%s could not find tokens "%s" in original "%s"', self, matchRefPhrase, v)
-                            span = (0, len(c.value))
-                        self.registerPartialMatch(c, self.t, score, hit, span)
+	def __init__(self, t, lexicon, maxTokens = 0, scorer = tokenScorer, distinctCount = 0, stopWords = None):
+		super(TokenizedMatcher, self).__init__(t)
+		currentMax = maxTokens
+		self.scorer = scorer
+		self.phrasesMap = validatedLexiconMap(lexicon)
+		self.tokenIdx = dict()
+		self.distinctCount = distinctCount
+		self.stopWords = prepStopWordList(stopWords)
+		for np in self.phrasesMap.keys():
+			tokens = list([t for t in np.split(' ') if t not in self.stopWords])
+			if len(tokens) < 1: continue
+			if maxTokens < 1 and len(tokens) > currentMax:
+				currentMax = len(tokens)
+				if currentMax > DTC:
+					logging.warning('Full tokenization of lexicon: encountered token of length {}, above DTC!'.format(currentMax))
+			matchedRefPhrase = ' '.join(tokens[:currentMax])
+			if matchedRefPhrase not in self.tokenIdx or len(self.tokenIdx[matchedRefPhrase]) < len(np):
+				self.tokenIdx[matchedRefPhrase] = np
+		self.maxTokens = currentMax
+		logging.info('SET UP %d-token matcher (%s-defined length) for <%s> with lexicon of size %d, total variants %d',
+			self.maxTokens, 'user' if maxTokens > 0 else 'data', self.t, len(self.phrasesMap), len(self.tokenIdx))
+	def diversity(self):
+		return self.distinctCount if self.distinctCount > 0 else math.log(len(self.phrasesMap), 1.5)
+	@timed
+	def match(self, c):
+		tokens = normalizeAndValidateTokens(c.value, tokenValidator = lambda t: isValidToken(t) and t not in self.stopWords)
+		if tokens is not None:
+			for k2 in range(self.maxTokens, 0, -1):
+				for k1 in range(0, len(tokens) + 1 - k2):
+					matchSrcTokens = tokens[k1:k1 + k2]
+					matchRefPhrase = ' '.join(matchSrcTokens)
+					if matchRefPhrase in self.tokenIdx:
+						nm = self.tokenIdx[matchRefPhrase]
+						score = self.scorer(matchSrcTokens, tokens, matchRefPhrase, nm)
+						if nm not in self.phrasesMap:
+							raise RuntimeError('Normalized phrase {} not found in phrases map'.format(nm))
+							continue
+						hit = self.phrasesMap[nm]
+						v = justCase(c.value)
+						# The next line joins on '' and not on ' ' because non-pure space chars might have been transformed
+						# during tokenization (hyphens, punctuation, etc.)
+						subStr = ''.join(matchSrcTokens)
+						span = ncsub(v, subStr)
+						if span is None:
+							logging.warning('%s could not find tokens "%s" in original "%s"', self, matchRefPhrase, v)
+							span = (0, len(c.value))
+						self.registerPartialMatch(c, self.t, score, hit, span)
 
 # Label-based matcher-normalizer class and its underlying FSS structure
 
@@ -626,35 +649,43 @@ def fssScore(r, l = 1024):
     elif l > 4: return (r[1], 20) if len(r[1]) > 0 else (r[2], 10)
     else: return (r[1], 5) if len(r[1]) > 0 else ([], 0)
 
+def normalizeOrNot(v, tokenize = False, stopWords = None): return normalizeAndValidatePhrase(v, stopWords = stopWords) if tokenize else justCase(v)
+
 class LabelMatcher(TypeMatcher):
-    def __init__(self, t, lexicon, mm):
-        ''' Parameters:
-            diversity specifies the min number of distinct reference values to qualify a column-wide match
-                (it is essential to have this constraint when the labels in question represent singleton instances,
-                i.e. specific entities, as opposed to a qualified and/or controlled vocabulary. '''
-        super(LabelMatcher, self).__init__(t)
-        self.mm = mm
-        labelsMap = validatedLexiconMap(lexicon, True) # dictionary from normalized string to list of original strings
-        self.labelsMap = labelsMap
-        if mm == MATCH_MODE_EXACT:
-            logging.info('SET UP exact label matcher for <%s>: lexicon of size %d', self.t, len(labelsMap))
-        elif mm == MATCH_MODE_CLOSE:
-            self.fss = buildFSS(labelsMap.keys())
-            logging.info('SET UP close label matcher for <%s>: lexicon of size %d', self.t, len(labelsMap))
-    def diversity(self):
-        return math.log(len(self.labelsMap), 1.8)
-    @timed
-    def match(self, c):
-        v = normalizeAndValidatePhrase(c.value)
-        if not v: return
-        if self.mm == MATCH_MODE_EXACT:
-            if v in self.labelsMap:
-                self.registerFullMatch(c, self.t, 100, self.labelsMap[v])
-        elif self.mm == MATCH_MODE_CLOSE:
-            (matchedRefPhrases, score) = fssScore(self.fss.search(v), len(v))
-            if score > 0:
-                for matchedRefPhrase in matchedRefPhrases:
-                    self.registerFullMatch(c, self.t, score, matchedRefPhrase)
+	def __init__(self, t, lexicon, mm, stopWords = None, synMap = None):
+		''' Parameters:
+			diversity specifies the min number of distinct reference values to qualify a column-wide match
+				(it is essential to have this constraint when the labels in question represent singleton instances,
+				i.e. specific entities, as opposed to a qualified and/or controlled vocabulary. '''
+		super(LabelMatcher, self).__init__(t)
+		self.mm = mm
+		self.stopWords = prepStopWordList(stopWords)
+		self.synMap = synMap
+		self.tokenize = synMap is not None
+		# dictionary from normalized string to list of original strings
+		labelsMap = validatedLexiconMap(lexicon, tokenize = self.tokenize, stopWords = self.stopWords, synMap = synMap) 
+		self.labelsMap = labelsMap
+		if mm == MATCH_MODE_EXACT:
+			logging.info('SET UP exact label matcher for <%s>: lexicon of size %d', self.t, len(labelsMap))
+		elif mm == MATCH_MODE_CLOSE:
+			self.fss = buildFSS(labelsMap.keys())
+			logging.info('SET UP close label matcher for <%s>: lexicon of size %d', self.t, len(labelsMap))
+	def diversity(self):
+		return math.log(len(self.labelsMap), 1.8)
+	@timed
+	def match(self, c):
+		v = normalizeOrNot(c.value, stopWords = self.stopWords, tokenize = self.tokenize)
+		if not v: return
+		if self.synMap is not None and v in self.synMap: # Check for synonyms
+			v = self.synMap[v]
+		if self.mm == MATCH_MODE_EXACT:
+			if v in self.labelsMap:
+				self.registerFullMatch(c, self.t, 100, self.labelsMap[v])
+		elif self.mm == MATCH_MODE_CLOSE:
+			(matchedRefPhrases, score) = fssScore(self.fss.search(v), len(v))
+			if score > 0:
+				for matchedRefPhrase in matchedRefPhrases:
+					self.registerFullMatch(c, self.t, score, matchedRefPhrase)
 
 class HeaderMatcher(LabelMatcher):
     def __init__(self, t, lexicon):
@@ -1582,7 +1613,6 @@ def headerMatchers():
         yield HeaderMatcher(r[0], set(r))
         logging.info('Registered matcher for <%s> header with %d variants', r[0], len(r))
 
-
 VALUE_MATCHERS = list()
 @timed
 def valueMatchers():
@@ -1593,198 +1623,203 @@ def valueMatchers():
     return VALUE_MATCHERS
 
 def generateValueMatchers(lvl = 0):
-    ''' Generates type matcher objects that can be applied to each value cell in a column in order to infer
-        whether that column's type is the matcher's type (or alternatively a parent type or a child type).
+	''' Generates type matcher objects that can be applied to each value cell in a column in order to infer
+		whether that column's type is the matcher's type (or alternatively a parent type or a child type).
 
-        Parameter:
-        lvl 0 for lightweight matching, 2 for the heaviest variants, 1 as an intermediate level
-        '''
+		Parameter:
+		lvl 0 for lightweight matching, 2 for the heaviest variants, 1 as an intermediate level
+		'''
+	yield LabelMatcher(F_COUNTRY, fileToSet('country'), MATCH_MODE_EXACT, synMap = fileToVariantMap('country_latin.syn'))
+	return
 
-    # Identifiers (typically but not necessarily unique)
-    # yield TemplateMatcher('Identifiant', 90) # TODO distinguish unique vs. non-unique
+	# Identifiers (typically but not necessarily unique)
+	# yield TemplateMatcher('Identifiant', 90) # TODO distinguish unique vs. non-unique
 
-    # Person names
-    if lvl >= 0: yield LabelMatcher(F_FIRST, PRENOM_LEXICON, MATCH_MODE_EXACT)
-    if lvl >= 2: yield TokenizedMatcher(F_FIRST, PRENOM_LEXICON,
-        # maxTokens set to 2 in order to deal with composite first names
-        maxTokens = 2, scorer = partial(tokenScorer, minSrcTokenRatio = 20, minSrcCharRatio = 10))
-    if lvl >= 0: yield LabelMatcher(F_LAST, PATRONYME_LEXICON, MATCH_MODE_EXACT)
-    if lvl >= 2:
-        titleLexicon = fileToSet('titre_appel') | fileToSet('titre_academique')
-        yield TokenizedMatcher(F_TITLE, titleLexicon, maxTokens = 1)
-    if lvl >= 2:
-        yield CustomPersonNameMatcher()
-        fullNameValidators = { F_FIRST: lambda v: len(stripped(v)) > 1, F_LAST: lambda v: len(stripped(v)) > 2 }
-        yield CompositeRegexMatcher(F_PERSON, PAT_FIRST_NAME, { F_FIRST: 1},
-            ignoreCase = True, validators = fullNameValidators)
-        yield CompositeRegexMatcher(F_PERSON, PAT_FIRST_LAST_NAME, { F_FIRST: 1, F_LAST: 2 },
-            ignoreCase = True, validators = fullNameValidators)
-        yield CompositeRegexMatcher(F_PERSON, PAT_LAST_FIRST_NAME, { F_FIRST: 2, F_LAST: 1 },
-            ignoreCase = True, validators = fullNameValidators)
-        yield CompositeRegexMatcher(F_PERSON, PAT_FIRSTINITIAL_LAST_NAME, { F_FIRST: 1, F_LAST: 2 },
-            ignoreCase = False, validators = fullNameValidators)
-        yield CompositeRegexMatcher(F_PERSON, PAT_LAST_FIRSTINITIAL_NAME, { F_FIRST: 2, F_LAST: 1 },
-            ignoreCase = False, validators = fullNameValidators)
-    yield CompositeMatcher(F_PERSON, [F_TITLE, F_FIRST])
-    # Negate person name matches when it's a street name
-    if lvl >= 0: yield RegexMatcher(F_PERSON, "(rue|avenue|av|boulevard|bvd|bd|chemin|route|place|allee) .{0,10} (%s)" % PAT_FIRST_NAME,
-        g = 1, ignoreCase = True, partial = True, neg = True)
+	# Person names
+	if lvl >= 0: yield LabelMatcher(F_FIRST, PRENOM_LEXICON, MATCH_MODE_EXACT)
+	if lvl >= 2: yield TokenizedMatcher(F_FIRST, PRENOM_LEXICON,
+		# maxTokens set to 2 in order to deal with composite first names
+		maxTokens = 2, scorer = partial(tokenScorer, minSrcTokenRatio = 20, minSrcCharRatio = 10))
+	if lvl >= 0: yield LabelMatcher(F_LAST, PATRONYME_LEXICON, MATCH_MODE_EXACT)
+	if lvl >= 2:
+		titleLexicon = fileToSet('titre_appel') | fileToSet('titre_academique')
+		yield TokenizedMatcher(F_TITLE, titleLexicon, maxTokens = 1)
+	if lvl >= 2:
+		yield CustomPersonNameMatcher()
+		fullNameValidators = { F_FIRST: lambda v: len(stripped(v)) > 1, F_LAST: lambda v: len(stripped(v)) > 2 }
+		yield CompositeRegexMatcher(F_PERSON, PAT_FIRST_NAME, { F_FIRST: 1},
+			ignoreCase = True, validators = fullNameValidators)
+		yield CompositeRegexMatcher(F_PERSON, PAT_FIRST_LAST_NAME, { F_FIRST: 1, F_LAST: 2 },
+			ignoreCase = True, validators = fullNameValidators)
+		yield CompositeRegexMatcher(F_PERSON, PAT_LAST_FIRST_NAME, { F_FIRST: 2, F_LAST: 1 },
+			ignoreCase = True, validators = fullNameValidators)
+		yield CompositeRegexMatcher(F_PERSON, PAT_FIRSTINITIAL_LAST_NAME, { F_FIRST: 1, F_LAST: 2 },
+			ignoreCase = False, validators = fullNameValidators)
+		yield CompositeRegexMatcher(F_PERSON, PAT_LAST_FIRSTINITIAL_NAME, { F_FIRST: 2, F_LAST: 1 },
+			ignoreCase = False, validators = fullNameValidators)
+	yield CompositeMatcher(F_PERSON, [F_TITLE, F_FIRST])
+	# Negate person name matches when it's a street name
+	if lvl >= 0: yield RegexMatcher(F_PERSON, "(rue|avenue|av|boulevard|bvd|bd|chemin|route|place|allee) .{0,10} (%s)" % PAT_FIRST_NAME,
+		g = 1, ignoreCase = True, partial = True, neg = True)
 
-    # Web stuff: Email, URL
-    # PAT_EMAIL = "(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)"
-    PAT_EMAIL = "[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
-    if lvl >= 0: yield RegexMatcher(F_EMAIL, PAT_EMAIL)
-    PAT_URL = "@^(https?|ftp)://[^\s/$.?#].[^\s]*$@iS"
-    if lvl >= 0: yield RegexMatcher(F_URL, PAT_URL)
+	# Web stuff: Email, URL
+	# PAT_EMAIL = "(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)"
+	PAT_EMAIL = "[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
+	if lvl >= 0: yield RegexMatcher(F_EMAIL, PAT_EMAIL)
+	PAT_URL = "@^(https?|ftp)://[^\s/$.?#].[^\s]*$@iS"
+	if lvl >= 0: yield RegexMatcher(F_URL, PAT_URL)
 
-    # Phone number
-    if lvl >= 0: yield CustomTelephoneMatcher()
-    if lvl >= 2: yield CustomTelephoneMatcher(partial = True)
+	# Phone number
+	if lvl >= 0: yield CustomTelephoneMatcher()
+	if lvl >= 2: yield CustomTelephoneMatcher(partial = True)
 
-    # Other individual IDs
+	# Other individual IDs
 
-    # from https://fr.wikipedia.org/wiki/Code_Insee#Identification_des_individus
-    if lvl >= 0: yield RegexMatcher(F_NIR, "[0-9]15")
+	# from https://fr.wikipedia.org/wiki/Code_Insee#Identification_des_individus
+	if lvl >= 0: yield RegexMatcher(F_NIR, "[0-9]15")
 
-    # Date-time
-    if lvl >= 0: yield RegexMatcher(F_YEAR, "19[0-9]{2}")
-    if lvl >= 0: yield RegexMatcher(F_YEAR, "20[0-9]{2}")
-    if lvl >= 1: yield CustomDateMatcher()
-    yield SubtypeMatcher(F_DATE, [F_YEAR])
-    yield SubtypeMatcher(F_STRUCTURED_TYPE, [F_DATE, F_URL, F_EMAIL, F_PHONE])
+	# Date-time
+	if lvl >= 0: yield RegexMatcher(F_YEAR, "19[0-9]{2}")
+	if lvl >= 0: yield RegexMatcher(F_YEAR, "20[0-9]{2}")
+	if lvl >= 1: yield CustomDateMatcher()
+	yield SubtypeMatcher(F_DATE, [F_YEAR])
+	yield SubtypeMatcher(F_STRUCTURED_TYPE, [F_DATE, F_URL, F_EMAIL, F_PHONE])
 
-    # MESR Domain
-    PAT_SIREN = "[0-9]{9}"
-    if lvl >= 0: yield RegexMatcher(F_SIREN, PAT_SIREN, validator = validateLuhn)
-    PAT_SIRET = "[0-9]{14}"
-    if lvl >= 0: yield RegexMatcher(F_SIRET, PAT_SIRET, validator = validateLuhn)
-    PAT_NNS = "[0-9]{9}[a-zA-Z]"
-    if lvl >= 0: yield RegexMatcher(F_NNS, PAT_NNS)
-    PAT_UAI = "[0-9]{7}[a-zA-Z]"
-    if lvl >= 0: yield RegexMatcher(F_UAI, PAT_UAI)
-    if lvl >= 0: yield RegexMatcher(F_UMR, "UMR-?[ A-Z]{0,8}([0-9]{3,4})", g = 1, partial = True)
-    # Negate dates for all thoses regex matches (which happen to match using our custom matcher, especially for UAI patterns)
-    if lvl >= 0:
-        yield RegexMatcher(F_DATE, PAT_SIREN, ignoreCase = True, neg = True)
-        yield RegexMatcher(F_DATE, PAT_SIRET, ignoreCase = True, neg = True)
-        yield RegexMatcher(F_DATE, PAT_NNS, ignoreCase = True, neg = True)
-        yield RegexMatcher(F_DATE, PAT_UAI, ignoreCase = True, neg = True)
+	# MESR Domain
+	PAT_SIREN = "[0-9]{9}"
+	if lvl >= 0: yield RegexMatcher(F_SIREN, PAT_SIREN, validator = validateLuhn)
+	PAT_SIRET = "[0-9]{14}"
+	if lvl >= 0: yield RegexMatcher(F_SIRET, PAT_SIRET, validator = validateLuhn)
+	PAT_NNS = "[0-9]{9}[a-zA-Z]"
+	if lvl >= 0: yield RegexMatcher(F_NNS, PAT_NNS)
+	PAT_UAI = "[0-9]{7}[a-zA-Z]"
+	if lvl >= 0: yield RegexMatcher(F_UAI, PAT_UAI)
+	if lvl >= 0: yield RegexMatcher(F_UMR, "UMR-?[ A-Z]{0,8}([0-9]{3,4})", g = 1, partial = True)
+	# Negate dates for all thoses regex matches (which happen to match using our custom matcher, especially for UAI patterns)
+	if lvl >= 0:
+		yield RegexMatcher(F_DATE, PAT_SIREN, ignoreCase = True, neg = True)
+		yield RegexMatcher(F_DATE, PAT_SIRET, ignoreCase = True, neg = True)
+		yield RegexMatcher(F_DATE, PAT_NNS, ignoreCase = True, neg = True)
+		yield RegexMatcher(F_DATE, PAT_UAI, ignoreCase = True, neg = True)
 
-    if lvl >= 2: yield LabelMatcher(F_RD_STRUCT, fileToSet('structure_recherche_short.col'), MATCH_MODE_EXACT)
-    if lvl >= 2: yield TokenizedMatcher(F_RD_PARTNER,
-        fileToSet('partenaire_recherche_ANR.col') |
-        fileToSet('partenaire_recherche_FUI.col') |
-        fileToSet('institution_H2020.col'),
-        maxTokens = 6)
-    if lvl >= 2: yield TokenizedMatcher(F_CLINICALTRIAL_COLLAB, fileToSet('clinical_trial_sponsor_collab.col'),
-        maxTokens = 4)
-    yield SubtypeMatcher(F_RD, [F_RD_STRUCT, F_RD_PARTNER, F_CLINICALTRIAL_COLLAB])
-    if lvl >= 0:
-        yield RegexMatcher(F_ACADEMIE, "acad.mie", ignoreCase = True)
-        yield LabelMatcher(F_ACADEMIE, fileToSet('academie'), MATCH_MODE_EXACT)    # SIES/APB
-    if lvl >= 0: 
-        yield VocabMatcher(F_ETAB, fileToSet('etablissement.vocab'), ignoreCase = True, partial = False)
-    if lvl >= 0: 
-        etabEnssupLexicon = fileToSet('etab_enssup')
-        etabEnssupMatcher = TokenizedMatcher(F_ETAB_ENSSUP, etabEnssupLexicon, maxTokens = 6)
-        yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('etab_enssup.vocab'), ignoreCase = True, partial = True, matcher = etabEnssupMatcher)
-    yield SubtypeMatcher(F_ETAB, [F_ETAB_ENSSUP])
-    if lvl >= 1: 
-        yield LabelMatcher(F_APB_MENTION, fileToSet('mention_licence_sise'), MATCH_MODE_EXACT)
-    if lvl >= 2: 
-        yield TokenizedMatcher(F_APB_MENTION, fileToSet('mention_licence_apb2017.col'), maxTokens = 5)
-    if lvl >= 2: 
-        yield TokenizedMatcher(F_RD_DOMAIN, fileToSet('domaine_recherche.col'), maxTokens = 4)
-    # yield CategoryMatcher(F_RD_DOMAIN, 'publi')
-    yield SubtypeMatcher(F_MESR, [F_RD, F_APB_MENTION, F_RD_DOMAIN])
+	if lvl >= 2: yield LabelMatcher(F_RD_STRUCT, fileToSet('structure_recherche_short.col'), MATCH_MODE_EXACT)
+	if lvl >= 2: yield TokenizedMatcher(F_RD_PARTNER,
+		fileToSet('partenaire_recherche_ANR.col') |
+		fileToSet('partenaire_recherche_FUI.col') |
+		fileToSet('institution_H2020.col'),
+		maxTokens = 6)
+	if lvl >= 2: yield TokenizedMatcher(F_CLINICALTRIAL_COLLAB, fileToSet('clinical_trial_sponsor_collab.col'),
+		maxTokens = 4)
+	yield SubtypeMatcher(F_RD, [F_RD_STRUCT, F_RD_PARTNER, F_CLINICALTRIAL_COLLAB])
+	if lvl >= 0:
+		yield RegexMatcher(F_ACADEMIE, "acad.mie", ignoreCase = True)
+		yield LabelMatcher(F_ACADEMIE, fileToSet('academie'), MATCH_MODE_EXACT, stopWords = ['académie'])    # SIES/APB
+	if lvl >= 0: 
+		yield VocabMatcher(F_ETAB, fileToSet('etablissement.vocab'), ignoreCase = True, partial = False)
+	if lvl >= 0: 
+		etabEnssupLexicon = fileToSet('etab_enssup')
+		etabEnssupMatcher = TokenizedMatcher(F_ETAB_ENSSUP, etabEnssupLexicon, maxTokens = 6)
+		yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('etab_enssup.vocab'), ignoreCase = True, partial = True, matcher = etabEnssupMatcher)
+	yield SubtypeMatcher(F_ETAB, [F_ETAB_ENSSUP])
+	if lvl >= 1: 
+		yield LabelMatcher(F_APB_MENTION, fileToSet('mention_licence_sise'), MATCH_MODE_EXACT)
+	if lvl >= 2: 
+		yield TokenizedMatcher(F_APB_MENTION, fileToSet('mention_licence_apb2017.col'), maxTokens = 5)
+	if lvl >= 2: 
+		yield TokenizedMatcher(F_RD_DOMAIN, fileToSet('domaine_recherche.col'), maxTokens = 4)
+	# yield CategoryMatcher(F_RD_DOMAIN, 'publi')
+	yield SubtypeMatcher(F_MESR, [F_RD, F_APB_MENTION, F_RD_DOMAIN])
 
-    # Geo Domain
-    # if lvl >= 2: 
-    #     yield FrenchAddressMatcher()
-    if lvl >= 2: 
-        yield CustomAddressMatcher()
-    if lvl >= 0: 
-        yield RegexMatcher(F_ZIP, "[0-9]{5}")
-    if lvl >= 0: 
-        yield LabelMatcher(F_COUNTRY, fileToSet('country'), MATCH_MODE_EXACT)
+	# Geo Domain
+	# if lvl >= 2: 
+	# 	yield FrenchAddressMatcher()
+	if lvl >= 2: 
+		yield CustomAddressMatcher()
+	if lvl >= 0: 
+		yield RegexMatcher(F_ZIP, "[0-9]{5}")
 
-    if lvl >= 2: 
-        yield TokenizedMatcher(F_CITY, COMMUNE_LEXICON, maxTokens = 3)
-    elif lvl >= 0: 
-        yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT) # MATCH_MODE_CLOSE too imprecise
-        yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
+	if lvl >= 1:
+		yield VariantExpander(fileToVariantMap('country.syn'), F_COUNTRY, False)
+	elif lvl >= 0:
+		yield LabelMatcher(F_COUNTRY, fileToSet('country'), MATCH_MODE_EXACT)
 
-    if lvl >= 2:
-        yield TokenizedMatcher(F_DPT, fileToSet('departement'), distinctCount = 7)
-        yield TokenizedMatcher(F_REGION, fileToSet('region'), distinctCount = 3)
-        yield TokenizedMatcher(F_STREET, fileToSet('voie.col'), maxTokens = 2)
-    yield CompositeMatcher(F_ADDRESS, [F_STREET, F_ZIP, F_CITY, F_COUNTRY])
-    yield SubtypeMatcher(F_GEO, [F_ADDRESS, F_ZIP, F_CITY, F_DPT, F_REGION, F_COUNTRY])
+	if lvl >= 2: 
+		yield TokenizedMatcher(F_CITY, COMMUNE_LEXICON, maxTokens = 3, stopWords = STOP_WORDS_CITY)
+	elif lvl >= 0: 
+		yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT, stopWords = STOP_WORDS_CITY)
+		yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
 
-    # Publications
-    # From http://stackoverflow.com/questions/27910/finding-a-doi-in-a-document-or-page
-    PAT_DOI = '\b(10[.][0-9]{4,}(?:[.][0-9]+)*/(?:(?!["&\'<>])\S)+)\b'
-    if lvl >= 0: 
-        yield RegexMatcher(F_DOI, PAT_DOI)
-    PAT_ISSN = '\d{4}-\d{3}[\dxX]$'
-    if lvl >= 0: 
-        yield RegexMatcher(F_ISSN, PAT_ISSN)
-     # TODO see if we should add IdRef
-    yield SubtypeMatcher(F_PUBLI_ID, [F_DOI, F_ISSN])
-    if lvl >= 0:
-        pubTitleLexicon = fileToSet('titre_revue')
-        yield LabelMatcher(F_JOURNAL, pubTitleLexicon, MATCH_MODE_EXACT)
-    if lvl >= 2: 
-        yield TokenizedMatcher(F_JOURNAL, pubTitleLexicon, maxTokens = 5, scorer = partial(tokenScorer, minSrcTokenRatio = 90))
-    if lvl >= 2:
-        articleLexicon = fileToSet('article_fr') | fileToSet('article_en')
-        yield TokenizedMatcher(F_ARTICLE, articleLexicon)
-    yield SubtypeMatcher(F_ARTICLE, [F_ABSTRACT, F_PUBLI_ID, F_ARTICLE_CONTENT])
-    # yield BiblioMatcher()
-    yield SubtypeMatcher(F_PUBLI, [F_JOURNAL, F_PUBLI_ID, F_ARTICLE, F_ABSTRACT])
+	if lvl >= 2:
+		yield TokenizedMatcher(F_DPT, fileToSet('departement'), distinctCount = 7)
+		yield TokenizedMatcher(F_REGION, fileToSet('region'), distinctCount = 3)
+		yield TokenizedMatcher(F_STREET, fileToSet('voie.col'), maxTokens = 2)
+	yield CompositeMatcher(F_ADDRESS, [F_STREET, F_ZIP, F_CITY, F_COUNTRY])
+	yield SubtypeMatcher(F_GEO, [F_ADDRESS, F_ZIP, F_CITY, F_DPT, F_REGION, F_COUNTRY])
 
-    # Text fields
-    yield SubtypeMatcher(F_TEXT, [F_FRENCH, F_ENGLISH])
-    yield SubtypeMatcher(F_TEXT, [F_ARTICLE, F_ABSTRACT])
+	# Publications
+	# From http://stackoverflow.com/questions/27910/finding-a-doi-in-a-document-or-page
+	PAT_DOI = '\b(10[.][0-9]{4,}(?:[.][0-9]+)*/(?:(?!["&\'<>])\S)+)\b'
+	if lvl >= 0: 
+		yield RegexMatcher(F_DOI, PAT_DOI)
+	PAT_ISSN = '\d{4}-\d{3}[\dxX]$'
+	if lvl >= 0: 
+		yield RegexMatcher(F_ISSN, PAT_ISSN)
+	 # TODO see if we should add IdRef
+	yield SubtypeMatcher(F_PUBLI_ID, [F_DOI, F_ISSN])
+	if lvl >= 0:
+		pubTitleLexicon = fileToSet('titre_revue')
+		yield LabelMatcher(F_JOURNAL, pubTitleLexicon, MATCH_MODE_EXACT)
+	if lvl >= 2: 
+		yield TokenizedMatcher(F_JOURNAL, pubTitleLexicon, maxTokens = 5, scorer = partial(tokenScorer, minSrcTokenRatio = 90))
+	if lvl >= 2:
+		articleLexicon = fileToSet('article_fr') | fileToSet('article_en')
+		yield TokenizedMatcher(F_ARTICLE, articleLexicon)
+	yield SubtypeMatcher(F_ARTICLE, [F_ABSTRACT, F_PUBLI_ID, F_ARTICLE_CONTENT])
+	# yield BiblioMatcher()
+	yield SubtypeMatcher(F_PUBLI, [F_JOURNAL, F_PUBLI_ID, F_ARTICLE, F_ABSTRACT])
 
-    # Biomedical Domain
-    if lvl >= 2:
-        yield TokenizedMatcher(F_CLINICALTRIAL_NAME, fileToSet('clinical_trial_acronym'))
-        yield TokenizedMatcher(F_MEDICAL_SPEC,
-            fileToSet('specialite_medicale_fr') |
-            fileToSet('specialite_medicale_en'))
-    yield SubtypeMatcher(F_BIOMEDICAL, [F_CLINICALTRIAL_NAME, F_MEDICAL_SPEC])
+	# Text fields
+	yield SubtypeMatcher(F_TEXT, [F_FRENCH, F_ENGLISH])
+	yield SubtypeMatcher(F_TEXT, [F_ARTICLE, F_ABSTRACT])
 
-    # Agro Domain
-    if lvl >= 0:
-        phytoLexicon = fileToSet('phyto')
-        yield LabelMatcher(F_PHYTO, phytoLexicon, MATCH_MODE_EXACT)
-    if lvl >= 2: yield TokenizedMatcher(F_PHYTO, phytoLexicon,
-        maxTokens = 4, scorer = partial(tokenScorer, minSrcTokenRatio = 30))
-    yield SubtypeMatcher(F_AGRO, [F_PHYTO])
+	# Biomedical Domain
+	if lvl >= 2:
+		yield TokenizedMatcher(F_CLINICALTRIAL_NAME, fileToSet('clinical_trial_acronym'))
+		yield TokenizedMatcher(F_MEDICAL_SPEC,
+			fileToSet('specialite_medicale_fr') |
+			fileToSet('specialite_medicale_en'))
+	yield SubtypeMatcher(F_BIOMEDICAL, [F_CLINICALTRIAL_NAME, F_MEDICAL_SPEC])
 
-    # A few subsumption relations
-    yield SubtypeMatcher(F_ORG_ID, [F_SIREN, F_SIRET, F_NNS, F_UAI, F_UMR])
-    yield SubtypeMatcher(F_PERSON_ID, [F_PERSON, F_EMAIL, F_PHONE, F_NIR])
-    yield SubtypeMatcher(F_ID, [F_ORG_ID, F_PERSON_ID, F_PUBLI_ID])
+	# Agro Domain
+	if lvl >= 0:
+		phytoLexicon = fileToSet('phyto')
+		yield LabelMatcher(F_PHYTO, phytoLexicon, MATCH_MODE_EXACT)
+	if lvl >= 2: yield TokenizedMatcher(F_PHYTO, phytoLexicon,
+		maxTokens = 4, scorer = partial(tokenScorer, minSrcTokenRatio = 30))
+	yield SubtypeMatcher(F_AGRO, [F_PHYTO])
 
-    # The top-level data type for organizations
-    yield SubtypeMatcher(F_INSTITUTION, [F_RD_STRUCT, F_ETAB, F_ENTREPRISE])
+	# A few subsumption relations
+	yield SubtypeMatcher(F_ORG_ID, [F_SIREN, F_SIRET, F_NNS, F_UAI, F_UMR])
+	yield SubtypeMatcher(F_PERSON_ID, [F_PERSON, F_EMAIL, F_PHONE, F_NIR])
+	yield SubtypeMatcher(F_ID, [F_ORG_ID, F_PERSON_ID, F_PUBLI_ID])
 
-    # Normalize by expanding alternative variants (such as acronyms, abbreviations and synonyms) to their main variant
-    if lvl >= 0:
-        yield VocabMatcher(F_ENTREPRISE, fileToSet('org_entreprise.vocab'), ignoreCase = True, partial = False,
-            matcher = VariantExpander(fileToVariantMap('org_entreprise.syn'), F_ENTREPRISE, True))
-        yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('org_enseignement.vocab'), ignoreCase = True, partial = False,
-            matcher = VariantExpander(fileToVariantMap('etab_enssup.syn'), F_MESR, False, targetType = F_ETAB_ENSSUP))
+	# The top-level data type for organizations
+	yield SubtypeMatcher(F_INSTITUTION, [F_RD_STRUCT, F_ETAB, F_ENTREPRISE])
 
-    if lvl >= 0:
-        yield VocabMatcher(F_RD_STRUCT, fileToSet('org_rnsr.vocab'), ignoreCase = True, partial = False,
-            matcher = VariantExpander(fileToVariantMap('org_rnsr.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT))
+	# Normalize by expanding alternative variants (such as acronyms, abbreviations and synonyms) to their main variant
+	if lvl >= 0:
+		yield VocabMatcher(F_ENTREPRISE, fileToSet('org_entreprise.vocab'), ignoreCase = True, partial = False,
+			matcher = VariantExpander(fileToVariantMap('org_entreprise.syn'), F_ENTREPRISE, True))
+		yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('org_enseignement.vocab'), ignoreCase = True, partial = False,
+			matcher = VariantExpander(fileToVariantMap('etab_enssup.syn'), F_MESR, False, targetType = F_ETAB_ENSSUP))
 
-    # Spot acronyms on-the-fly
-    if lvl >= 1: 
-        yield AcronymMatcher()
+	if lvl >= 0:
+		yield VocabMatcher(F_RD_STRUCT, fileToSet('org_rnsr.vocab'), ignoreCase = True, partial = False,
+			matcher = VariantExpander(fileToVariantMap('org_rnsr.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT))
+
+	# Spot acronyms on-the-fly
+	if lvl >= 1: 
+		yield AcronymMatcher()
 
 def allDatatypes():
     ''' Returns a map of categories (including a default one for orphan data types) to a list of data types 

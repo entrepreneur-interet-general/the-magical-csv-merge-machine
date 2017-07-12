@@ -259,6 +259,7 @@ class Normalizer(AbstractDataProject):
         if user_given_name is not None:
             base_name = user_given_name.rsplit('.')[0]
             extension = user_given_name.rsplit('.')[-1]    
+
             if extension not in ['csv', 'xls', 'xlsx']:
                 raise Exception('user given name should end with .csv , .xls , or .xlsx or .zip')
             if any(x in base_name for x in chars_to_replace):
@@ -275,6 +276,9 @@ class Normalizer(AbstractDataProject):
         else:
             base_name = file_name.rsplit('.')[0]
             extension = file_name.rsplit('.')[-1]    
+
+        if extension not in ['csv', 'xls', 'xlsx']:
+            raise Exception('file name (and user given name) should end with .csv , .xls , or .xlsx or .zip')
             
         file_name = secure_filename(file_name)
         self.mem_data_info['file_name'] = file_name
@@ -290,6 +294,7 @@ class Normalizer(AbstractDataProject):
         if extension == 'csv':
             self.mem_data, sep, encoding, columns = self.read_csv(file, chars_to_replace)
             file_type = 'csv'
+
         else:
             self.mem_data, sep, encoding = self.read_excel(file, chars_to_replace)
             file_type = 'excel'
