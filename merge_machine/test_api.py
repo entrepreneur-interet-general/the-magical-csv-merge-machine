@@ -460,19 +460,27 @@ if __name__ == '__main__':
     
     import argparse 
     
-    dir_path = os.path.join('local_test_data', 'integration_1')
+    parser = argparse.ArgumentParser(description='Run normalization and link pipelines')
+    parser.add_argument('--dir', 
+                        type=str, 
+                        default=os.path.join('local_test_data', 'integration_1'), 
+                        help='Path to directory containing test data')
+    parser.add_argument('--keep', 
+                        action='store_true',
+                        help='Use this flag to NOT delete projects after testing')    
+    args = parser.parse_args()
     
     # Parameters
-    source_params_path = 'local_test_data/integration_1/source_params.json'
-    ref_params_path = 'local_test_data/integration_1/ref_params.json'
-    link_params_path = 'local_test_data/integration_1/link_params.json'
+    source_params_path = os.path.join(args.dir, 'source_params.json')
+    ref_params_path = os.path.join(args.dir, 'ref_params.json')
+    link_params_path = os.path.join(args.dir, 'link_params.json')
     
     #==============================================================================
     # RUN NORMALIZE PIPELINE ON SOURCE
     #==============================================================================        
     with open(source_params_path) as f:
         source_params = json.load(f)
-    source_params['file_path'] = os.path.join(dir_path, source_params['file_name'])
+    source_params['file_path'] = os.path.join(args.dir, source_params['file_name'])
     source_project_id = normalize_pipeline(source_params)
     
     #==============================================================================
@@ -480,7 +488,7 @@ if __name__ == '__main__':
     #==============================================================================
     with open(ref_params_path) as f:
         ref_params = json.load(f)
-    ref_params['file_path'] = os.path.join(dir_path, ref_params['file_name'])
+    ref_params['file_path'] = os.path.join(args.dir, ref_params['file_name'])
     ref_project_id = normalize_pipeline(ref_params)
     
     #==============================================================================
@@ -492,18 +500,19 @@ if __name__ == '__main__':
     link_params['source_project_id'] = source_project_id
     link_params['source_file_name'] = source_params['file_name']
     link_params['ref_project_id'] = ref_project_id
-    link_params['training_file_path'] = os.path.join(dir_path, link_params['training_file_name'])
+    link_params['training_file_path'] = os.path.join(args.dir, link_params['training_file_name'])
                
     link_project_id = link_pipeline(link_params)
     
     #==============================================================================
     # Delete projects   
     #==============================================================================
-    for (type_, id_) in [('normalize', source_project_id), 
-                         ('normalize', ref_project_id), 
-                         ('link', link_project_id)]:
-        url_to_append = '/api/delete/{0}/{1}'.format(type_, id_)
-        resp = get_resp(url_to_append)
+    if not args.keep:
+        for (type_, id_) in [('normalize', source_project_id), 
+                             ('normalize', ref_project_id), 
+                             ('link', link_project_id)]:
+            url_to_append = '/api/delete/{0}/{1}'.format(type_, id_)
+            resp = get_resp(url_to_append)
 
     #==============================================================================
     # List projects
