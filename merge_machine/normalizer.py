@@ -6,6 +6,7 @@ Created on Fri Apr 21 19:39:45 2017
 @author: leo
 """
 
+import io
 import itertools
 import os
 import time
@@ -179,11 +180,12 @@ class Normalizer(AbstractDataProject):
         #return "".join([c for c in file_name[:-4] if c.isalpha() or c.isdigit() or c==' ']).rstrip() + ext
     
     @staticmethod
-    def rename_columns(tab, chars_to_replace):
+    def rename_columns(tab, columns, chars_to_replace):
         '''Replaces characters in table header'''
         for char in chars_to_replace:
-            tab.columns = [unidecode.unidecode(x.replace(char, '_')) \
-                                     for x in tab.columns]        
+            columns = [unidecode.unidecode(x.replace(char, '_')) \
+                                     for x in columns]        
+        tab.columns = columns
         return tab
 
         
@@ -191,43 +193,44 @@ class Normalizer(AbstractDataProject):
         ENCODINGS = ['utf-8', 'windows-1252']
         SEPARATORS = [',', ';', '\t']
         
-        could_read = False
+        first_lines = b''.join([file.readline() for _ in range(self.CHUNKSIZE)])
+        
+        could_read = False        
         for encoding in ENCODINGS:
             for sep in SEPARATORS:
                 try:
+                    first_lines_io = io.BytesIO(first_lines)
+                                        
                     # Just read column name and first few lines for encoding
-                    tab_part = pd.read_csv(file, 
+                    tab_part = pd.read_csv(first_lines_io, 
                                            sep=sep, 
                                            encoding=encoding, 
                                            dtype=str)
+                    
                     columns = tab_part.columns
                     
-                    try:
-                        file.seek(0)
-                    except:
-                        pass # TODO: really? try except? really??
-                    
-                    # Create actual generator
-                    tab_it = pd.read_csv(file, 
-                                         sep=sep, 
-                                         encoding=encoding, 
-                                         dtype=str, 
-                                         chunksize=self.CHUNKSIZE)
-                    
-                    tab = (self.rename_columns(sub_tab, chars_to_replace) 
-                                        for sub_tab in tab_it)
                     could_read = True
                     break
                 except Exception as e:
                     print(e)
-                    file.seek(0)
+                    
             if could_read:
+                # Create actual generator
+                tab_next = pd.read_csv(file, 
+                                     sep=sep, 
+                                     encoding=encoding,     
+                                     dtype=str,
+                                     header=None,
+                                     chunksize=self.CHUNKSIZE)
+                tab_it = itertools.chain([tab_part], tab_next)
+                tab = (self.rename_columns(sub_tab, columns, chars_to_replace) 
+                                    for sub_tab in tab_it)
                 break
             
         if not could_read:
             raise Exception('Separator and/or Encoding not detected. Try uploading \
                             a csv with "," as separator with utf-8 encoding')            
-            
+        
         return tab, sep, encoding, columns
     
     @staticmethod

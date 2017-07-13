@@ -1240,7 +1240,6 @@ def upload_config(project_type, project_id):
                 "file_name": file to fetch
                 }
         - module_params: parameters to write
-    
     """
     # TODO: do not expose ?
     proj = _init_project(project_type=project_type, project_id=project_id)    
@@ -1307,12 +1306,13 @@ def upload(project_id):
     make_mini = module_params.get('make_mini', True)
     
     # Upload data
-    file = request.files['file']
-    if file:
-        _, run_info = proj.upload_init_data(file.stream, file.filename)
-    else:
-        raise Exception('Empty file')
+    #import pdb; pdb.set_trace()
+    #file = request.files['file']
+    for _ in range(8):
+        request.stream.readline()
         
+    _, run_info = proj.upload_init_data(request.stream, 'TEST_CHANGE_THIS.csv')
+    
     # Make mini
     if make_mini:
         proj.load_data('INIT', run_info['file_name'])
@@ -1325,6 +1325,21 @@ def upload(project_id):
             proj.write_metadata()
 
     return jsonify(run_info=run_info, project_id=proj.project_id)
+
+
+#@app.route("/upload/<filename>", methods=["POST", "PUT"])
+#def upload_process(filename):
+#    filename = secure_filename(filename)
+#    fileFullPath = os.path.join(application.config['UPLOAD_FOLDER'], filename)
+#    with open(fileFullPath, "wb") as f:
+#        chunk_size = 4096
+#        while True:
+#            chunk = flask.request.stream.read(chunk_size)
+#            if len(chunk) == 0:
+#                return
+#
+#            f.write(chunk)
+#    return jsonify({'filename': filename})
 
 
 @app.route('/api/normalize/make_mini/<project_id>', methods=['POST'])
