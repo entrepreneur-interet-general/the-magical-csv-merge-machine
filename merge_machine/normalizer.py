@@ -5,7 +5,7 @@ Created on Fri Apr 21 19:39:45 2017
 
 @author: leo
 """
-
+import copy
 import itertools
 import os
 import time
@@ -74,7 +74,7 @@ class Normalizer(AbstractDataProject):
 
     def default_log(self):
         '''Default log for a new file'''
-        return {module_name: self.default_module_log for module_name in NORMALIZE_MODULE_ORDER_log}
+        return {module_name: copy.deepcopy(self.default_module_log) for module_name in NORMALIZE_MODULE_ORDER_log}
         
     def load_data(self, module_name, file_name, nrows=None, columns=None, restrict_to_selected=True):
         assert (columns is None) or (not restrict_to_selected)
@@ -264,7 +264,7 @@ class Normalizer(AbstractDataProject):
                 raise Exception('user given name should end with .csv , .xls , or .xlsx or .zip')
             if any(x in base_name for x in chars_to_replace):
                 raise Exception('user_given_name sould be alphanumeric or underscores (+.csv or .xls or .xlsx)')
-                
+        
         # TODO: Check that file is not already present
         self.mem_data_info = {
                                 'og_file_name': file_name,
@@ -283,7 +283,7 @@ class Normalizer(AbstractDataProject):
         file_name = secure_filename(file_name)
         self.mem_data_info['file_name'] = file_name
         display_name = file_name
-        
+                
         # Check that file name is not already present 
         if file_name in self.metadata['files']:
             raise Exception('File: {0} already exists. Delete this file ' \
@@ -298,7 +298,7 @@ class Normalizer(AbstractDataProject):
         else:
             self.mem_data, sep, encoding = self.read_excel(file, chars_to_replace)
             file_type = 'excel'
-
+            
         if len(set(columns)) != len(columns):
             raise Exception('Column names should all be different')
 
@@ -315,12 +315,12 @@ class Normalizer(AbstractDataProject):
                                               'created': []}
         else:
             assert list(self.mem_data.columns) == self.metadata['column_tracker']['original']
-        
+                
         # Create new empty log in metadata
         self.mem_data_info['file_name'] = secure_filename(base_name) + '.csv'
         self.metadata['log'][file_name] = self.default_log()
         # self.write_metadata() Delete this line if evth is working fine
-        
+                
         # Complete log
         log = self.end_active_log(log, error=False)
                           
@@ -344,7 +344,7 @@ class Normalizer(AbstractDataProject):
         self.upload_config_data(config_dict, 'INIT', 'infered_config.json')
 
         self.clear_memory()    
-        
+                
         return None, config_dict
 
     def add_selected_columns(self, columns):
@@ -419,7 +419,7 @@ class Normalizer(AbstractDataProject):
                 pass
             
             try:
-                self.metadata['log'][file_name][iter_module_name] = self.default_module_log
+                self.metadata['log'][file_name][iter_module_name] = copy.deepcopy(self.default_module_log)
             except:
                 pass
             self.write_metadata()
