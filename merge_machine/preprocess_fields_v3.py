@@ -975,21 +975,21 @@ class Fields(object):
 				yield (of, b)
 			self.outputFieldsByColumn[fieldName] = ofs
 	def normalizeValuesInPlace(self, types):
-	   ''' Generates (original field name, modified field values) pairs for each output field and each cell that is 
-		   actually modified (even just changing a single character's case). '''
-	   for (h, f) in self.fields.items():
-		   fieldName = h.value
-		   if fieldName not in types:
-			   logging.warning('No values to normalize for {}'.format(fieldName))
-			   continue
-		   logging.info('Normalizing values for {}'.format(fieldName))
-		   lvt = types[fieldName]
-		   newCol = [None] * self.entries
-		   for i, c in enumerate(f.cells):
-			   nvs = list([c.normalizedValuesInPlace(lvt)])
-			   if c.value in nvs: continue
-			   newCol[i] = ', '.join(nvs)
-		   yield (fieldName, newCol)
+		''' Generates (original field name, modified field values) pairs for each output field and each cell that is 
+		 actually modified (even just changing a single character's case). '''
+		for (h, f) in self.fields.items():
+			fieldName = h.value
+			if fieldName not in types:
+				logging.warning('No values to normalize for {}'.format(fieldName))
+				continue
+			logging.info('Normalizing values for {}'.format(fieldName))
+			lvt = types[fieldName]
+			newCol = [None] * self.entries
+			for i, c in enumerate(f.cells):
+				nvs = list(c.normalizedValuesInPlace(lvt))
+				if c.value in nvs: continue
+				newCol[i] = ', '.join(nvs)
+			yield (fieldName, newCol)
 
 def foldForChanges(s):
 	''' Override this if we want to skip minor changes (case, hyphenation, etc.) '''
@@ -1138,16 +1138,16 @@ class Cell(object):
 		return nvs
 	def normalizedValuesInPlace(self, t):
 		res = defaultdict(set)
+		s = set()
 		if t in self.tis and t not in self.nts:
 			for ti in self.tis[t]:
 				if isinstance(ti.hit, list): res[ti.t] |= set(ti.hit)
 				else: res[ti.t].add(str(ti.hit))
-			nvs = dict()
 			for (k, v) in res.items():
 				ucvs = uniqueCellValues(v)
-				print('DEBUG ucvs', k, v, ucvs)
-				for ucv in filter(lambda ucv: ucv is not None and len(ucv) > 0, ucvs):
-					yield ucv
+				l = list([ucv for ucv in ucvs if ucv is not None and len(ucv) > 0])
+				s |= (v if len(l) < 1 else set(l))
+		return list(s)
 
 def setAsListOrSingleton(v):
 	s = set(v)
@@ -1765,7 +1765,7 @@ def generateValueMatchers(lvl = 0):
 		yield RegexMatcher(F_ZIP, "[0-9]{5}")
 
 	if lvl >= 1:
-		yield VariantExpander(fileToVariantMap('country.syn'), F_COUNTRY, False)
+		yield VariantExpander(fileToVariantMap('country.latin.syn'), F_COUNTRY, False)
 	elif lvl >= 0:
 		yield LabelMatcher(F_COUNTRY, fileToSet('country'), MATCH_MODE_EXACT)
 
@@ -1939,11 +1939,11 @@ if __name__ == '__main__':
 	print('Python version: {}'.format(sys.version))
 	parser = optparse.OptionParser()
 	parser.add_option("-s", "--src", dest = "srcFileName",
-					  help = "source file")
+						help = "source file")
 	parser.add_option("-d", "--delimiter", dest = "delimiter",
-					  help = "CSV delimiter")
+						help = "CSV delimiter")
 	parser.add_option("-f", "--output_format", dest = "of",
-					  help = "Output format (md / csv)")
+						help = "Output format (md / csv)")
 	(options, args) = parser.parse_args()
 	separator = options.delimiter if options.delimiter else '|'
 	outputFormat = options.of if options.of else separator
