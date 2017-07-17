@@ -276,7 +276,6 @@ class AbstractDataProject(AbstractProject):
         
             log['og_file_name'] = log['file_name']
             log['file_name'] = new_file_name
-            log['completed'] = True
             
             # TODO: think if transformation should / should not be complete
     
@@ -304,7 +303,7 @@ class AbstractDataProject(AbstractProject):
             pass
             #            raise Exception('No log buffer: no operations were executed since \
             #                            write_log_buffer was last called')
-    
+
         # Indicate if any data was written
         if written:
             for log in self.log_buffer[::-1]:
@@ -328,7 +327,6 @@ class AbstractDataProject(AbstractProject):
             #                raise ValueError('module name {0} was not initialized in log for file {1}'.format(module_name, file_name))
             if file_name is not None: # TODO: burn this heresy
                 self.metadata['log'][file_name][module_name].update(log)
-
         # Write metadata and clear log buffer
         self.write_metadata()
         self.log_buffer = []
@@ -354,12 +352,10 @@ class AbstractDataProject(AbstractProject):
             os.makedirs(dir_path)        
         file_path = self.path_to(self.mem_data_info['module_name'], 
                                  self.mem_data_info['file_name'])
-        
 #        try:
         nrows = 0
         with open(file_path, 'w') as w:
             # Enumerate to know whether or not to write header (i==0)
-            self.mem_data, temp = tee(self.mem_data)
             try:
                 for i, part_tab in enumerate(self.mem_data):
                     print(i)
@@ -371,18 +367,16 @@ class AbstractDataProject(AbstractProject):
                     
             except Exception as e:
                 print('At error here:', e)
-                import pdb
-                pdb.set_trace()
 #        except Exception as e:
 #            if os.path.isfile(file_path):
 #                os.remove(file_path)
 #            raise e
-            
+
         print('Wrote to ', file_path)
-        
         self.write_log_buffer(True)
         self.write_run_info_buffer()
-        
+
+
         if nrows == 0:
             raise Exception('No data was written, make sure you loaded data before'
                            + ' calling write_data')
