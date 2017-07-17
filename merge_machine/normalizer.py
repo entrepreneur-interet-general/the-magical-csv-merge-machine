@@ -187,7 +187,7 @@ class Normalizer(AbstractDataProject):
                                      for x in columns]        
         tab.columns = columns
         return tab
-
+    
         
     def read_csv(self, file, chars_to_replace):
         ENCODINGS = ['utf-8', 'windows-1252']

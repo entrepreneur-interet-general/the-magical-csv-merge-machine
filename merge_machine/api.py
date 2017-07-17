@@ -1309,6 +1309,8 @@ def upload(project_id):
     #import pdb; pdb.set_trace()
     #file = request.files['file']
     for _ in range(8):
+        import pdb
+        pdb.set_trace()
         request.stream.readline()
         
     _, run_info = proj.upload_init_data(request.stream, 'TEST_CHANGE_THIS.csv')
