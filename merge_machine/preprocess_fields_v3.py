@@ -1136,17 +1136,18 @@ class Cell(object):
 				if i == 0: nvs[k] = ucv
 				else: nvs['{}.{}'.format(k, i + 1)] = ucv
 		return nvs
-def normalizedValuesInPlace(self, t):
-	res = defaultdict(set)
-	if t in self.tis and t not in self.nts:
-		for ti in self.tis[t]:
-			if isinstance(ti.hit, list): res[ti.t] |= set(ti.hit)
-			else: res[ti.t].add(str(ti.hit))
-		nvs = dict()
-		for (k, v) in res.items():
-			ucvs = uniqueCellValues(v)
-			for ucv in filter(lambda ucv: ucv is not None and len(ucv) > 0, ucvs):
-				yield ucv
+	def normalizedValuesInPlace(self, t):
+		res = defaultdict(set)
+		if t in self.tis and t not in self.nts:
+			for ti in self.tis[t]:
+				if isinstance(ti.hit, list): res[ti.t] |= set(ti.hit)
+				else: res[ti.t].add(str(ti.hit))
+			nvs = dict()
+			for (k, v) in res.items():
+				ucvs = uniqueCellValues(v)
+				print('DEBUG ucvs', k, v, ucvs)
+				for ucv in filter(lambda ucv: ucv is not None and len(ucv) > 0, ucvs):
+					yield ucv
 
 def setAsListOrSingleton(v):
 	s = set(v)
@@ -1656,8 +1657,6 @@ def generateValueMatchers(lvl = 0):
 		Parameter:
 		lvl 0 for lightweight matching, 2 for the heaviest variants, 1 as an intermediate level
 		'''
-	yield LabelMatcher(F_COUNTRY, fileToSet('country'), MATCH_MODE_EXACT, synMap = fileToVariantMap('country_latin.syn'))
-	return
 
 	# Identifiers (typically but not necessarily unique)
 	# yield TemplateMatcher('Identifiant', 90) # TODO distinguish unique vs. non-unique
