@@ -354,16 +354,13 @@ class AbstractDataProject(AbstractProject):
             os.makedirs(dir_path)        
         file_path = self.path_to(self.mem_data_info['module_name'], 
                                  self.mem_data_info['file_name'])
-        import gc
-        import sys
-#        try:
+
         nrows = 0
         with open(file_path, 'w') as w:
             # Enumerate to know whether or not to write header (i==0)
             try:
                 for i, part_tab in enumerate(self.mem_data):
-                    print(i)
-                    print({key: sys.getsizeof(val) for key, val in locals().items()})
+                    print('At part', i)
                     part_tab.to_csv(w, encoding='utf-8', 
                                          index=False,  
                                          header=i==0, 
@@ -374,11 +371,7 @@ class AbstractDataProject(AbstractProject):
                 print('At error here:', e)
                 import pdb
                 pdb.set_trace()
-#        except Exception as e:
-#            if os.path.isfile(file_path):
-#                os.remove(file_path)
-#            raise e
-            
+
         print('Wrote to ', file_path)
         
         self.write_log_buffer(True)

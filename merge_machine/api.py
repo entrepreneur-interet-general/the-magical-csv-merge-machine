@@ -111,7 +111,8 @@ import gzip
 import json
 import os
 import shutil
-
+import tempfile
+    
 # Change current path to path of api.py
 curdir = os.path.dirname(os.path.realpath(__file__))
 os.chdir(curdir)
@@ -122,6 +123,7 @@ from flask import Flask, jsonify, render_template, request, send_file, url_for
 from flask_session import Session
 from flask_socketio import disconnect, emit, SocketIO
 from flask_cors import CORS, cross_origin
+import werkzeug
 from werkzeug.utils import secure_filename
 
 # Redis imports
@@ -1305,15 +1307,20 @@ def upload(project_id):
         module_params = {}
     make_mini = module_params.get('make_mini', True)
     
+    # Upload data        
+    def custom_stream_factory(total_content_length, filename, content_type, content_length=None):
+        tmpfile = tempfile.NamedTemporaryFile('wb+', prefix='flaskapp')
+        app.logger.info("start receiving file ... filename => " + str(tmpfile.name))
+        return tmpfile
+    
+    _, _, files = werkzeug.formparser.parse_form_data(flask.request.environ, stream_factory=custom_stream_factory)
+    
+    
     # Upload data
-    #import pdb; pdb.set_trace()
-    #file = request.files['file']
-    for _ in range(8):
-        import pdb
-        pdb.set_trace()
-        request.stream.readline()
-        
-    _, run_info = proj.upload_init_data(request.stream, 'TEST_CHANGE_THIS.csv')
+    file_name = files['file'].filename
+    stream = files['file'].stream
+    
+    _, run_info = proj.upload_init_data(stream, file_name)
     
     # Make mini
     if make_mini:

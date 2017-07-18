@@ -194,7 +194,6 @@ class Normalizer(AbstractDataProject):
         SEPARATORS = [',', ';', '\t']
         
         first_lines = b''.join([file.readline() for _ in range(self.CHUNKSIZE)])
-        
         could_read = False        
         for encoding in ENCODINGS:
             for sep in SEPARATORS:
@@ -216,13 +215,16 @@ class Normalizer(AbstractDataProject):
                     
             if could_read:
                 # Create actual generator
-                tab_next = pd.read_csv(file, 
-                                     sep=sep, 
-                                     encoding=encoding,     
-                                     dtype=str,
-                                     header=None,
-                                     chunksize=self.CHUNKSIZE)
-                tab_it = itertools.chain([tab_part], tab_next)
+                try:
+                    tab_next = pd.read_csv(file, 
+                                         sep=sep, 
+                                         encoding=encoding,     
+                                         dtype=str,
+                                         header=None,
+                                         chunksize=self.CHUNKSIZE)
+                    tab_it = itertools.chain([tab_part], tab_next)
+                except:
+                    tab_it = itertools.chain([tab_part])
                 tab = (self.rename_columns(sub_tab, columns, chars_to_replace) 
                                     for sub_tab in tab_it)
                 break
