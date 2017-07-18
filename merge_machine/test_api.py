@@ -227,7 +227,7 @@ def normalize_pipeline(params):
     #==============================================================================
     url_to_append = '/api/schedule/infer_types/{0}/'.format(project_id)
     body = {
-            'data_params': {'module_name': 'INIT', 'file_name': file_name}
+            'data_params': {'module_name': 'replace_mvs', 'file_name': file_name}
             }
     resp = post_resp(url_to_append, body)
     job_id = resp['job_id']
@@ -262,7 +262,7 @@ def normalize_pipeline(params):
     #==============================================================================
     url_to_append = '/api/schedule/concat_with_init/{0}/'.format(project_id)
     body = {
-            'data_params': {'module_name': 'INIT', 'file_name': file_name}
+            'data_params': {'module_name': 'recode_types', 'file_name': file_name}
             }
     resp = post_resp(url_to_append, body)
     job_id = resp['job_id']
