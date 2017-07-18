@@ -13,7 +13,6 @@ import numpy as np
 # Parsing/normalization packages
 import urllib, json # For BAN address API on data.gouv.fr
 from dateparser import DateDataParser
-from postal.parser import parse_address
 import phonenumbers
 
 from CONFIG import RESOURCE_PATH
@@ -1440,6 +1439,7 @@ def rejoin(v): return toASCII(v)
 class CustomAddressMatcher(TypeMatcher):
 	def __init__(self):
 		super(CustomAddressMatcher, self).__init__(F_ADDRESS)
+		from postal.parser import parse_address
 	@timed
 	def match(self, c):
 		if c.value.isdigit():
@@ -1758,8 +1758,8 @@ def generateValueMatchers(lvl = 0):
 	# Geo Domain
 	# if lvl >= 2: 
 	# 	yield FrenchAddressMatcher()
-	if lvl >= 2: 
-		yield CustomAddressMatcher()
+	# if lvl >= 2: 
+	# 	yield CustomAddressMatcher()
 	if lvl >= 0: 
 		yield RegexMatcher(F_ZIP, "[0-9]{5}")
 
