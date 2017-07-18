@@ -111,14 +111,18 @@ class AbstractDataProject(AbstractProject):
             - first element is a generator which generates pandas DataFrames
             - second element is a 
         '''
+        print('columns', columns)
         file_path = self.path_to(module_name, file_name)
-        if nrows is not None:
-            print('Nrows is: ', nrows)
-            self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
-                                nrows=nrows, usecols=columns, chunksize=self.CHUNKSIZE)
-        else:
-            self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
-                                        usecols=columns, chunksize=self.CHUNKSIZE)
+        try:
+            if nrows is not None:
+                print('Nrows is: ', nrows)
+                self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
+                                    nrows=nrows, usecols=columns, chunksize=self.CHUNKSIZE)
+            else:
+                self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
+                                            usecols=columns, chunksize=self.CHUNKSIZE)
+        except:
+            import pdb; pdb.set_trace()
         self.mem_data_info = {'file_name': file_name,
                               'module_name': module_name,
                               'nrows': nrows, 
@@ -276,7 +280,6 @@ class AbstractDataProject(AbstractProject):
         
             log['og_file_name'] = log['file_name']
             log['file_name'] = new_file_name
-            log['completed'] = True
             
             # TODO: think if transformation should / should not be complete
     
@@ -304,7 +307,7 @@ class AbstractDataProject(AbstractProject):
             pass
             #            raise Exception('No log buffer: no operations were executed since \
             #                            write_log_buffer was last called')
-    
+
         # Indicate if any data was written
         if written:
             for log in self.log_buffer[::-1]:
@@ -328,7 +331,6 @@ class AbstractDataProject(AbstractProject):
             #                raise ValueError('module name {0} was not initialized in log for file {1}'.format(module_name, file_name))
             if file_name is not None: # TODO: burn this heresy
                 self.metadata['log'][file_name][module_name].update(log)
-
         # Write metadata and clear log buffer
         self.write_metadata()
         self.log_buffer = []
@@ -369,14 +371,13 @@ class AbstractDataProject(AbstractProject):
                     
             except Exception as e:
                 print('At error here:', e)
-                import pdb
-                pdb.set_trace()
+
 
         print('Wrote to ', file_path)
-        
         self.write_log_buffer(True)
         self.write_run_info_buffer()
-        
+
+
         if nrows == 0:
             raise Exception('No data was written, make sure you loaded data before'
                            + ' calling write_data')
@@ -448,14 +449,22 @@ class AbstractDataProject(AbstractProject):
         '''
         Runs the selected module on the dataframe in partial_data and stores
         modifications in the run_info buffer
-        '''       
+        '''
+        print('At module ', module_name)
         # Apply module transformation
         valid_columns = [col for col in partial_data if '__' not in col] # TODO: test on upload      
+        created_columns = [col for col in partial_data if '__' in col]
+        old_modified = partial_data[created_columns]
+        
         new_partial_data, modified = self.MODULES['transform'][module_name] \
                                     ['func'](partial_data[valid_columns], params)
+                                    
+        for col in created_columns:
+            new_partial_data.loc[:, col] = old_modified[col]
         
         # Add modifications tracker to data
         modified.columns = [col + '__MODIFIED' for col in modified.columns]
+        
         for col in modified.columns:
             if col in new_partial_data:
                 new_partial_data[col] = new_partial_data[col] | modified[col]
@@ -502,6 +511,4 @@ class AbstractDataProject(AbstractProject):
         
         # Update buffers
         self.log_buffer.append(log)
-        
-        
         return log, run_info
