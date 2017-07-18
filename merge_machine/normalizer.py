@@ -180,9 +180,10 @@ class Normalizer(AbstractDataProject):
     
     @staticmethod
     def rename_column(col, chars_to_replace):
-        for char in chars_to_replace:
-            col = col.replace(char, '_')
-        return unidecode.unidecode(col)
+        return col
+        #        for char in chars_to_replace:
+        #            col = col.replace(char, '_')
+        #        return unidecode.unidecode(col)
     
     def rename_columns(self, tab, chars_to_replace):
         '''Replaces characters in table header'''
@@ -443,7 +444,7 @@ class Normalizer(AbstractDataProject):
     
         og_file_name = self.mem_data_info['file_name']
         og_file_path = self.path_to('INIT', og_file_name)
-        og_tab, _, _, og_columns = self.read_csv(og_file_path, chars_to_replace)
+        og_tab, _, _, _, _ = self.read_csv(og_file_path, chars_to_replace)
             
         def rename_column(col):
             if '__' in col:
