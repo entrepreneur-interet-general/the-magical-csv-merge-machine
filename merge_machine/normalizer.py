@@ -179,11 +179,15 @@ class Normalizer(AbstractDataProject):
         #return "".join([c for c in file_name[:-4] if c.isalpha() or c.isdigit() or c==' ']).rstrip() + ext
     
     @staticmethod
-    def rename_columns(tab, chars_to_replace):
+    def rename_column(col, chars_to_replace):
+        for char in chars_to_replace:
+            col = col.replace(char, '_')
+        return unidecode.unidecode(col)
+    
+    def rename_columns(self, tab, chars_to_replace):
         '''Replaces characters in table header'''
         for char in chars_to_replace:
-            tab.columns = [unidecode.unidecode(x.replace(char, '_')) \
-                                     for x in tab.columns]        
+            tab.columns = [self.rename_column(col, chars_to_replace) for col in tab.columns]        
         return tab
 
         
@@ -200,7 +204,7 @@ class Normalizer(AbstractDataProject):
                                            sep=sep, 
                                            encoding=encoding, 
                                            dtype=str)
-                    columns = tab_part.columns
+                    columns = [self.rename_column(col, chars_to_replace) for col in tab_part.columns]
                     
                     try:
                         file.seek(0)
@@ -219,6 +223,8 @@ class Normalizer(AbstractDataProject):
                     could_read = True
                     break
                 except Exception as e:
+                    pdb
+                    pdb.set_trace()
                     print(e)
                     file.seek(0)
             if could_read:
@@ -487,7 +493,9 @@ class Normalizer(AbstractDataProject):
             return super().transform(module_name, params)
             
     def run_all_transforms(self):
-        '''Runs all modules on data in memory. And config from module names'''
+        '''Runs all modules on data in memory. And config from module names
+        # TODO: move to abstract_data_project ?
+        '''
         self.check_mem_data()
         
         all_run_infos = {}
