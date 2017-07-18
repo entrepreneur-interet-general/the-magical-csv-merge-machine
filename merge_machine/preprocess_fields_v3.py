@@ -987,7 +987,6 @@ class Fields(object):
 			newCol = [None] * self.entries
 			for i, c in enumerate(f.cells):
 				nvs = list(c.normalizedValuesInPlace(lvt))
-				if c.value in nvs: continue
 				newCol[i] = ', '.join(nvs)
 			yield (fieldName, newCol)
 
