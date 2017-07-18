@@ -179,11 +179,16 @@ class Normalizer(AbstractDataProject):
         #return "".join([c for c in file_name[:-4] if c.isalpha() or c.isdigit() or c==' ']).rstrip() + ext
     
     @staticmethod
-    def rename_columns(tab, chars_to_replace):
+    def rename_column(col, chars_to_replace):
+        return col
+        #        for char in chars_to_replace:
+        #            col = col.replace(char, '_')
+        #        return unidecode.unidecode(col)
+    
+    def rename_columns(self, tab, chars_to_replace):
         '''Replaces characters in table header'''
         for char in chars_to_replace:
-            tab.columns = [unidecode.unidecode(x.replace(char, '_')) \
-                                     for x in tab.columns]        
+            tab.columns = [self.rename_column(col, chars_to_replace) for col in tab.columns]        
         return tab
 
         
@@ -200,7 +205,8 @@ class Normalizer(AbstractDataProject):
                                            sep=sep, 
                                            encoding=encoding, 
                                            dtype=str)
-                    columns = tab_part.columns
+                    og_columns = tab_part.columns
+                    columns = [self.rename_column(col, chars_to_replace) for col in og_columns]
                     
                     try:
                         file.seek(0)
@@ -219,6 +225,8 @@ class Normalizer(AbstractDataProject):
                     could_read = True
                     break
                 except Exception as e:
+                    pdb
+                    pdb.set_trace()
                     print(e)
                     file.seek(0)
             if could_read:
@@ -228,16 +236,25 @@ class Normalizer(AbstractDataProject):
             raise Exception('Separator and/or Encoding not detected. Try uploading \
                             a csv with "," as separator with utf-8 encoding')            
             
-        return tab, sep, encoding, columns
+        return tab, sep, encoding, columns, og_columns
     
-    @staticmethod
-    def read_excel(file, chars_to_replace):
+    def read_excel(self, file, chars_to_replace):
         # TODO: add iterator and return columns
-        tab = pd.read_excel(file, dtype=str, chunksize=self.CHUNKSIZE)
-        for char in chars_to_replace:
-            tab.columns = [unidecode.unidecode(x.replace(char, '_')) \
-                                     for x in tab.columns]
-        return tab, None, None
+        excel_tab = pd.read_excel(file, dtype=str)
+        og_columns = excel_tab.columns
+        excel_tab = self.rename_columns(excel_tab, chars_to_replace)
+        columns = excel_tab.columns
+        
+        def make_gen(excel_tab, chunksize):
+            cursor = 0
+            chunk = excel_tab.iloc[:chunksize]
+            while chunk.shape[0]:
+                yield chunk
+                cursor += chunksize
+                chunk = excel_tab.iloc[cursor:cursor+chunksize]
+        tab = make_gen(excel_tab, self.CHUNKSIZE) 
+    
+        return tab, None, None, columns, og_columns
 
 
     def upload_init_data(self, file, file_name, user_given_name=None):
@@ -255,35 +272,23 @@ class Normalizer(AbstractDataProject):
         if self.metadata['files']:
             raise Exception('Cannot upload multiple files to the same project anymore :(')
         
-        # Check that user given name is not illegal
-        if user_given_name is not None:
-            base_name = user_given_name.rsplit('.')[0]
-            extension = user_given_name.rsplit('.')[-1]    
 
-            if extension not in ['csv', 'xls', 'xlsx']:
-                raise Exception('user given name should end with .csv , .xls , or .xlsx or .zip')
-            if any(x in base_name for x in chars_to_replace):
-                raise Exception('user_given_name sould be alphanumeric or underscores (+.csv or .xls or .xlsx)')
-        
-        # TODO: Check that file is not already present
-        self.mem_data_info = {
-                                'og_file_name': file_name,
-                                'module_name': 'INIT'
-                             }
-    
-        if user_given_name is not None:
-            file_name = user_given_name
-        else:
-            base_name = file_name.rsplit('.')[0]
-            extension = file_name.rsplit('.')[-1]    
+        og_file_name = file_name
+
+        base_name = secure_filename(file_name.rsplit('.')[0])
+        extension = file_name.rsplit('.')[-1]
+        file_name = base_name + '.csv'
 
         if extension not in ['csv', 'xls', 'xlsx']:
             raise Exception('file name (and user given name) should end with .csv , .xls , or .xlsx or .zip')
             
-        file_name = secure_filename(file_name)
-        self.mem_data_info['file_name'] = file_name
-        display_name = file_name
-                
+    
+        self.mem_data_info = {
+                                'file_name': file_name,
+                                'og_file_name': og_file_name,
+                                'module_name': 'INIT'
+                             }
+        
         # Check that file name is not already present 
         if file_name in self.metadata['files']:
             raise Exception('File: {0} already exists. Delete this file ' \
@@ -292,11 +297,11 @@ class Normalizer(AbstractDataProject):
         log = self.init_active_log('INIT', 'transform')
 
         if extension == 'csv':
-            self.mem_data, sep, encoding, columns = self.read_csv(file, chars_to_replace)
+            self.mem_data, sep, encoding, columns, og_columns = self.read_csv(file, chars_to_replace)
             file_type = 'csv'
 
         else:
-            self.mem_data, sep, encoding = self.read_excel(file, chars_to_replace)
+            self.mem_data, sep, encoding, columns, og_columns = self.read_excel(file, chars_to_replace)
             file_type = 'excel'
             
         if len(set(columns)) != len(columns):
@@ -304,22 +309,21 @@ class Normalizer(AbstractDataProject):
 
         # Add file to metadata
         self.metadata['files'][file_name] = {
-                                                'og_file_name': file_name,
-                                                'display_name': display_name,
+                                                'og_file_name': og_file_name,
                                                 'upload_time': time.time()
                                             }
         
         if self.metadata['column_tracker'] is None:
-            self.metadata['column_tracker'] = {'original': list(columns),
+            self.metadata['column_tracker'] = {'original': list(og_columns),  # As in the original file
+                                              'uploaded': list(columns), # As uploaded in project
                                               'selected': list(columns), 
                                               'created': []}
         else:
             assert list(self.mem_data.columns) == self.metadata['column_tracker']['original']
                 
         # Create new empty log in metadata
-        self.mem_data_info['file_name'] = secure_filename(base_name) + '.csv'
+        self.mem_data_info['file_name'] = file_name
         self.metadata['log'][file_name] = self.default_log()
-        # self.write_metadata() Delete this line if evth is working fine
                 
         # Complete log
         log = self.end_active_log(log, error=False)
@@ -330,6 +334,7 @@ class Normalizer(AbstractDataProject):
         # Write configuration (sep, encoding) to INIT dir
         config_dict = {
                         'file_name': file_name,
+                        'og_file_name': og_file_name,
                         'file_type': file_type, 
                         'sep': sep, 
                         'encoding': encoding, 
@@ -358,8 +363,8 @@ class Normalizer(AbstractDataProject):
         
         # Check that selected columns are in the original header
         for col in columns:
-            if col not in self.metadata['column_tracker']['original']:
-                raise ValueError('Selected column {0} is not in original header ({1})'.format(\
+            if col not in self.metadata['column_tracker']['uploaded']:
+                raise ValueError('Selected column {0} is not in uploaded header (can be different from the original file)\n --> uploaded header: ({1})'.format(\
                                 col, self.metadata['column_tracker']['original']))
         
         # If a selected column was not previously selected, delete all 
@@ -439,7 +444,7 @@ class Normalizer(AbstractDataProject):
     
         og_file_name = self.mem_data_info['file_name']
         og_file_path = self.path_to('INIT', og_file_name)
-        og_tab, _, _, og_columns = self.read_csv(og_file_path, chars_to_replace)
+        og_tab, _, _, _, _ = self.read_csv(og_file_path, chars_to_replace)
             
         def rename_column(col):
             if '__' in col:
@@ -487,7 +492,9 @@ class Normalizer(AbstractDataProject):
             return super().transform(module_name, params)
             
     def run_all_transforms(self):
-        '''Runs all modules on data in memory. And config from module names'''
+        '''Runs all modules on data in memory. And config from module names
+        # TODO: move to abstract_data_project ?
+        '''
         self.check_mem_data()
         
         all_run_infos = {}
