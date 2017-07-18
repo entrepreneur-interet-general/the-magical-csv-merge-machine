@@ -463,7 +463,12 @@ class AbstractDataProject(AbstractProject):
                                     
         for col in created_columns:
             new_partial_data.loc[:, col] = old_modified[col]
-        
+
+        # Store modificiations in run_info_buffer
+        self.run_info_buffer[(module_name, self.mem_data_info['file_name'])]['mod_count'] = \
+            self.add_mod(self.run_info_buffer[(module_name, self.mem_data_info['file_name'])]['mod_count'], \
+                         self.count_modifications(modified))
+  
         # Add modifications tracker to data
         modified.columns = [col + '__MODIFIED' for col in modified.columns]
         
@@ -472,11 +477,7 @@ class AbstractDataProject(AbstractProject):
                 new_partial_data[col] = new_partial_data[col] | modified[col]
             else:
                 new_partial_data[col] = modified[col]
-
-        # Store modificiations in run_info_buffer
-        self.run_info_buffer[(module_name, self.mem_data_info['file_name'])]['mod_count'] = \
-            self.add_mod(self.run_info_buffer[(module_name, self.mem_data_info['file_name'])]['mod_count'], \
-                         self.count_modifications(modified))
+                
         return new_partial_data
     
     def transform(self, module_name, params):
