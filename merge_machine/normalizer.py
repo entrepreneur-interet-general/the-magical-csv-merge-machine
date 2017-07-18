@@ -176,22 +176,8 @@ class Normalizer(AbstractDataProject):
     def safe_filename(self, file_name, ext='.csv'):
         assert file_name[-len(ext):] == ext
         return secure_filename(file_name)
-        #return "".join([c for c in file_name[:-4] if c.isalpha() or c.isdigit() or c==' ']).rstrip() + ext
-    
-    @staticmethod
-    def rename_column(col, chars_to_replace):
-        return col
-        #        for char in chars_to_replace:
-        #            col = col.replace(char, '_')
-        #        return unidecode.unidecode(col)
-    
-    def rename_columns(self, tab, chars_to_replace):
-        '''Replaces characters in table header'''
-        for char in chars_to_replace:
-            tab.columns = [self.rename_column(col, chars_to_replace) for col in tab.columns]        
-        return tab
 
-        
+
     def read_csv(self, file, chars_to_replace):
         ENCODINGS = ['utf-8', 'windows-1252']
         SEPARATORS = [',', ';', '\t']
@@ -205,8 +191,7 @@ class Normalizer(AbstractDataProject):
                                            sep=sep, 
                                            encoding=encoding, 
                                            dtype=str)
-                    og_columns = tab_part.columns
-                    columns = [self.rename_column(col, chars_to_replace) for col in og_columns]
+                    columns = tab_part.columns
                     
                     try:
                         file.seek(0)
@@ -214,19 +199,14 @@ class Normalizer(AbstractDataProject):
                         pass # TODO: really? try except? really??
                     
                     # Create actual generator
-                    tab_it = pd.read_csv(file, 
+                    tab = pd.read_csv(file, 
                                          sep=sep, 
                                          encoding=encoding, 
                                          dtype=str, 
                                          chunksize=self.CHUNKSIZE)
-                    
-                    tab = (self.rename_columns(sub_tab, chars_to_replace) 
-                                        for sub_tab in tab_it)
                     could_read = True
                     break
                 except Exception as e:
-                    pdb
-                    pdb.set_trace()
                     print(e)
                     file.seek(0)
             if could_read:
@@ -236,13 +216,11 @@ class Normalizer(AbstractDataProject):
             raise Exception('Separator and/or Encoding not detected. Try uploading \
                             a csv with "," as separator with utf-8 encoding')            
             
-        return tab, sep, encoding, columns, og_columns
+        return tab, sep, encoding, columns
     
     def read_excel(self, file, chars_to_replace):
         # TODO: add iterator and return columns
         excel_tab = pd.read_excel(file, dtype=str)
-        og_columns = excel_tab.columns
-        excel_tab = self.rename_columns(excel_tab, chars_to_replace)
         columns = excel_tab.columns
         
         def make_gen(excel_tab, chunksize):
@@ -254,7 +232,7 @@ class Normalizer(AbstractDataProject):
                 chunk = excel_tab.iloc[cursor:cursor+chunksize]
         tab = make_gen(excel_tab, self.CHUNKSIZE) 
     
-        return tab, None, None, columns, og_columns
+        return tab, None, None, columns
 
 
     def upload_init_data(self, file, file_name, user_given_name=None):
@@ -297,11 +275,11 @@ class Normalizer(AbstractDataProject):
         log = self.init_active_log('INIT', 'transform')
 
         if extension == 'csv':
-            self.mem_data, sep, encoding, columns, og_columns = self.read_csv(file, chars_to_replace)
+            self.mem_data, sep, encoding, columns = self.read_csv(file, chars_to_replace)
             file_type = 'csv'
 
         else:
-            self.mem_data, sep, encoding, columns, og_columns = self.read_excel(file, chars_to_replace)
+            self.mem_data, sep, encoding, columns = self.read_excel(file, chars_to_replace)
             file_type = 'excel'
             
         if len(set(columns)) != len(columns):
@@ -314,8 +292,7 @@ class Normalizer(AbstractDataProject):
                                             }
         
         if self.metadata['column_tracker'] is None:
-            self.metadata['column_tracker'] = {'original': list(og_columns),  # As in the original file
-                                              'uploaded': list(columns), # As uploaded in project
+            self.metadata['column_tracker'] = {'original': list(columns),  # As in the original file
                                               'selected': list(columns), 
                                               'created': []}
         else:
@@ -363,7 +340,7 @@ class Normalizer(AbstractDataProject):
         
         # Check that selected columns are in the original header
         for col in columns:
-            if col not in self.metadata['column_tracker']['uploaded']:
+            if col not in self.metadata['column_tracker']['original']:
                 raise ValueError('Selected column {0} is not in uploaded header (can be different from the original file)\n --> uploaded header: ({1})'.format(\
                                 col, self.metadata['column_tracker']['original']))
         
@@ -444,7 +421,7 @@ class Normalizer(AbstractDataProject):
     
         og_file_name = self.mem_data_info['file_name']
         og_file_path = self.path_to('INIT', og_file_name)
-        og_tab, _, _, _, _ = self.read_csv(og_file_path, chars_to_replace)
+        og_tab, _, _, _ = self.read_csv(og_file_path, chars_to_replace)
             
         def rename_column(col):
             if '__' in col:
