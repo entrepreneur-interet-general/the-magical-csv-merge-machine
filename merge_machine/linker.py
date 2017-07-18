@@ -406,7 +406,6 @@ class Linker(AbstractDataProject):
         file_name = self.metadata['current']['ref']['file_name']
         self.ref.load_data(module_name, file_name)        
         
-        import pdb; pdb.set_trace()
         self.mem_data = (perform_restriction(part_tab, params)[0] \
                                    for part_tab in self.ref.mem_data) # TODO: no run info !
         

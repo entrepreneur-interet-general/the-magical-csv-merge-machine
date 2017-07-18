@@ -441,7 +441,7 @@ def link_pipeline(params):
     url_to_append = '/api/schedule/link_results_analyzer/{0}/'.format(project_id)
     body = {'data_params': {
                             "module_name": 'dedupe_linker',
-                            "file_name": link_params['source_file_name']
+                            "file_name": link_params['source_file_name'].rsplit('.')[0] + '.csv'
                             }
             }    
     resp = post_resp(url_to_append, body)

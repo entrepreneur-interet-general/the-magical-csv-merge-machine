@@ -102,6 +102,16 @@ class AbstractDataProject(AbstractProject):
         if self.mem_data is None:
             raise Exception('No data in memory: use `load_data` (reload is \
                         mandatory after dedupe)')
+    
+    def static_load_data(self, file_path, nrows, columns):
+        if nrows is not None:
+            print('Nrows is: ', nrows)
+            tab = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
+                                nrows=nrows, usecols=columns, chunksize=self.CHUNKSIZE)
+        else:
+            tab = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
+                                        usecols=columns, chunksize=self.CHUNKSIZE)
+        return tab
         
     def load_data(self, module_name, file_name, nrows=None, columns=None):
         '''
@@ -112,17 +122,9 @@ class AbstractDataProject(AbstractProject):
             - second element is a 
         '''
         print('columns', columns)
-        file_path = self.path_to(module_name, file_name)
-        try:
-            if nrows is not None:
-                print('Nrows is: ', nrows)
-                self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
-                                    nrows=nrows, usecols=columns, chunksize=self.CHUNKSIZE)
-            else:
-                self.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
-                                            usecols=columns, chunksize=self.CHUNKSIZE)
-        except:
-            import pdb; pdb.set_trace()
+
+        file_path = self.path_to(module_name, file_name)     
+        self.mem_data = self.static_load_data(file_path, nrows, columns)
         self.mem_data_info = {'file_name': file_name,
                               'module_name': module_name,
                               'nrows': nrows, 

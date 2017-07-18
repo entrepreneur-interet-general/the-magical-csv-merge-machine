@@ -426,9 +426,9 @@ class Normalizer(AbstractDataProject):
     
         og_file_name = self.mem_data_info['file_name']
         og_file_path = self.path_to('INIT', og_file_name)
-        with open(og_file_path, 'rb') as f:
-            og_tab, _, _, _ = self.read_csv(f, chars_to_replace)
-            
+
+        og_tab = self.static_load_data(og_file_path, None, None)
+        
         def rename_column(col):
             if '__' in col:
                 return col
