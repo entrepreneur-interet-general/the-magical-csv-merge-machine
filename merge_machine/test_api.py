@@ -300,7 +300,7 @@ def normalize_pipeline(params):
             'data_params': {
                 'module_name': 'concat_with_init'},
             'module_params': {
-                'file_type': 'xls'}
+                'file_type': 'csv'}
             }
     PRINT = False
     resp = post_download(url_to_append, body)    

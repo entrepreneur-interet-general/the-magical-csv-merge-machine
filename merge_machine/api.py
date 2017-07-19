@@ -646,7 +646,17 @@ def web_get_answer(message_received):
             print('Writing train')
             flask._app_ctx_stack.labeller_mem[project_id]['labeller'].write_training(flask._app_ctx_stack.labeller_mem[project_id]['paths']['train'])
             print('Wrote train')
-
+            
+            try:
+                del flask._app_ctx_stack.labeller_mem[project_id]['labeller']
+                print('Deleted labeller for project: {0}'.format(project_id))
+            except:
+                print('Could not delete labeller for project: {0}'.format(project_id))
+            try:
+                del flask._app_ctx_stack.labeller_mem[project_id]['paths']
+            except:
+                print('Could not delete paths for project: {0}'.format(project_id))
+                
             # TODO: Do dedupe
             next_url = url_for('web_select_return', project_type='link', project_id=project_id)
             emit('redirect', {'url': next_url})
@@ -665,12 +675,13 @@ def web_terminate_labeller_load(message_received):
     
     try:
         del flask._app_ctx_stack.labeller_mem[project_id]['labeller']
+        print('Deleted labeller for project: {0}'.format(project_id))
     except:
-        print('Could not delete labeller')
+        print('Could not delete labeller for project: {0}'.format(project_id))
     try:
         del flask._app_ctx_stack.labeller_mem[project_id]['paths']
     except:
-        print('Could not delete paths')
+        print('Could not delete paths for project: {0}'.format(project_id))
             
     
 @socketio.on('load_labeller', namespace='/')
@@ -1103,7 +1114,7 @@ def download(project_type, project_id):
     else:
         new_file_name = proj.to_xls(module_name, file_name)
     
-    file_path = proj.path_to(module_name, new_file_name)
+    file_path = proj.path_to(module_name, file_name)
 
     # Zip this file and send the zipped file
     zip_file_name = new_file_name + '.zip'

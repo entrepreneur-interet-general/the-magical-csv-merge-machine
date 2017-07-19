@@ -103,13 +103,24 @@ class AbstractDataProject(AbstractProject):
             raise Exception('No data in memory: use `load_data` (reload is \
                         mandatory after dedupe)')
     
-    def static_load_data(self, file_path, nrows, columns):
+    def static_load_data(self, file_path, nrows=None, columns=None): 
+        
+        if columns is None:
+            columns = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
+                                    nrows=0, usecols=columns).columns
+        def choose_dtype(col):
+            if '__MODIFIED' in col:
+                return bool
+            else:
+                return str
+        dtype = {col: choose_dtype(col) for col in columns}
+                                   
         if nrows is not None:
             print('Nrows is: ', nrows)
-            tab = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
+            tab = pd.read_csv(file_path, encoding='utf-8', dtype=dtype, 
                                 nrows=nrows, usecols=columns, chunksize=self.CHUNKSIZE)
         else:
-            tab = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
+            tab = pd.read_csv(file_path, encoding='utf-8', dtype=dtype, 
                                         usecols=columns, chunksize=self.CHUNKSIZE)
         return tab
         
@@ -145,6 +156,8 @@ class AbstractDataProject(AbstractProject):
         
         Use for download only!
         '''
+        raise DeprecationWarning('Excel download currently not supported due'\
+                                 'to potential memory issues with large files')
         
         file_path = self.path_to(module_name, file_name)
         
@@ -406,16 +419,22 @@ class AbstractDataProject(AbstractProject):
             self.check_mem_data()
             self.mem_data, tab_gen = tee(self.mem_data)
             data = pd.concat(tab_gen)
+            valid_columns = [col for col in data if '__MODIFIED' not in col]
+            data = data[valid_columns]
             
         # Initiate log
         log = self.init_active_log(module_name, 'infer')
         
         # We duplicate the generator to load a full version of the table and
         # while leaving self.mem_data unchanged
-        infered_params = self.MODULES['infer'][module_name]['func'](data, params)
+        try:
+            infered_params = self.MODULES['infer'][module_name]['func'](data, params)
+        except:
+            import pdb; pdb.set_trace()
         
         # Write result of inference
         module_to_write_to = self.MODULES['infer'][module_name]['write_to']
+
         self.upload_config_data(infered_params, module_to_write_to, 'infered_config.json')
         
         # Update log buffer
@@ -454,30 +473,25 @@ class AbstractDataProject(AbstractProject):
         '''
         print('At module ', module_name)
         # Apply module transformation
-        valid_columns = [col for col in partial_data if '__' not in col] # TODO: test on upload      
-        created_columns = [col for col in partial_data if '__' in col]
-        old_modified = partial_data[created_columns]
+        valid_columns = [col for col in partial_data if '__MODIFIED' not in col] # TODO: test on upload      
+        modified_columns = [col for col in partial_data if '__MODIFIED' in col]
+        old_modified = partial_data[modified_columns]
         
         new_partial_data, modified = self.MODULES['transform'][module_name] \
                                     ['func'](partial_data[valid_columns], params)
-                                    
-        for col in created_columns:
-            new_partial_data.loc[:, col] = old_modified[col]
 
         # Store modificiations in run_info_buffer
         self.run_info_buffer[(module_name, self.mem_data_info['file_name'])]['mod_count'] = \
             self.add_mod(self.run_info_buffer[(module_name, self.mem_data_info['file_name'])]['mod_count'], \
                          self.count_modifications(modified))
-  
-        # Add modifications tracker to data
+
         modified.columns = [col + '__MODIFIED' for col in modified.columns]
-        
         for col in modified.columns:
-            if col in new_partial_data:
-                new_partial_data[col] = new_partial_data[col] | modified[col]
+            if col in old_modified.columns:
+                new_partial_data.loc[:, col] = old_modified.loc[:, col] | modified.loc[:, col]
             else:
                 new_partial_data[col] = modified[col]
-                
+
         return new_partial_data
     
     def transform(self, module_name, params):

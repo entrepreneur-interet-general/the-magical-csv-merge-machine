@@ -81,6 +81,8 @@ class Normalizer(AbstractDataProject):
         assert (columns is None) or (not restrict_to_selected)
         if restrict_to_selected:
             columns = self.metadata['column_tracker']['selected']
+            if module_name != 'INIT':
+                columns = columns + [col + '__MODIFIED' for col in columns]
         super().load_data(module_name=module_name, 
                          file_name=file_name, 
                          nrows=nrows, 
@@ -181,6 +183,12 @@ class Normalizer(AbstractDataProject):
         return secure_filename(file_name)
 
     def read_csv(self, file, chars_to_replace):
+        '''
+        Read CSV and perform inference on streaming file
+        
+        /!\ Use only on upload. Otherwise, look into static_load_data in parent
+        class        
+        '''
         ENCODINGS = ['utf-8', 'windows-1252']
         SEPARATORS = [',', ';', '\t']
         
@@ -439,12 +447,17 @@ class Normalizer(AbstractDataProject):
             data.columns = [rename_column(col) for col in data.columns]
             data = pd.concat([og_data, data], 1)
         
+            # This should be same as selected columns: TODO: replace here
+            base_modified_columns = set([x.split('__', 1)[0] for x in data.columns])
+        
             # Re-order columns
             columns = []
             for col in og_data.columns:
                 columns.append(col)
-                modified_cols = filter(lambda x: col + '__' in x, og_data.columns)
-                columns.extend(modified_cols)
+                if col in base_modified_columns:
+                    modified_cols = filter(lambda x: col + '__' in x, data.columns)
+                    columns.extend(modified_cols)
+                    
             data = data[columns]
             return data
         
@@ -513,10 +526,8 @@ class InternalNormalizer(Normalizer):
     def path_to(self, module_name='', file_name=''):
         return self._path_to(NORMALIZE_DATA_PATH, module_name, file_name)
     
-
-
-
-
+    
+    
 if __name__ == '__main__':
     import logging
 
