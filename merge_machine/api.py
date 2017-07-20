@@ -1230,7 +1230,8 @@ def read_config(project_type, project_id):
     file_name = data_params['file_name']
     
     # Check that the file_name is allowed:
-    assert file_name in ['training.json', 'infered_config.json', 'config.json']
+    assert (file_name in ['training.json', 'infered_config.json', 'config.json']) \
+            or '__run_info.json' in file_name
     
     result = proj.read_config_data(data_params['module_name'], file_name)
     return jsonify(result=result)
