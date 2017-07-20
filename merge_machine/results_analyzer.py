@@ -21,8 +21,6 @@ def link_results_analyzer(tab, params={}):
     '''
     
     if '__CONFIDENCE' not in tab.columns:
-        import pdb
-        pdb.set_trace()
         raise Exception('Column __CONFIDENCE could not be found. Are you sure \
                         this is the result of a dedupe merge?')
     

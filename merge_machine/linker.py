@@ -404,7 +404,8 @@ class Linker(AbstractDataProject):
         self.load_project_to_merge('ref')
         module_name = self.metadata['current']['ref']['module_name']
         file_name = self.metadata['current']['ref']['file_name']
-        self.ref.load_data(module_name, file_name)        
+        
+        self.ref.load_data(module_name, file_name, restrict_to_selected=False)   
         
         self.mem_data = (perform_restriction(part_tab, params)[0] \
                                    for part_tab in self.ref.mem_data) # TODO: no run info !

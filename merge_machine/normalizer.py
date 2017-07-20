@@ -448,7 +448,7 @@ class Normalizer(AbstractDataProject):
             data = pd.concat([og_data, data], 1)
         
             # This should be same as selected columns: TODO: replace here
-            base_modified_columns = set([x.split('__', 1)[0] for x in data.columns])
+            base_modified_columns = set(x.split('__', 1)[0] for x in data.columns)
         
             # Re-order columns
             columns = []

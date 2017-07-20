@@ -157,12 +157,13 @@ def filter_by_vals(ref, col_vals, pre_process_func=None):
 # TODO: dirty! move this
 from dedupe_linker import pd_pre_process
 
-def training_to_ref_df(training):
+def training_to_ref_df(training, file_role='ref'):
     '''
     Takes as input a dedupe training file and returns a pandas DataFrame with
     the data corresponding to match samples in the referential.
     '''
-    training_df = pd.DataFrame([x['__value__'][1] for x in training['match']])
+    pos = {'source': 0, 'ref': 1}[file_role]
+    training_df = pd.DataFrame([x['__value__'][pos] for x in training['match']])
     return training_df
 
 def infer_restriction(_, params):
@@ -212,9 +213,11 @@ def perform_restriction(ref, params):
 #    TODO: This
 
 if __name__ == '__main__':
+    import os
+    
     from linker import UserLinker
     
-    project_id = '78246d462d500c1234903cc338c7c495'    
+    project_id = os.listdir('data/link')[-1]
     proj = UserLinker(project_id)    
     training = proj.read_config_data('dedupe_linker', 'training.json')    
     

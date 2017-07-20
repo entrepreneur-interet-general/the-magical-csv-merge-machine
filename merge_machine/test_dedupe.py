@@ -57,7 +57,9 @@ Create trees
 
 import json
 import math
+import os
 import random
+import time
 
 #from joblib import Parallel, delayed
 
@@ -72,7 +74,7 @@ def gen_dedupe_variable_definition(col_matches):
             {"ref": match['ref'][0], "source": match['source'][0]}, "type": "String"})
     return my_variable_definition
 
-project_id = '78246d462d500c1234903cc338c7c495'# 'e2c5b874a3c9741d36f16d4bba612712'
+project_id = os.listdir('data/link')[0]# 'e2c5b874a3c9741d36f16d4bba612712'
 
 proj = UserLinker(project_id)
 
@@ -145,6 +147,8 @@ num_tries = 4
 
 for i in range(num_tries):
     for prop in props:
+        
+        a = time.time()
         metrics = main_link_test(proj, paths, prop, num_matches, num_distinct, i)
         
         print('match_rate --> ', metrics['perc_match'])
@@ -165,6 +169,8 @@ for i in range(num_tries):
         
         with open(file_path, 'w') as w:
             json.dump(results, w)
+            
+        print('  --> This took {0} seconds'.format(time.time()-a))
 
 #for prop in props:
 #    recalls[prop] = []
