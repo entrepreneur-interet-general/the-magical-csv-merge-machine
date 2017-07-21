@@ -413,13 +413,13 @@ if write_labelling:
 
 
 
-def count_matches(predicates, labelled):
-    return sum(labelled[x]['match'] for x in predicates)
+def count_matches(pair_ids, labelled):
+    return sum(labelled[x]['match'] for x in pair_ids)
 
 def df_from_dupe_cover(dupe_cover):
-    dupe_cover_match_count = {key: count_matches(predicates, labelled) \
-                              for key, predicates in dupe_cover.items()}
-    dupe_cover_count = {key: len(predicates) for key, predicates in dupe_cover.items()}
+    dupe_cover_match_count = {key: count_matches(pair_ids, labelled) \
+                              for key, pair_ids in dupe_cover.items()}
+    dupe_cover_count = {key: len(pair_ids) for key, pair_ids in dupe_cover.items()}
     
     false_positives = {key: {id_ for id_ in ids if not labelled[id_]['match']} for key, ids in dupe_cover.items()}
     
@@ -537,7 +537,7 @@ def score(id_source, id_ref):
     return score
 
 # Get best match based on mean crfEd
-source_best_match = defaultdict(None)
+source_best_match = dict()
 for key, candidates in source_candidates.items():
     if len(candidates) == 0:
         source_best_match[key] = None
@@ -567,7 +567,7 @@ def anal_print(id_source):
 
 import numpy as np
 def _get_ref_uai(id_source):
-    if source_best_match[id_source] is not None:
+    if source_best_match.get(id_source, None) is not None:
         return ref.loc[source_best_match[id_source], 'numero_uai']
     else:
         return np.nan
