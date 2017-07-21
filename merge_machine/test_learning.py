@@ -5,11 +5,13 @@ Created on Thu Jun 29 18:18:51 2017
 
 @author: leo
 """
+
 from future.utils import viewitems, viewvalues
 
 from collections import defaultdict, deque
 import functools
 import itertools
+import json
 import os
 from string import punctuation
 import random
@@ -261,10 +263,11 @@ source.columns = [temp_match_cols.get(x, x) for x in source.columns]
 fields = [{'crf': True, 'missing_values': True, 'type': 'String', 'field': x} for x in ref_cols]
 
 
+real_match_cols = [pair['ref'] for pair in match_cols]
 
-for match in match_cols:
-    source[match['ref']] = pd_pre_process(source[match['ref']], remove_punctuation=True)
-    ref[match['ref']] = pd_pre_process(ref[match['ref']], remove_punctuation=True)
+for col in real_match_cols:
+    source[col] = pd_pre_process(source[col], remove_punctuation=True)
+    ref[col] = pd_pre_process(ref[col], remove_punctuation=True)
 
 # Replace np.nan 's by None 's
 source = source.where(source.notnull(), None)
@@ -273,16 +276,16 @@ ref = ref.where(ref.notnull(), None)
 source_items = source[ref_cols].to_dict('index')
 ref_items = ref[ref_cols].to_dict('index')
 
-deque_1 = sampling.randomDeque(source_items)
-deque_2 = sampling.randomDeque(ref_items)
+#deque_1 = sampling.randomDeque(source_items)
+#deque_2 = sampling.randomDeque(ref_items)
 
 datamodel = dedupe.datamodel.DataModel(fields)
 my_predicates = list(datamodel.predicates(index_predicates=False, canopies=False)) # TODO: set to True
 
-blocked_sample_keys = linkBlockedSample(5000,
-                                         my_predicates,
-                                         deque_1,
-                                         deque_2)
+#blocked_sample_keys = linkBlockedSample(5000,
+#                                         my_predicates,
+#                                         deque_1,
+#                                         deque_2)
 
 
 
@@ -290,26 +293,26 @@ blocked_sample_keys = linkBlockedSample(5000,
 #               for k1, k2
 #               in blocked_sample_keys | random_sample_keys]
 
-candidates = [(source_items[k1], ref_items[k2])
-               for predicate, (k1, k2)
-               in blocked_sample_keys]
+#candidates = [(source_items[k1], ref_items[k2])
+#               for predicate, (k1, k2)
+#               in blocked_sample_keys]
 
 
 compound_length = 1
 
 blocker = blocking.Blocker(my_predicates)
 
-blocker.indexAll({i : record
-                       for i, record
-                       in enumerate(unroll(candidates))})
-    
-dupe_cover = cover(blocker, candidates, compound_length)
+#blocker.indexAll({i : record
+#                       for i, record
+#                       in enumerate(unroll(candidates))})
+#    
+#dupe_cover = cover(blocker, candidates, compound_length)
+#
 
-dupe_cover_count = {key: len(predicates) for key, predicates in dupe_cover.items()}
-
-tab = pd.DataFrame([[key, val] for key, val in dupe_cover_count.items()], columns=['predicate', 'count'])
-tab['col'] = tab.predicate.apply(get_col)
-tab.groupby('col')['count'].mean() # meaningfull columns
+#
+#tab = pd.DataFrame([[key, val] for key, val in dupe_cover_count.items()], columns=['predicate', 'count'])
+#tab['col'] = tab.predicate.apply(get_col)
+#tab.groupby('col')['count'].mean() # meaningfull columns
 
 def invert_dupe_cover(dupe_cover):
     inv_dupe_cover = defaultdict(set)
@@ -318,14 +321,14 @@ def invert_dupe_cover(dupe_cover):
             inv_dupe_cover[match_id].add(key)
     return inv_dupe_cover
 
-inv_dupe_cover = invert_dupe_cover(dupe_cover)
-
-inv_dupe_cover_count = {key: len(predicates) for key, predicates in inv_dupe_cover.items()}
-set(my_predicates) - set(dupe_cover.keys())
-
-import re
-
-word_count = pd.Series(re.findall(r"[\w']+", source.full_name.str.lower().str.cat(sep=' '))).value_counts()
+#inv_dupe_cover = invert_dupe_cover(dupe_cover)
+#
+#inv_dupe_cover_count = {key: len(predicates) for key, predicates in inv_dupe_cover.items()}
+#set(my_predicates) - set(dupe_cover.keys())
+#
+#import re
+#
+#word_count = pd.Series(re.findall(r"[\w']+", source.full_name.str.lower().str.cat(sep=' '))).value_counts()
 
 
 def my_print(candidate):
@@ -336,7 +339,6 @@ def my_print(candidate):
         print(candidate[1][key])
 
 def my_other_print(record):
-    print('*****\n')
     for key, value in record.items():
         print(value)
 
@@ -368,37 +370,43 @@ def excl_2(candidate, field):
     ngrams_2 = n_grams(pre_process_string(field_2), 3)
     
     return not (ngrams_1 & ngrams_2)
+
+
+load_labelling = True
+do_labelling = False
+write_labelling = False
+
+if load_labelling:
+    with open('temp_labelling.json') as f:
+        labelled = json.load(f)
     
-
-labelled = []
-cursor = 0
-
-
-for candidate in candidates[cursor:]:
-    if (None in candidate[0].values()) or (None in candidate[1].values()):
-        continue
+if do_labelling:
+    labelled = []
+    cursor = 0
     
-    my_print(candidate)
+    for candidate in candidates[cursor:]:
+        if (None in candidate[0].values()) or (None in candidate[1].values()):
+            continue
+        
+        my_print(candidate)
+        
+        if excl_1(candidate) \
+            or excl_2(candidate, 'full_name') \
+            or excl_2(candidate, 'localite_acheminement_uai'):
+            labelled.append({'candidate': candidate, 'match': False})
+        else:
+            is_match = None
+            while is_match not in ['0', '1', 'stop']:
+                if is_match is not None:
+                    print('stop to stop')
+                is_match = input('\n({0}) >'.format(cursor))
+            if is_match == 'stop':
+                print('Done labelling. Did {0}'.format(cursor))
+                break
+            labelled.append({'candidate': candidate, 'match': is_match=='1'})
+        cursor += 1
     
-    if excl_1(candidate) \
-        or excl_2(candidate, 'full_name') \
-        or excl_2(candidate, 'localite_acheminement_uai'):
-        labelled.append({'candidate': candidate, 'match': False})
-    else:
-        is_match = None
-        while is_match not in ['0', '1', 'stop']:
-            if is_match is not None:
-                print('stop to stop')
-            is_match = input('\n({0}) >'.format(cursor))
-        if is_match == 'stop':
-            print('Done labelling. Did {0}'.format(cursor))
-            break
-        labelled.append({'candidate': candidate, 'match': is_match=='1'})
-    cursor += 1
-    
-
-
-if False:
+if write_labelling:
     import json
     with open('temp_labelling.json', 'w') as w:
         json.dump(labelled, w)
@@ -413,16 +421,18 @@ def df_from_dupe_cover(dupe_cover):
                               for key, predicates in dupe_cover.items()}
     dupe_cover_count = {key: len(predicates) for key, predicates in dupe_cover.items()}
     
-    tab = pd.DataFrame([[key, val, dupe_cover_match_count[key]] \
+    false_positives = {key: {id_ for id_ in ids if not labelled[id_]['match']} for key, ids in dupe_cover.items()}
+    
+    tab = pd.DataFrame([[key, val, dupe_cover_match_count[key], false_positives[key]] \
                         for key, val in dupe_cover_count.items()], \
-                        columns=['predicate', 'count', 'match_count'])
+                        columns=['predicate', 'count', 'match_count', 'false_positives'])
     
     tab['precision'] = tab['match_count'] / tab['count']
     match_count = sum(x['match'] for x in labelled)
     tab['recall'] = tab.match_count / match_count
-    tab.sort_values('recall', ascending=False, inplace=True)
     
     tab['ratio'] = tab['recall'] * tab['precision']
+    tab.sort_values('ratio', ascending=True, inplace=True)
     
     return tab
 
@@ -441,7 +451,7 @@ def make_n_cover(dupe_cover, n):
 
 candidates = [x['candidate'] for x in labelled]
 dupe_cover = cover(blocker, candidates, compound_length)
-
+dupe_cover_count = {key: len(predicates) for key, predicates in dupe_cover.items()}
 
 tab = df_from_dupe_cover(dupe_cover)
 tab['col'] = tab.predicate.apply(get_col)
@@ -455,16 +465,16 @@ double_tab = df_from_dupe_cover(double_dupe_cover)
 triple_dupe_cover = make_n_cover(dupe_cover, 3)
 triple_tab = df_from_dupe_cover(triple_dupe_cover)
 
+predicate = triple_tab.sort('ratio')['predicate'].iloc[-5]
 
-predicate = triple_tab['predicate'].iloc[-1]
+# Print false positives with chosen predicate
 for id_ in triple_dupe_cover[predicate]:
     if not labelled[id_]['match']:
         my_print(labelled[id_]['candidate'])
-        
-        
-        
+    
+false_positives = triple_tab.loc[triple_tab.predicate==predicate, 'false_positives'].iloc[0]
+    
 compound_predicate = predicates.CompoundPredicate(predicate)
-
 
 num_indexes = pd.Series(len(compound_predicate(x[0])) for x in candidates)
 
@@ -477,7 +487,99 @@ for i, label in enumerate(labelled):
 my_index_small = {key: value for key, value in my_index.items() if len(value)>1}    
 
 
+# Look at the blocks of the false positives
+for id_ in false_positives:
+    hashes = compound_predicate(candidates[id_][0])
+    
+    print('>>>>>>>>>>>>>>>>>>\nSOURCE\n')
+    my_other_print(candidates[id_][0])
+    print('\n>>>\nREFERENCES\n')
+    printed_refs = set()
+    for hash_ in hashes:
+        for (i, pos, _) in my_index[hash_]:
+            if pos == 1:
+                to_print = labelled[i]['candidate'][pos]
+                to_print_hash = hash(to_print.__str__())
+                if to_print_hash not in printed_refs:
+                    my_other_print(to_print)
+                    print('--> ID: ', i)
+                    printed_refs.add(to_print_hash)
+                    
+                    
+                    
+# Index source
+ref_blocks = defaultdict(set)
+for key, value in ref_items.items():
+    for hash_ in compound_predicate(value):
+        ref_blocks[hash_].add(key)
 
-id_ = 'hirson:oliotcurie:2'
-for (i, pos, _) in my_index_small[id_]:
-    my_other_print(labelled[i]['candidate'][pos])
+# Get candidates in ref from source
+source_candidates = defaultdict(set)
+for key, value in source_items.items():
+    for hash_ in compound_predicate(value):
+        if hash_ in ref_blocks:
+            source_candidates[key] = source_candidates[key].union(ref_blocks[hash_])
+                    
+from highered import CRFEditDistance
+crfEd = CRFEditDistance()
+
+
+len_match_cols = len(real_match_cols)
+
+id_source = 1132
+id_ref = 1
+
+
+def score(id_source, id_ref):
+    pair = {'source': source_items[id_source], 'ref': ref_items[id_ref]}
+    # score = sum(crfEd(pair['source'][col], pair['ref'][col]) for col in real_match_cols) / len_match_cols
+    score = crfEd(pair['source']['full_name'], pair['ref']['full_name'])
+    return score
+
+# Get best match based on mean crfEd
+source_best_match = defaultdict(None)
+for key, candidates in source_candidates.items():
+    if len(candidates) == 0:
+        source_best_match[key] = None
+    elif len(candidates) == 1:
+        source_best_match[key] = next(iter(candidates))
+    else:
+        scores = [(id_ref, score(id_source, id_ref)) for id_ref in candidates]
+        source_best_match[key] = min(scores, key=lambda x: x[1])[0]
+
+# Print all matches found
+for id_source, id_ref in source_best_match.items():
+    if id_ref is not None:
+        my_print((source_items[id_source], ref_items[id_ref]))
+        print('  --> src: {0} ; ref: {1}'.format(id_source, id_ref))
+
+def anal_print(id_source):
+    print('\n' + '>'*20 + ' id_source: {0} \nMATCH FOUND'.format(id_source))
+    id_ref_good = source_best_match[id_source]
+    my_print((source_items[id_source], ref_items[id_ref_good]))
+    print('  -> id_ref: {0} ; score: {1}'.format(id_ref_good, score(id_source, id_ref_good)))
+    
+    print('\n>>>>>>>>\nOTHER OPTIONS IN BLOCKS')
+    for id_ref in source_candidates[id_source]:
+        if id_ref != id_ref_good:
+            my_other_print(ref_items[id_ref])
+            print('  -> id_ref: {0} ; score: {1}'.format(id_ref, score(id_source, id_ref)))
+
+import numpy as np
+def _get_ref_uai(id_source):
+    if source_best_match[id_source] is not None:
+        return ref.loc[source_best_match[id_source], 'numero_uai']
+    else:
+        return np.nan
+
+source['ref_uai'] = [_get_ref_uai(id_source) for id_source in source.index]
+
+source['good'] = source['uai'].str.upper() == source['ref_uai'].str.upper()
+
+for id_source in source[~source.good & source.ref_uai.notnull()].index:
+    anal_print(id_source)
+    
+    
+    
+# 1302
+# 4891
