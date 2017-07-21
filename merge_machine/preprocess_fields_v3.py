@@ -209,8 +209,10 @@ def justCase(phrase, keepAcronyms = False):
 def splitAndCase(phrase, keepAcronyms):
 	return map(lambda t: caseToken(t, keepAcronyms), str.split(preSplit(phrase)))
 
-
-def validateTokens(phrase, keepAcronyms, tokenValidator, phraseValidator, stopWords = None):
+def normalizeAndValidateTokens(phrase,
+	keepAcronyms = False, tokenValidator = isValidToken, phraseValidator = isValidPhrase, stopWords = None):
+	''' Returns a list of normalized, valid tokens for the input phrase (an empty list
+		if no valid tokens were found) '''
 	if phrase:
 		tokens = splitAndCase(phrase, keepAcronyms)
 		validTokens = []
@@ -218,13 +220,6 @@ def validateTokens(phrase, keepAcronyms, tokenValidator, phraseValidator, stopWo
 			if tokenValidator(token) and (stopWords is None or token not in stopWords): validTokens.append(token)
 		if phraseValidator(validTokens): return validTokens
 	return []
-
-def normalizeAndValidateTokens(value,
-	keepAcronyms = False, tokenValidator = isValidToken, phraseValidator = isValidPhrase, stopWords = None):
-	''' Returns a list of normalized, valid tokens for the input phrase (an empty list
-		if no valid tokens were found) '''
-	return validateTokens(value, keepAcronyms, 
-		tokenValidator, phraseValidator, stopWords)
 
 def normalizeAndValidatePhrase(value,
 	keepAcronyms = False, tokenValidator = isValidToken, phraseValidator = isValidPhrase, stopWords = None):
@@ -241,14 +236,14 @@ def validatedLexiconMap(lexicon, tokenize = False, stopWords = None, synMap = No
 	''' Returns a dictionary from normalized string to list of original strings. '''
 	lm = defaultdict(list)
 	for s in lexicon:
-		addToLexiconMap(lm, s, stopWords, tokenize)
+		addToLexiconMap(lm, s, tokenize, stopWords)
 	if synMap is not None:
 		for (mainVariant, altVariants) in synMap.items():
-			addToLexiconMap(lm, mainVariant, stopWords, tokenize)
+			addToLexiconMap(lm, mainVariant, tokenize, stopWords)
 			# for altVariant in altVariants: addToLexiconMap(lm, altVariant, stopWords, tokenize)
 	return lm
 
-def addToLexiconMap(lm, s, stopWords, tokenize):
+def addToLexiconMap(lm, s, tokenize, stopWords):
 	k = normalizeAndValidatePhrase(s, stopWords = stopWords) if tokenize else caseToken(s, False)
 	if k is None: return
 	lm[k].append(s)
@@ -267,32 +262,6 @@ def fileRowIterator(fileName, sep, path = RESOURCE_PATH):
 
 def fileColumnToList(fileName, c, sep = '\t', includeInvalid = True):
 	return [r[c] for r in fileRowIterator(fileName, sep) if len(r) > c and (includeInvalid or isValidValue(r[c]))]
-
-
-def fileToVariantMap(fileName, sep = '|', includeSelf = False, tokenize = False):
-	''' The input format is pipe-separated, column 1 is the main variant, column 2 an alternative variant.
-
-		Returns a reverse index, namely a map from original alternative variant to original main variant
-
-		Parameters:
-		includeSelf if True, then the main variant will be included in the list of alternative variants
-			(so as to enable partial matching simultaneously).
-	'''
-	otherToMain = defaultdict(list)
-	mainToOther = defaultdict(list)
-	for row in fileRowIterator(fileName, sep):
-		if len(row) < 2: continue
-		r = list([normalizeOrNot(e, tokenize = tokenize)  for e in row])
-		main, alts = r[0], set(r[1:])
-		alts.discard(main)
-		for alt in alts: otherToMain[alt].append(main)
-		mainToOther[main].extend(list(alts))
-	logging.debug('Main variant collisions from {}:'.format(fileName))
-	for (other, main) in otherToMain.items():
-		if len(main) > 1: logging.debug(other + ' --> ' + '|'.join(main))
-	l = list([(other, next(iter(main))) for (other, main) in otherToMain.items() if len(main) < 2])
-	if includeSelf: l = list([(main, main) for main in mainToOther.keys()]) + l
-	return dict(l)
 
 FRENCH_LEXICON = fileColumnToList('most_common_tokens_fr', 0, '|')
 
@@ -495,6 +464,7 @@ class TypeMatcher(object):
 		if div < self.diversity():
 			logging.info('Not enough diversity matches of type {} produced by {} ({})'.format(self.t, self, div))
 		else:
+			logging.info('Positing value type {} by {}'.format(self.t, self))
 			for c in cells: c.positType(self.t)
 
 MATCH_MODE_EXACT = 0
@@ -648,7 +618,8 @@ def fssScore(r, l = 1024):
 	elif l > 4: return (r[1], 20) if len(r[1]) > 0 else (r[2], 10)
 	else: return (r[1], 5) if len(r[1]) > 0 else ([], 0)
 
-def normalizeOrNot(v, tokenize = False, stopWords = None): return normalizeAndValidatePhrase(v, stopWords = stopWords) if tokenize else justCase(v)
+def normalizeOrNot(v, tokenize = False, stopWords = None): 
+	return normalizeAndValidatePhrase(v, stopWords = stopWords) if tokenize else justCase(v)
 
 class LabelMatcher(TypeMatcher):
 	def __init__(self, t, lexicon, mm, stopWords = None, synMap = None):
@@ -799,7 +770,7 @@ PARENT_CHILD_RATIO = 2
 def parseFieldsFromCSV(fileName, delimiter):
 	''' Takes a CSV filepath and a delimiter as input, returns an instance of the Fields class. '''
 	a = list(fileRowIterator(fileName, delimiter, path = None))
-	return Fields({ Cell(h, h): Field([Cell(a[i][k], h) for i in range(1, len(a)) if len(a[i]) > k]) for (k, h) in enumerate(a[0]) },
+	return Fields({ Cell(h, h): Field([Cell(a[i][k] if len(a[i]) > k else '', h) for i in range(1, len(a))]) for (k, h) in enumerate(a[0]) },
 		len(a) - 1)
 
 def parseFieldsFromPanda(df):
@@ -923,7 +894,7 @@ class Fields(object):
 		for (h, f) in self.fields.items():
 			fieldName = h.value
 			ts = sorted(f2t[fieldName], key = itemgetter(1), reverse = True)
-			logging.info('Sorted types for {} : {}'. format(fieldName, '; '.join(['{} ({}) '.format(t, s) for (t, s) in ts])))
+			logging.info('Sorted types for {}: {}'. format(fieldName, '; '.join(['{} ({}) '.format(t, s) for (t, s) in ts])))
 			for (t, s) in ts:
 				betterField = any((p[1] > s and p[0] not in types) for p in t2f[t])
 				betterChild = t in PARENT_CHILD_RELS and any((p[1] * PARENT_CHILD_RATIO > s and p[0] in PARENT_CHILD_RELS[t]) for p in ts)
@@ -983,7 +954,8 @@ class Fields(object):
 				continue
 			logging.info('Normalizing values for {}'.format(fieldName))
 			lvt = types[fieldName]
-			newCol = [None] * self.entries
+			assert self.entries == len(f.cells)
+			newCol = [''] * self.entries
 			for i, c in enumerate(f.cells):
 				nvs = list(c.normalizedValuesInPlace(lvt))
 				newCol[i] = ', '.join(nvs)
@@ -1143,9 +1115,11 @@ class Cell(object):
 				else: res[ti.t].add(str(ti.hit))
 			for (k, v) in res.items():
 				ucvs = uniqueCellValues(v)
-				l = list([ucv for ucv in ucvs if ucv is not None and len(ucv) > 0])
-				s |= (v if len(l) < 1 else set(l))
-		return list(s)
+				s |= set([ucv for ucv in ucvs if ucv is not None and len(ucv) > 0])
+				# l = list([ucv for ucv in ucvs if ucv is not None and len(ucv) > 0])
+				# if len(l) < 1: s.add(v)
+				# else: s |= set(l)
+		return list(s) if len(s) > 0 else [self.value]
 
 def setAsListOrSingleton(v):
 	s = set(v)
@@ -1553,18 +1527,43 @@ class AcronymMatcher(TypeMatcher):
 				tl = tokens[i1 : i2]
 				yield ''.join([t[0] for t in tl]).upper()
 
+def fileToVariantMap(fileName, sep = '|', includeSelf = False, tokenize = False):
+	''' The input format is pipe-separated, column 1 is the main variant, column 2 an alternative variant.
+
+		Returns a reverse index, namely a map from original alternative variant to original main variant
+
+		Parameters:
+		includeSelf if True, then the main variant will be included in the list of alternative variants
+			(so as to enable partial matching simultaneously).
+	'''
+	otherToMain = defaultdict(list)
+	mainToOther = defaultdict(list)
+	for row in fileRowIterator(fileName, sep):
+		if len(row) < 2: continue
+		r = list([normalizeOrNot(e, tokenize = tokenize)  for e in row])
+		main, alts = r[0], set(r[1:])
+		alts.discard(main)
+		for alt in alts: otherToMain[alt].append(main)
+		mainToOther[main].extend(list(alts))
+	logging.debug('Main variant collisions from {}:'.format(fileName))
+	for (other, main) in otherToMain.items():
+		if len(main) > 1: logging.debug(other + ' --> ' + '|'.join(main))
+	l = list([(other, next(iter(main))) for (other, main) in otherToMain.items() if len(main) < 2])
+	if includeSelf: l = list([(main, main) for main in mainToOther.keys()]) + l
+	return dict(l)
+
 class VariantExpander(TypeMatcher):
-	def __init__(self, variantsMap, domainType, keepContext, targetType = None, scorer = tokenScorer):
-		super(VariantExpander, self).__init__(domainType if targetType is None else targetType)
+	def __init__(self, variantsMapFile, targetType, keepContext, domainType = None, scorer = tokenScorer):
+		super(VariantExpander, self).__init__(targetType)
 		self.domainType = domainType
 		self.keepContext = keepContext # if true, then the main variant will be surrounded by original context in the normalized value
-		self.variantsMap = variantsMap # map from original alternative variant to original main variant
+		self.variantsMap = fileToVariantMap(variantsMapFile) # map from original alternative variant to original main variant
 		self.scorer = scorer
 		self.tokenIdx = defaultdict(set) # map from alternative variant as joined-normalized-token-list to original alternative variant
 		self.minTokens = 3
 		self.maxTokens = DTC
 		# map of alternative variants (including main or not!), from normalized string to list of original strings:
-		phrasesMap = validatedLexiconMap(variantsMap.keys(), tokenize = True)
+		phrasesMap = validatedLexiconMap(self.variantsMap.keys(), tokenize = True)
 		for (phrase, altVariants) in phrasesMap.items():
 			tokens = phrase.split()
 			l = len(tokens)
@@ -1574,18 +1573,20 @@ class VariantExpander(TypeMatcher):
 			matchedVariantPhrase = ' '.join(tokens[:self.maxTokens])
 			for altVariant in altVariants:
 				self.tokenIdx[matchedVariantPhrase].add(altVariant)
-				if altVariant not in variantsMap:
+				if altVariant not in self.variantsMap:
 					raise RuntimeError('Alternative variant {} not found in variants map'.format(altVariant))
 	@timed
 	def match(self, c):
-		if self.domainType not in c.notExcludedTypes(): return
+		if self.domainType is not None and self.domainType not in c.notExcludedTypes():
+			return
 		tokens = normalizeAndValidateTokens(c.value)
 		if tokens is not None:
 			for k2 in range(self.maxTokens, 0, -1):
 				for k1 in range(0, len(tokens) + 1 - k2):
 					matchSrcTokens = tokens[k1:k1 + k2]
 					matchRefPhrase = ' '.join(matchSrcTokens)
-					if matchRefPhrase not in self.tokenIdx: continue
+					if matchRefPhrase not in self.tokenIdx: 
+						continue
 					for altVariant in self.tokenIdx[matchRefPhrase]:
 						score = self.scorer(matchSrcTokens, tokens, matchRefPhrase, altVariant)
 						v = justCase(c.value)
@@ -1656,6 +1657,8 @@ def generateValueMatchers(lvl = 0):
 		Parameter:
 		lvl 0 for lightweight matching, 2 for the heaviest variants, 1 as an intermediate level
 		'''
+	yield VariantExpander('country_latin.syn', targetType = F_COUNTRY, keepContext = True)
+	return
 
 	# Identifiers (typically but not necessarily unique)
 	# yield TemplateMatcher('Identifiant', 90) # TODO distinguish unique vs. non-unique
@@ -1764,7 +1767,7 @@ def generateValueMatchers(lvl = 0):
 		yield RegexMatcher(F_ZIP, "[0-9]{5}")
 
 	if lvl >= 1:
-		yield VariantExpander(fileToVariantMap('country.latin.syn'), F_COUNTRY, False)
+		yield VariantExpander('country_latin.syn', targetType = F_COUNTRY, keepContext = True)
 	elif lvl >= 0:
 		yield LabelMatcher(F_COUNTRY, fileToSet('country'), MATCH_MODE_EXACT)
 
@@ -1834,13 +1837,13 @@ def generateValueMatchers(lvl = 0):
 	# Normalize by expanding alternative variants (such as acronyms, abbreviations and synonyms) to their main variant
 	if lvl >= 0:
 		yield VocabMatcher(F_ENTREPRISE, fileToSet('org_entreprise.vocab'), ignoreCase = True, partial = False,
-			matcher = VariantExpander(fileToVariantMap('org_entreprise.syn'), F_ENTREPRISE, True))
+			matcher = VariantExpander('org_entreprise.syn', targetType = F_ENTREPRISE, keepContext = True ))
 		yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('org_enseignement.vocab'), ignoreCase = True, partial = False,
-			matcher = VariantExpander(fileToVariantMap('etab_enssup.syn'), F_MESR, False, targetType = F_ETAB_ENSSUP))
+			matcher = VariantExpander('etab_enssup.syn', targetType = F_ETAB_ENSSUP, keepContext = False, domainType = F_MESR))
 
 	if lvl >= 0:
 		yield VocabMatcher(F_RD_STRUCT, fileToSet('org_rnsr.vocab'), ignoreCase = True, partial = False,
-			matcher = VariantExpander(fileToVariantMap('org_rnsr.syn'), F_RD_DOMAIN, False, targetType = F_RD_STRUCT))
+			matcher = VariantExpander('org_rnsr.syn', targetType = F_RD_STRUCT, keepContext = True, domainType = F_RD_DOMAIN))
 
 	# Spot acronyms on-the-fly
 	if lvl >= 1: 
@@ -1943,15 +1946,26 @@ if __name__ == '__main__':
 						help = "CSV delimiter")
 	parser.add_option("-f", "--output_format", dest = "of",
 						help = "Output format (md / csv)")
+	parser.add_option("-p", "--in_place", dest = "ip",
+						help = "in-place normalization")
 	(options, args) = parser.parse_args()
 	separator = options.delimiter if options.delimiter else '|'
 	outputFormat = options.of if options.of else separator
 	fields = parseFieldsFromCSV(options.srcFileName, delimiter = separator)
+	inPlace = True # options.ip
 
 	# Single-pass method
 	# fields.processValues(outputFormat = outputFormat)
 
-	# Two-pass method
+	if inPlace:
+		# In-place normalization
+		types = fields.inferTypes()
+		for (field, row) in fields.normalizeValuesInPlace(types):
+			print ('Normalized', field)
+			for value in row: print(value)
+		sys.exit()
+
+	# With addition of new fields
 	res = list()
 	for i in range(fields.entries): res.append(dict())
 	types = fields.inferTypes()
