@@ -21,7 +21,9 @@ from dedupe import blocking, predicates, sampling
 from highered import CRFEditDistance
 import numpy as np
 import pandas as pd
+import pprint
 import unidecode
+
 
 
 def pd_pre_process(series, remove_punctuation=False):
@@ -304,18 +306,6 @@ def my_other_print(record):
     for key, value in record.items():
         print(value)
 
-def excl_1(candidate):
-    '''Return true if candidate should be excluded'''
-    dep_1 = candidate[0]['departement']
-    dep_2 = candidate[1]['departement']
-    return (len(dep_1) == 2) \
-            and (len(dep_2) == 3) \
-            and (dep_2[0] == '0') \
-            and (dep_1 != dep_2[1:])
-
-def n_grams(string, N):
-    return {string[i:i+N] for i in range(len(string)-N+1)}
-
 
 def pre_process_string(string):
     TO_REPLACE = [('lycee', ''), (' de ', ' ')]
@@ -324,40 +314,6 @@ def pre_process_string(string):
         string = string.replace(pair[0], pair[1])
     return string
 
-def excl_2(candidate, field):
-    field_1 = candidate[0][field]
-    field_2 = candidate[1][field]
-    
-    ngrams_1 = n_grams(pre_process_string(field_1), 3)
-    ngrams_2 = n_grams(pre_process_string(field_2), 3)
-    
-    return not (ngrams_1 & ngrams_2)
-
-
-def count_matches(pair_ids, labelled):
-    '''Counts actual matches among the pairs'''
-    return sum(labelled[x]['match'] for x in pair_ids)
-
-def df_from_predicate_cover(dupe_cover):
-    dupe_cover_match_count = {key: count_matches(pair_ids, labelled) \
-                              for key, pair_ids in dupe_cover.items()}
-    dupe_cover_count = {key: len(pair_ids) for key, pair_ids in dupe_cover.items()}
-    
-    false_positives = {key: {id_ for id_ in ids if not labelled[id_]['match']} \
-                       for key, ids in dupe_cover.items()}
-    
-    tab = pd.DataFrame([[key, val, dupe_cover_match_count[key], false_positives[key]] \
-                        for key, val in dupe_cover_count.items()], \
-                        columns=['predicate', 'count', 'match_count', 'false_positives'])
-    
-    tab['precision'] = tab['match_count'] / tab['count']
-    match_count = sum(x['match'] for x in labelled)
-    tab['recall'] = tab.match_count / match_count
-    
-    tab['ratio'] = tab['recall'] * tab['precision']
-    tab.sort_values('ratio', ascending=True, inplace=True)
-    
-    return tab
 
 def make_n_cover(dupe_cover, n):
     dupe_cover_n = dict() 
@@ -370,13 +326,11 @@ def make_n_cover(dupe_cover, n):
     return dupe_cover_n
 
 
-
-
 def get_best_predicate(predicate_info):
     '''Returns the predicate that has the highest ratio'''
     return max(predicate_info.values(), key=lambda x: x['ratio'])['key']
 
-def update_predicate_info(predicate_info, candidate_cover, pair_id, is_match):
+def update_predicate_info(predicate_info, candidate_cover, selected_predicate, pair_id, is_match):
     for key in predicate_info.keys():
         if key in candidate_cover[pair_id]:
             predicate_info[key]['num_labelled'] += 1
@@ -384,13 +338,14 @@ def update_predicate_info(predicate_info, candidate_cover, pair_id, is_match):
                 predicate_info[key]['num_matches'] += 1
             predicate_info[key]['precision'] = predicate_info[key]['num_matches'] \
                                              / predicate_info[key]['num_labelled']
+            
             if num_positives:
-                predicate_info[key]['recall'] = predicate_info[key]['num_matches'] \
+                if key != selected_predicate:
+                    predicate_info[key]['recall'] = predicate_info[key]['num_matches'] \
                                              / num_positives
-            else:
-                predicate_info[key]['recall'] = 0
+
             predicate_info[key]['ratio'] = predicate_info[key]['precision'] \
-                                        * predicate_info[key]['recall']
+                                        * predicate_info[key].get('recall', 0.1)
 
 
 def score(id_source, id_ref):
@@ -420,21 +375,31 @@ def choose_pair(predicate_cover, predicate_info, proba=0.5):
         # Choose best_predicate
         print('Getting best')
         predicate = get_best_predicate(predicate_info)
-        pair_id = predicate_cover[predicate].pop()
     else:
         predicate = random.choice(list(predicate_info.keys()))
-        pair_id = predicate_cover[predicate].pop()
-    return pair_id
+        
+    pair_id = predicate_cover[predicate].pop()
+    if not predicate_cover[predicate]:
+        del predicate_cover[predocate]
+    return predicate, pair_id
     
 
 '''
 loop:
 1) Choose predicate (50% with highest ratio ; 50% random not)
 2) Choose a sample (include string distance ?)
-3) Update predicate_info including ratio (and sort ?)
+3) Update predicate_info including precision, recall(exclude current) and
+    ratio (and sort ?)
         
 WARNING: elements are poped from predicate_cover
 '''
+
+
+class Labeller():
+    def __init__(self, candidates):
+        self.candidates = candidates
+        self.labelled = []
+        self.predicate_cover = make_n_cover(predicate_cover, 3)
 
 # Load prelabelled data for testing
 with open('temp_labelling.json') as f:
@@ -458,7 +423,9 @@ num_positives = 0
 
 quit_ = False
 while not quit_:
-    pair_id = choose_pair(predicate_cover, predicate_info, 0.5)
+    selected_predicate, pair_id = choose_pair(predicate_cover, predicate_info, 0.5)
+    
+    pprint.pprint(predicate_info[selected_predicate])
     my_print(candidates[pair_id])
     
     while True:
@@ -477,7 +444,7 @@ while not quit_:
             print('(y)es, (n)o, or (f)inished')
             
     if input_ in ['y', 'n']:
-        update_predicate_info(predicate_info, candidate_cover, pair_id, is_match)
+        update_predicate_info(predicate_info, candidate_cover, selected_predicate, pair_id, is_match)
         labelled.append({'candidate': candidates[pair_id], 'match': is_match})
 
 assert False
