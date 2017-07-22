@@ -326,34 +326,16 @@ def make_n_cover(dupe_cover, n):
     return dupe_cover_n
 
 
-def get_best_predicate(predicate_info):
-    '''Returns the predicate that has the highest ratio'''
-    return max(predicate_info.values(), key=lambda x: x['ratio'])['key']
-
-def update_predicate_info(predicate_info, candidate_cover, selected_predicate, pair_id, is_match):
-    for key in predicate_info.keys():
-        if key in candidate_cover[pair_id]:
-            predicate_info[key]['num_labelled'] += 1
-            if is_match:
-                predicate_info[key]['num_matches'] += 1
-            predicate_info[key]['precision'] = predicate_info[key]['num_matches'] \
-                                             / predicate_info[key]['num_labelled']
-            
-            if num_positives:
-                if key != selected_predicate:
-                    predicate_info[key]['recall'] = predicate_info[key]['num_matches'] \
-                                             / num_positives
-
-            predicate_info[key]['ratio'] = predicate_info[key]['precision'] \
-                                        * predicate_info[key].get('recall', 0.1)
 
 
-def score(id_source, id_ref):
-    pair = {'source': source_items[id_source], 'ref': ref_items[id_ref]}
-    # score = sum(crfEd(pair['source'][col], pair['ref'][col]) for col in real_match_cols) / len_match_cols
-    crfEd = CRFEditDistance()
-    score = crfEd(pair['source']['full_name'], pair['ref']['full_name'])
-    return score
+
+
+#def score(id_source, id_ref):
+#    pair = {'source': source_items[id_source], 'ref': ref_items[id_ref]}
+#    # score = sum(crfEd(pair['source'][col], pair['ref'][col]) for col in real_match_cols) / len_match_cols
+#    crfEd = CRFEditDistance()
+#    score = crfEd(pair['source']['full_name'], pair['ref']['full_name'])
+#    return score
 
 
 
@@ -369,19 +351,7 @@ def score(id_source, id_ref):
 #        ref_id = min(scores, key=lambda x: x[1])[0]
 #    return (source_id, ref_id)
 
-def choose_pair(predicate_cover, predicate_info, proba=0.5):
-    rand_val = random.random()
-    if rand_val <= proba:
-        # Choose best_predicate
-        print('Getting best')
-        predicate = get_best_predicate(predicate_info)
-    else:
-        predicate = random.choice(list(predicate_info.keys()))
-        
-    pair_id = predicate_cover[predicate].pop()
-    if not predicate_cover[predicate]:
-        del predicate_cover[predocate]
-    return predicate, pair_id
+
     
 
 '''
@@ -396,10 +366,85 @@ WARNING: elements are poped from predicate_cover
 
 
 class Labeller():
-    def __init__(self, candidates):
+    def __init__(self, candidates, blocker, n=3):
         self.candidates = candidates
-        self.labelled = []
-        self.predicate_cover = make_n_cover(predicate_cover, 3)
+        self.labelled = {}
+        self.predicate_cover = cover(blocker, candidates, 1)
+        self.predicate_cover = make_n_cover(self.predicate_cover, n)
+        self.predicate_info = {key: {'key': key, 
+                                     'num_labelled': 0, # Number of times a selected pair had this predicate
+                                     'num_labelled_selected': 0, # Number of times selected as predicate
+                                     'num_matches': 0, # Number of matches found
+                                     'num_matches_selected': 0, # Number of matches found when predicate was selected
+                                     'has_pairs': True, # Still has pairs to label
+                                     'ratio': 0.001} \
+                                      for key in self.predicate_cover.keys()}
+        self.candidate_cover = invert_predicate_cover(self.predicate_cover)
+        
+        self.num_matches = 0
+        self.num_labelled = 0
+        
+        
+    def update(self, selected_predicate, pair_id, is_match):
+        # Update global count
+        self.num_labelled += 1
+        self.num_matches += int(is_match)
+        
+        # Add count of selected
+        self.predicate_info[selected_predicate]['num_labelled_selected'] += 1
+        self.predicate_info[selected_predicate]['num_matches_selected'] += int(is_match)
+        
+        for key in self.predicate_info.keys():
+            # If the selected pair is covered by the predicate
+            if key in self.candidate_cover[pair_id]:
+                # One more label for this predicate
+                self.predicate_info[key]['num_labelled'] += 1
+                
+                # Add match for this predicate (if is_match)
+                if is_match:
+                    self.predicate_info[key]['num_matches'] += 1
+                
+                # Update precision
+                self.predicate_info[key]['precision'] = self.predicate_info[key]['num_matches'] \
+                                                 / self.predicate_info[key]['num_labelled']
+
+                # Remove the pair from predicate_cover          
+                self.predicate_cover[key] = self.predicate_cover[key] - {pair_id} 
+                
+                # Check if it still has pairs
+                self.predicate_info[key]['has_pairs'] = bool(len(self.predicate_cover[key]))
+            
+            # Update recall (on examples not selected using this predicate)
+            if (self.num_matches - self.predicate_info[key]['num_matches_selected']):
+                self.predicate_info[key]['recall'] = \
+                    (self.predicate_info[key]['num_matches'] - self.predicate_info[key]['num_matches_selected']) / (self.num_matches - self.predicate_info[key]['num_matches_selected'])
+                    
+            # Compute ratio
+            self.predicate_info[key]['ratio'] = self.predicate_info[key].get('precision', 0.1) \
+                                        * self.predicate_info[key].get('recall', 0.1)  
+                               
+
+
+    def get_best_predicate(self):
+        '''Returns the predicate that has the highest ratio'''
+        return max(self.predicate_info.values(), key=lambda x: x['ratio'] * x['has_pairs'])['key']
+
+    def choose_pair(self, proba=0.5):
+        rand_val = random.random()
+        if rand_val <= proba:
+            # Choose best_predicate
+            print('Getting best')
+            predicate = self.get_best_predicate()
+        else:
+            for _ in range(100):
+                predicate = random.choice(list(self.predicate_info.keys()))
+                if self.predicate_info[predicate]['has_pairs']:
+                    break
+            else:
+                raise RuntimeError('Could not found predicate with pairs')
+            
+        pair_id = self.predicate_cover[predicate].pop()        
+        return predicate, pair_id
 
 # Load prelabelled data for testing
 with open('temp_labelling.json') as f:
@@ -408,31 +453,21 @@ with open('temp_labelling.json') as f:
 # Candidates of pairs to be labelled
 candidates = [pair['candidate'] for pair in real_labelled]
 
-# Initiate labelled pairs
-labelled = []
 
-# Initiate 
-predicate_cover = cover(blocker, candidates, compound_length)
-
-predicate_cover = make_n_cover(predicate_cover, 3)
-predicate_info = {key: {'key': key, 'num_labelled':0, 'num_matches': 0, 'ratio': 0.001} \
-                  for key in predicate_cover.keys()}
-candidate_cover = invert_predicate_cover(predicate_cover)
-
-num_positives = 0
+# Initiate
+labeller = Labeller(candidates, blocker)
 
 quit_ = False
 while not quit_:
-    selected_predicate, pair_id = choose_pair(predicate_cover, predicate_info, 0.5)
+    selected_predicate, pair_id = labeller.choose_pair(0.5)
     
-    pprint.pprint(predicate_info[selected_predicate])
-    my_print(candidates[pair_id])
+    pprint.pprint(labeller.predicate_info[selected_predicate])
+    my_print(labeller.candidates[pair_id])
     
     while True:
         input_ = input('>')
         if input_ == 'y':
             is_match = True
-            num_positives += 1
             break
         elif input_ == 'n':
             is_match = False
@@ -444,8 +479,8 @@ while not quit_:
             print('(y)es, (n)o, or (f)inished')
             
     if input_ in ['y', 'n']:
-        update_predicate_info(predicate_info, candidate_cover, selected_predicate, pair_id, is_match)
-        labelled.append({'candidate': candidates[pair_id], 'match': is_match})
+        labeller.update(selected_predicate, pair_id, is_match)
+        #labelled.append({'candidate': candidates[pair_id], 'match': is_match})
 
 assert False
 
