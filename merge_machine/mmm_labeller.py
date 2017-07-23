@@ -360,15 +360,43 @@ loop:
 2) Choose a sample (include string distance ?)
 3) Update predicate_info including precision, recall(exclude current) and
     ratio (and sort ?)
-        
-WARNING: elements are poped from predicate_cover
+
+WARNING: elements are poped from predicate_cover    
+
+
+
+*****  
+
+We want to learn:
+
+1) Good blocking rule
+2) Good string distance (consider it to be a classifier) for this blocking rule.
+
+Ideas:
+Below threshold doesn't influence precision
+Keep string distance in labels and simultaneously learn the string distance
+In info keep all string distances and compute threshold from 2 matches
+and 2 non matches up.
+Compute threshold on best block each time    
+
+1) Build string distance CLASSIFIER on ALL examples
+2) Blocker rules: Compute Precision using new info. RECALL doesn't change. Compute RATIO
+3) 50% Choose best predicate (highest RATIO) and best sample (highest probability with distance CLASSIFIER) 
+
+Classifier should be corrected for precision of blocking
+Ratio should include absolute precision of blocking (without string distance)
+
 '''
 
+from sklearn import linear_model
 
 class Labeller():
-    def __init__(self, candidates, blocker, n=3):
+    def __init__(self, candidates, blocker, datamodel, n=3):
+        self.distances = datamodel.distances(candidates)
+        self.classifier = self._init_classifier(self)
+        
         self.candidates = candidates
-        self.labelled = {}
+        self.labelled = []
         self.predicate_cover = cover(blocker, candidates, 1)
         self.predicate_cover = make_n_cover(self.predicate_cover, n)
         self.predicate_info = {key: {'key': key, 
@@ -379,10 +407,22 @@ class Labeller():
                                      'has_pairs': True, # Still has pairs to label
                                      'ratio': 0.001} \
                                       for key in self.predicate_cover.keys()}
-        self.candidate_cover = invert_predicate_cover(self.predicate_cover)
         
+        self.candidate_cover = invert_predicate_cover(self.predicate_cover)
         self.num_matches = 0
         self.num_labelled = 0
+    
+    
+    def _init_classifier(self):
+        classifier = linear_model.LogisticRegression()
+        classifier.intercept_ = np.array([0])
+        classifier. coef_ = np.array([[0.5 for _ in range(self.distances.shape[1])]])
+        return classifier
+    
+    def train_classifier(self):      
+        X = self.distances[[x['pair_id'] for x in self.labelled]]
+        Y = [x['match'] for x in self.labelled]
+        self.classifier.fit(X, Y)
         
         
     def update(self, selected_predicate, pair_id, is_match):
