@@ -379,7 +379,7 @@ In info keep all string distances and compute threshold from 2 matches
 and 2 non matches up.
 Compute threshold on best block each time    
 
-1) Build string distance CLASSIFIER on ALL examples
+1) Build string distance CLASSIFIER on ALL examples and make prediction for each example
 2) Blocker rules: Compute Precision using new info. RECALL doesn't change. Compute RATIO
 3) 50% Choose best predicate (highest RATIO) and best sample (highest probability with distance CLASSIFIER) 
 
@@ -393,18 +393,18 @@ from sklearn import linear_model
 class Labeller():
     def __init__(self, candidates, blocker, datamodel, n=3):
         self.distances = datamodel.distances(candidates)
-        self.classifier = self._init_classifier(self)
-        
+        self.classifier = self._init_classifier()
         self.candidates = candidates
-        self.labelled = []
+        self.is_match_from_classifier = np.array([True]*len(candidates))
+        self.is_match = dict()
         self.predicate_cover = cover(blocker, candidates, 1)
         self.predicate_cover = make_n_cover(self.predicate_cover, n)
         self.predicate_info = {key: {'key': key, 
-                                     'num_labelled': 0, # Number of times a selected pair had this predicate
-                                     'num_labelled_selected': 0, # Number of times selected as predicate
-                                     'num_matches': 0, # Number of matches found
-                                     'num_matches_selected': 0, # Number of matches found when predicate was selected
+                                     'labelled_pairs': set(), # Labelled pairs covered by this predicate
+                                     'labelled_pairs_selected': set(), # Pairs selected precisely to test this preidcate
                                      'has_pairs': True, # Still has pairs to label
+                                     'recall': 0.1,
+                                     'precision': 0.1,
                                      'ratio': 0.001} \
                                       for key in self.predicate_cover.keys()}
         
@@ -414,77 +414,117 @@ class Labeller():
     
     
     def _init_classifier(self):
-        classifier = linear_model.LogisticRegression()
+        classifier = linear_model.LogisticRegression(class_weight="balanced")
         classifier.intercept_ = np.array([0])
-        classifier. coef_ = np.array([[0.5 for _ in range(self.distances.shape[1])]])
+        classifier.coef_ = np.array([[0.5 for _ in range(self.distances.shape[1])]])
         return classifier
     
     def train_classifier(self):      
-        X = self.distances[[x['pair_id'] for x in self.labelled]]
-        Y = [x['match'] for x in self.labelled]
+        pair_match = list(self.is_match.items())
+        X = self.distances[[pair_id for (pair_id, _) in pair_match]]
+        Y = [is_match for (_, is_match) in pair_match]
         self.classifier.fit(X, Y)
-        
         
     def update(self, selected_predicate, pair_id, is_match):
         # Update global count
         self.num_labelled += 1
         self.num_matches += int(is_match)
+        self.is_match[pair_id] = is_match
         
         # Add count of selected
-        self.predicate_info[selected_predicate]['num_labelled_selected'] += 1
-        self.predicate_info[selected_predicate]['num_matches_selected'] += int(is_match)
+        self.predicate_info[selected_predicate]['labelled_pairs_selected'].add(pair_id)
         
-        for key in self.predicate_info.keys():
-            # If the selected pair is covered by the predicate
-            if key in self.candidate_cover[pair_id]:
-                # One more label for this predicate
-                self.predicate_info[key]['num_labelled'] += 1
-                
-                # Add match for this predicate (if is_match)
-                if is_match:
-                    self.predicate_info[key]['num_matches'] += 1
-                
-                # Update precision
-                self.predicate_info[key]['precision'] = self.predicate_info[key]['num_matches'] \
-                                                 / self.predicate_info[key]['num_labelled']
+        # Update matches_from classifier
+        use_classifier = (self.num_labelled - self.num_matches >= 5)
+        if use_classifier:
+            self.train_classifier()
+            self.is_match_from_classifier = self.classifier.predict(self.distances)
 
+        # Update_blocking rules
+        for predicate, this_predicate_info in self.predicate_info.items():
+            if predicate in self.candidate_cover[pair_id]:
+                this_predicate_info['labelled_pairs'].add(pair_id)
+        
                 # Remove the pair from predicate_cover          
-                self.predicate_cover[key] = self.predicate_cover[key] - {pair_id} 
+                self.predicate_cover[predicate] = self.predicate_cover[predicate] - {pair_id} 
                 
                 # Check if it still has pairs
-                self.predicate_info[key]['has_pairs'] = bool(len(self.predicate_cover[key]))
+                this_predicate_info['has_pairs'] = bool(len(self.predicate_cover[predicate]))        
+        
+        
+            # Compute pseudo-precision (classifier + blocking precision)
+            num_covered_matches = sum(self.is_match_from_classifier[pair_id] \
+                                  and self.is_match[pair_id] \
+                                  for pair_id in this_predicate_info['labelled_pairs'])
+            num_covered = sum(self.is_match_from_classifier[pair_id] \
+                                  for pair_id in this_predicate_info['labelled_pairs'])
+
+        
+            if num_covered:
+                this_predicate_info['precision'] = num_covered_matches / num_covered
+            else:
+                this_predicate_info['precision'] = 0.1
             
-            # Update recall (on examples not selected using this predicate)
-            if (self.num_matches - self.predicate_info[key]['num_matches_selected']):
-                self.predicate_info[key]['recall'] = \
-                    (self.predicate_info[key]['num_matches'] - self.predicate_info[key]['num_matches_selected']) / (self.num_matches - self.predicate_info[key]['num_matches_selected'])
-                    
-            # Compute ratio
-            self.predicate_info[key]['ratio'] = self.predicate_info[key].get('precision', 0.1) \
-                                        * self.predicate_info[key].get('recall', 0.1)  
-                               
+            # Compute pseudo-recall (blocking only, exlcuding matches from selected predicate)
+            num_covered_matches = sum(self.is_match[pair_id] \
+                                  for pair_id in this_predicate_info['labelled_pairs'])      
+            num_covered_matches_selected = sum(self.is_match[pair_id] \
+                                  for pair_id in this_predicate_info['labelled_pairs_selected'])    
+            if (self.num_matches-num_covered_matches_selected) >= 2:
+                this_predicate_info['recall'] = (num_covered_matches-num_covered_matches_selected) \
+                                                / (self.num_matches-num_covered_matches_selected)   
+            
+            # Compute ratio$
+            this_predicate_info['ratio'] = this_predicate_info['precision'] * this_predicate_info['recall']
 
-
-    def get_best_predicate(self):
+    def get_sorted_predicates(self):
         '''Returns the predicate that has the highest ratio'''
-        return max(self.predicate_info.values(), key=lambda x: x['ratio'] * x['has_pairs'])['key']
+        return [x['key'] for x in sorted(self.predicate_info.values(), \
+                key=lambda x: x['ratio'] * x['has_pairs'], reverse=True)]
 
     def choose_pair(self, proba=0.5):
         rand_val = random.random()
+        
+        sorted_predicates = self.get_sorted_predicates()
+        self.best_predicate = sorted_predicates[0]
         if rand_val <= proba:
             # Choose best_predicate
             print('Getting best')
-            predicate = self.get_best_predicate()
+            predicate = self.best_predicate 
+            pair_ids = labeller.predicate_cover[predicate]
         else:
-            for _ in range(100):
-                predicate = random.choice(list(self.predicate_info.keys()))
-                if self.predicate_info[predicate]['has_pairs']:
+            for predicate in sorted_predicates[1:]:
+                pair_ids = labeller.predicate_cover[predicate] - labeller.predicate_cover[self.best_predicate]
+                if pair_ids:
                     break
             else:
                 raise RuntimeError('Could not found predicate with pairs')
-            
-        pair_id = self.predicate_cover[predicate].pop()        
+    
+        pair_id = random.choice(list(pair_ids))
+        self.predicate_cover[predicate].remove(pair_id) 
         return predicate, pair_id
+
+    def score_predicate(self, predicate, real_labelled):
+        # Evaluate predicate
+        guessed_as_dupes = {x for x in self.predicate_cover[predicate] \
+                            if self.is_match_from_classifier[x]}
+        
+        actual_dupes = {i for i, x in enumerate(real_labelled) if x['match']}
+        
+        precision = len(guessed_as_dupes & actual_dupes) / max(len(guessed_as_dupes), 1)
+        recall = len(guessed_as_dupes & actual_dupes) / max(len(actual_dupes), 1)
+        ratio = precision * recall
+        
+        return precision, recall, ratio
+
+
+
+import copy
+
+manual_labelling = False
+max_labels = 50
+prop = 0.5
+n = 3
 
 # Load prelabelled data for testing
 with open('temp_labelling.json') as f:
@@ -493,45 +533,98 @@ with open('temp_labelling.json') as f:
 # Candidates of pairs to be labelled
 candidates = [pair['candidate'] for pair in real_labelled]
 
-
 # Initiate
-labeller = Labeller(candidates, blocker)
+labeller = Labeller(candidates, blocker, datamodel, n)
 
 quit_ = False
-while not quit_:
-    selected_predicate, pair_id = labeller.choose_pair(0.5)
+hist_metrics = []
+final_metrics = []
+while (not quit_) and labeller.num_labelled <= max_labels:
+    selected_predicate, pair_id = labeller.choose_pair(prop)
     
     pprint.pprint(labeller.predicate_info[selected_predicate])
+    print('Is match from classifier:', labeller.is_match_from_classifier[pair_id])
+    print('Num matches: {0} ; Num labelled: {1}'.format(labeller.num_matches, labeller.num_labelled))
     my_print(labeller.candidates[pair_id])
     
-    while True:
-        input_ = input('>')
-        if input_ == 'y':
-            is_match = True
-            break
-        elif input_ == 'n':
-            is_match = False
-            break
-        elif input_ == 'f':
-            quit_ = True
-            break
-        else:
-            print('(y)es, (n)o, or (f)inished')
-            
-    if input_ in ['y', 'n']:
-        labeller.update(selected_predicate, pair_id, is_match)
+    hist_metrics.append(copy.deepcopy(labeller.predicate_info[labeller.best_predicate]))
+    final_metrics.append(labeller.predicate_info[labeller.best_predicate])
+    
+    if manual_labelling:
+        while True:
+            input_ = input('>')
+            if input_ == 'y':
+                is_match = True
+                break
+            elif input_ == 'n':
+                is_match = False
+                break
+            elif input_ == 'f':
+                quit_ = True
+                break
+            else:
+                print('(y)es, (n)o, or (f)inished')
+                
+        if input_ in ['y', 'n']:
+            labeller.update(selected_predicate, pair_id, is_match)
+    else:
+        labeller.update(selected_predicate, pair_id, real_labelled[pair_id]['match'])
         #labelled.append({'candidate': candidates[pair_id], 'match': is_match})
+
+
+
+
 
 assert False
 
-tab = df_from_predicate_cover(predicate_cover)
-tab['col'] = tab.predicate.apply(get_col)
-tab.groupby('col')['count'].mean() # meaningfull columns
+final_predicate = labeller.best_predicate
+precision, recall, ratio = labeller.score_predicate(final_predicate, real_labelled)
 
-# Create double key
-double_predicate_cover = make_n_cover(predicate_cover, 2)
-double_tab = df_from_predicate_cover(double_predicate_cover)
 
-# Create triple key
-triple_predicate_cover = make_n_cover(predicate_cover, 3)
-triple_tab = df_from_predicate_cover(triple_predicate_coverr)
+print('Precision: {0} ; Recall: {1} ; Ratio: {2}'.format(precision, recall, ratio))
+
+assert False
+
+
+# Print best_predicate evolution
+next_id = 0
+class_id = dict()
+best_ids = []
+for predicate_info in hist_metrics:
+    predicate = predicate_info['key']
+    if predicate not in class_id:
+        class_id[predicate] = next_id
+        next_id += 1
+    best_ids.append(class_id[predicate])
+print(best_ids)
+
+
+# Print final estimated metrics
+for metric in ['precision', 'recall', 'ratio']:
+    print('\nMetric:', metric)
+    print([predicate_info[metric] for predicate_info in hist_metrics])
+    print([predicate_info[metric] for predicate_info in final_metrics])
+
+
+# Evaluate real predicate metrics as function of iterations
+predicate_metrics = dict()
+for x in hist_metrics:
+    predicate = x['key']
+    if predicate not in predicate_metrics:
+        predicate_metrics[predicate] = labeller.score_predicate(predicate, real_labelled)
+
+real_metric = [predicate_metrics[x['key']] for x in hist_metrics]
+
+
+#
+sorted_predicates = labeller.get_sorted_predicates()
+for predicate in sorted_predicates[:10]:
+    print(labeller.score_predicate(predicate, real_labelled))
+    
+#
+actual_dupes = {i for i, x in enumerate(real_labelled) if x['match']}
+
+for predicate in sorted_predicates[1:400]:
+    pair_ids = labeller.predicate_cover[predicate] - labeller.predicate_cover[labeller.best_predicate]
+    print('Extra pairs:', len(pair_ids), ' | precision: ', len(pair_ids & actual_dupes) / max(len(pair_ids), 1))
+    
