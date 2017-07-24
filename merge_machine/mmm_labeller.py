@@ -386,19 +386,34 @@ Compute threshold on best block each time
 Classifier should be corrected for precision of blocking
 Ratio should include absolute precision of blocking (without string distance)
 
+Choose pairs based on classifier probability
 '''
 
 from sklearn import linear_model
 
 class Labeller():
-    def __init__(self, candidates, blocker, datamodel, n=3):
+    def __init__(self, candidates, blocker, datamodel, n=3, min_pairs_for_classifier=10**9):
         self.distances = datamodel.distances(candidates)
         self.classifier = self._init_classifier()
+        self.min_pairs_for_classifier = min_pairs_for_classifier
         self.candidates = candidates
         self.is_match_from_classifier = np.array([True]*len(candidates))
         self.is_match = dict()
-        self.predicate_cover = cover(blocker, candidates, 1)
-        self.predicate_cover = make_n_cover(self.predicate_cover, n)
+        
+        
+        # Include equivalent predicates
+        all_predicate_cover = cover(blocker, candidates, 1)
+        all_predicate_cover = make_n_cover(all_predicate_cover, n) # TODO: hash before to save time ?
+        
+        hashes_included = set()
+        self.predicate_cover = dict()
+        for predicate, cover_ in all_predicate_cover.items():
+            hash_ = hash(cover_.__str__())
+            if hash_ not in hashes_included:
+                self.predicate_cover[predicate] = cover_
+                hashes_included.add(hash_)
+
+        
         self.predicate_info = {key: {'key': key, 
                                      'labelled_pairs': set(), # Labelled pairs covered by this predicate
                                      'labelled_pairs_selected': set(), # Pairs selected precisely to test this preidcate
@@ -411,7 +426,10 @@ class Labeller():
         self.candidate_cover = invert_predicate_cover(self.predicate_cover)
         self.num_matches = 0
         self.num_labelled = 0
+        
+        self.best_predicate = list(self.predicate_cover.keys())[0]
     
+
     
     def _init_classifier(self):
         classifier = linear_model.LogisticRegression(class_weight="balanced")
@@ -435,7 +453,7 @@ class Labeller():
         self.predicate_info[selected_predicate]['labelled_pairs_selected'].add(pair_id)
         
         # Update matches_from classifier
-        use_classifier = (self.num_labelled - self.num_matches >= 5)
+        use_classifier = (self.num_labelled - self.num_matches >= self.min_pairs_for_classifier)
         if use_classifier:
             self.train_classifier()
             self.is_match_from_classifier = self.classifier.predict(self.distances)
@@ -498,10 +516,9 @@ class Labeller():
                 if pair_ids:
                     break
             else:
-                raise RuntimeError('Could not found predicate with pairs')
+                raise RuntimeError('Could not found predicate with pairs')      
     
         pair_id = random.choice(list(pair_ids))
-        self.predicate_cover[predicate].remove(pair_id) 
         return predicate, pair_id
 
     def score_predicate(self, predicate, real_labelled):
@@ -522,29 +539,38 @@ class Labeller():
 import copy
 
 manual_labelling = False
-max_labels = 50
+max_labels = 100
 prop = 0.5
 n = 3
+min_pairs_for_classifier = 10**9
+
+num_matches = 50
 
 # Load prelabelled data for testing
 with open('temp_labelling.json') as f:
     real_labelled = json.load(f)
+random.shuffle(real_labelled)    
 
 # Candidates of pairs to be labelled
 candidates = [pair['candidate'] for pair in real_labelled]
 
+
 # Initiate
-labeller = Labeller(candidates, blocker, datamodel, n)
+labeller = Labeller(candidates, blocker, datamodel, n, min_pairs_for_classifier)
 
 quit_ = False
 hist_metrics = []
 final_metrics = []
-while (not quit_) and labeller.num_labelled <= max_labels:
-    selected_predicate, pair_id = labeller.choose_pair(prop)
+while (not quit_) \
+        and labeller.num_labelled <= max_labels\
+        and labeller.num_matches <= num_matches:
+    predicate, pair_id = labeller.choose_pair(prop)
     
-    pprint.pprint(labeller.predicate_info[selected_predicate])
-    print('Is match from classifier:', labeller.is_match_from_classifier[pair_id])
+    pprint.pprint({key: val for key, val in labeller.predicate_info[predicate].items() if 'labelled_pairs' not in key})
     print('Num matches: {0} ; Num labelled: {1}'.format(labeller.num_matches, labeller.num_labelled))
+    print('Is match from classifier:', labeller.is_match_from_classifier[pair_id])
+    print('Is match from real_labelling', real_labelled[pair_id]['match'])
+
     my_print(labeller.candidates[pair_id])
     
     hist_metrics.append(copy.deepcopy(labeller.predicate_info[labeller.best_predicate]))
@@ -566,21 +592,19 @@ while (not quit_) and labeller.num_labelled <= max_labels:
                 print('(y)es, (n)o, or (f)inished')
                 
         if input_ in ['y', 'n']:
-            labeller.update(selected_predicate, pair_id, is_match)
+            labeller.update(predicate, pair_id, is_match)
     else:
-        labeller.update(selected_predicate, pair_id, real_labelled[pair_id]['match'])
+        labeller.update(predicate, pair_id, real_labelled[pair_id]['match'])
         #labelled.append({'candidate': candidates[pair_id], 'match': is_match})
 
 
 
 
+print('\n')
 
-assert False
-
+# Print realest metric
 final_predicate = labeller.best_predicate
 precision, recall, ratio = labeller.score_predicate(final_predicate, real_labelled)
-
-
 print('Precision: {0} ; Recall: {1} ; Ratio: {2}'.format(precision, recall, ratio))
 
 assert False
@@ -616,10 +640,10 @@ for x in hist_metrics:
 real_metric = [predicate_metrics[x['key']] for x in hist_metrics]
 
 
-#
+# Print real score for top predicates 
 sorted_predicates = labeller.get_sorted_predicates()
 for predicate in sorted_predicates[:10]:
-    print(labeller.score_predicate(predicate, real_labelled))
+    print(class_id[predicate], ':', labeller.score_predicate(predicate, real_labelled))
     
 #
 actual_dupes = {i for i, x in enumerate(real_labelled) if x['match']}
