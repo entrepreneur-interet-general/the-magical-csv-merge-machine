@@ -578,10 +578,10 @@ source['good'] = source['uai'].str.upper() == source['ref_uai'].str.upper()
 
 for id_source in source[~source.good & source.ref_uai.notnull()].index:
     anal_print(id_source)
-    
-    
-    
-    
+
+
+
+
 # Evaluate predicate
 pred_string = '(SimplePredicate: (commonIntegerPredicate, localite_acheminement_uai), SimplePredicate: (firstTokenPredicate, localite_acheminement_uai), SimplePredicate: (commonFourGram, localite_acheminement_uai))'
 pred_string = '(SimplePredicate: (suffixArray, full_name), SimplePredicate: (metaphoneToken, localite_acheminement_uai), SimplePredicate: (tokenFieldPredicate, full_name))'
