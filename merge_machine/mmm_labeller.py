@@ -394,7 +394,8 @@ class IDFDistance():
             self.idfs[col] = self._gen_idf(ref, col)
         
         self.default_value = 0
-        self.default_idf_source = 5
+        self.default_idf_source = 8.7
+        self.default_idf_ref = 8.7
     
     @staticmethod        
     def _gen_idf(ref, col):
@@ -426,7 +427,7 @@ class IDFDistance():
         
         val_0 = sum(idf[word]**2 for word in common)
         val_1 = math.sqrt(sum(idf.get(word, self.default_idf_source)**2 for word in tokens_1))
-        val_2 = math.sqrt(sum(idf[word]**2 for word in tokens_2))
+        val_2 = math.sqrt(sum(idf.get(word, self.default_idf_ref)**2 for word in tokens_2))
         
         return 1 - val_0 / (val_1 * val_2)
         
@@ -499,8 +500,12 @@ class Learner():
     
     def _init_classifier(self):
         '''Initiate the distance-based classifier'''
-        classifier = linear_model.LogisticRegression(class_weight="balanced")
-        classifier.intercept_ = np.array([0])
+        #        classifier = linear_model.SGDClassifier(class_weight="balanced", 
+        #                                                     fit_intercept=True, 
+        #                                                     loss='modified_huber')
+        classifier = linear_model.LogisticRegressionCV(class_weight="balanced", 
+                                                     fit_intercept=True)
+        classifier.intercept_ = np.array([0.])
         classifier.coef_ = np.array([[0.5 for _ in range(self.distances.shape[1])]])
         return classifier
     
@@ -606,13 +611,13 @@ class Learner():
     
         pair_id = random.choice(list(pair_ids))
         return predicate, pair_id
+    
 
-    @staticmethod
-    def compute_ratio(precision, recall, target_precision=0.85):
-        if precision >= target_precision:
+    def compute_ratio(self, precision, recall, target_precision=0.85):
+        if (precision >= target_precision) or (self.num_labelled <= 10):
             return precision * recall
         else:
-            return target_precision * (precision/target_precision)**4 * recall
+            return target_precision * (precision/target_precision)**3 * recall
 
     def score_predicate(self, predicate, real_labelled):
         '''
@@ -698,7 +703,7 @@ prop = 0.65
 n = 3
 min_pairs_for_classifier = 3
 
-num_matches = 20
+num_matches = 12
 
 # Load prelabelled data for testing
 with open('temp_labelling.json') as f:
