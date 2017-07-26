@@ -1536,19 +1536,20 @@ def fileToVariantMap(fileName, sep = '|', includeSelf = False, tokenize = False)
 		includeSelf if True, then the main variant will be included in the list of alternative variants
 			(so as to enable partial matching simultaneously).
 	'''
-	otherToMain = defaultdict(list)
+	otherToMain = dict()
 	mainToOther = defaultdict(list)
 	for row in fileRowIterator(fileName, sep):
 		if len(row) < 2: continue
 		r = list([normalizeOrNot(e, tokenize = tokenize)  for e in row])
 		main, alts = r[0], set(r[1:])
 		alts.discard(main)
-		for alt in alts: otherToMain[alt].append(main)
+		for alt in alts: 
+			if alt not in otherToMain:
+				otherToMain[alt] = main
+			elif main not in otherToMain and otherToMain[alt] != main:
+				otherToMain[main] = otherToMain[alt]
 		mainToOther[main].extend(list(alts))
-	logging.debug('Main variant collisions from {}:'.format(fileName))
-	for (other, main) in otherToMain.items():
-		if len(main) > 1: logging.debug(other + ' --> ' + '|'.join(main))
-	l = list([(other, next(iter(main))) for (other, main) in otherToMain.items() if len(main) < 2])
+	l = list(otherToMain.items())
 	if includeSelf: l = list([(main, main) for main in mainToOther.keys()]) + l
 	return dict(l)
 
@@ -1657,6 +1658,9 @@ def generateValueMatchers(lvl = 0):
 		Parameter:
 		lvl 0 for lightweight matching, 2 for the heaviest variants, 1 as an intermediate level
 		'''
+	yield VocabMatcher(F_RD_STRUCT, fileToSet('org_RD.vocab'), ignoreCase = True, partial = False,
+		matcher = VariantExpander('org_hal2.syn', targetType = F_RD_STRUCT, keepContext = True ))
+	return
 
 	# Identifiers (typically but not necessarily unique)
 	# yield TemplateMatcher('Identifiant', 90) # TODO distinguish unique vs. non-unique
@@ -1834,6 +1838,8 @@ def generateValueMatchers(lvl = 0):
 
 	# Normalize by expanding alternative variants (such as acronyms, abbreviations and synonyms) to their main variant
 	if lvl >= 0:
+		yield VocabMatcher(F_RD_STRUCT, fileToSet('org_RD.vocab'), ignoreCase = True, partial = False,
+			matcher = VariantExpander('org_hal2.syn', targetType = F_RD_STRUCT, keepContext = True ))
 		yield VocabMatcher(F_ENTREPRISE, fileToSet('org_entreprise.vocab'), ignoreCase = True, partial = False,
 			matcher = VariantExpander('org_entreprise.syn', targetType = F_ENTREPRISE, keepContext = True ))
 		yield VocabMatcher(F_ETAB_ENSSUP, fileToSet('org_enseignement.vocab'), ignoreCase = True, partial = False,
