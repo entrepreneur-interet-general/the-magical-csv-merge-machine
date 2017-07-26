@@ -1658,9 +1658,6 @@ def generateValueMatchers(lvl = 0):
 		Parameter:
 		lvl 0 for lightweight matching, 2 for the heaviest variants, 1 as an intermediate level
 		'''
-	yield VocabMatcher(F_RD_STRUCT, fileToSet('org_RD.vocab'), ignoreCase = True, partial = False,
-		matcher = VariantExpander('org_hal2.syn', targetType = F_RD_STRUCT, keepContext = True ))
-	return
 
 	# Identifiers (typically but not necessarily unique)
 	# yield TemplateMatcher('Identifiant', 90) # TODO distinguish unique vs. non-unique
