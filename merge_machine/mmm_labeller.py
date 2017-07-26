@@ -4,41 +4,61 @@
 Created on Thu Jun 29 18:18:51 2017
 
 @author: leo
+
+loop:
+1) Choose predicate (50% with highest ratio ; 50% random not)
+2) Choose a sample (include string distance ?)
+3) Update predicate_info including precision, recall(exclude current) and
+    ratio (and sort ?)
+
+WARNING: elements are poped from predicate_cover    
+
+
+
+*****  
+
+We want to learn:
+
+1) Good blocking rule
+2) Good string distance (consider it to be a classifier) for this blocking rule.
+
+Ideas:
+Below threshold doesn't influence precision
+Keep string distance in labels and simultaneously learn the string distance
+In info keep all string distances and compute threshold from 2 matches
+and 2 non matches up.
+Compute threshold on best block each time    
+
+1) Build string distance CLASSIFIER on ALL examples and make prediction for each example
+2) Blocker rules: Compute Precision using new info. RECALL doesn't change. Compute RATIO
+3) 50% Choose best predicate (highest RATIO) and best sample (highest probability with distance CLASSIFIER) 
+
+Classifier should be corrected for precision of blocking
+Ratio should include absolute precision of blocking (without string distance)
+
+Choose pairs based on classifier probability
 """
 
-from future.utils import viewitems, viewvalues
+from future.utils import viewitems
 
 from collections import defaultdict, deque
 import functools
 import itertools
 import json
+import math
 import os
 from string import punctuation
 import random
 
 import dedupe
 from dedupe import blocking, predicates, sampling
-from highered import CRFEditDistance
 import numpy as np
 import pandas as pd
 import pprint
+from sklearn import linear_model
 import unidecode
 
 
-def pd_pre_process(series, remove_punctuation=False):
-    '''Applies pre-processing to series using builtin pandas.str'''
-    series = series.str.replace(' +', ' ')
-    series = series.str.replace('\n', ' ')
-    if remove_punctuation:
-        for punc in punctuation:
-            series = series.str.replace(punc, ' ')
-    series = series.str.strip(' \"\'').str.lower()
-    
-    sel = series.notnull()
-    series[sel] = series[sel].apply(lambda x: unidecode.unidecode(x))
-    
-    series = series.replace('', np.nan)
-    return series 
 
 def interleave(*iterables) :
     return itertools.chain.from_iterable(zip(*iterables))
@@ -176,8 +196,6 @@ def linkSamplePredicates(sample_size, my_predicates, items1, items2) :
 
         yield predicate, linkSamplePredicate(subsample_size, predicate, items1, items2) # change here
 
-
-
 def cover(blocker, pairs, compound_length) : # pragma: no cover
     cover = coveredPairs(blocker.predicates, pairs)
     cover = compound(cover, compound_length)
@@ -210,7 +228,6 @@ def compound(cover, compound_length) :
                 compound_cover = cover[a] & cover[b]
                 if compound_cover:
                     cover[CP(compound_predicate)] = compound_cover
-
     return cover
 
 def remaining_cover(coverage, covered=set()):
@@ -244,42 +261,69 @@ def get_col(predicate):
 
 linkBlockedSample = functools.partial(blockedSample, linkSamplePredicates) 
 
-dir_path = 'local_test_data'
+# =============================================================================
+# ^ Up is from dedupe
+# =============================================================================
 
-source = pd.read_csv(os.path.join(dir_path, 'source.csv'), dtype=str)
-ref = pd.read_csv(os.path.join(dir_path, 'ref.csv'), dtype=str)
+def pd_pre_process(series, remove_punctuation=False):
+    '''Applies pre-processing to series using builtin pandas.str'''
+    series = series.str.replace(' +', ' ')
+    series = series.str.replace('\n', ' ')
+    if remove_punctuation:
+        for punc in punctuation:
+            series = series.str.replace(punc, ' ')
+    series = series.str.strip(' \"\'').str.lower()
+    
+    sel = series.notnull()
+    series[sel] = series[sel].apply(lambda x: unidecode.unidecode(x))
+    
+    series = series.replace('', np.nan)
+    return series 
+
+def prepare_data(source, ref, match_cols):    
+    ref_cols = [x['ref'] for x in match_cols]
+    
+    temp_match_cols = {x['source']: x['ref'] for x in match_cols}
+    
+    # Replace column_names in source by those in ref
+    source.columns = [temp_match_cols.get(x, x) for x in source.columns]
+    
+    real_match_cols = [pair['ref'] for pair in match_cols]
+    
+    for col in real_match_cols:
+        source[col] = pd_pre_process(source[col], remove_punctuation=True)
+        ref[col] = pd_pre_process(ref[col], remove_punctuation=True)
+    
+    # Replace np.nan 's by None 's
+    source = source.where(source.notnull(), None)
+    ref = ref.where(ref.notnull(), None)
+    
+    source_items = source[ref_cols].to_dict('index')
+    ref_items = ref[ref_cols].to_dict('index')
+    return source_items, ref_items
+
+def gen_dedupe_datamodel(ref_cols):
+    fields = [{'crf': True, 'missing_values': True, 'type': 'String', 'field': x} for x in ref_cols]
+    dedupe_datamodel = dedupe.datamodel.DataModel(fields)
+    return dedupe_datamodel
+
+
+source_path = os.path.join('local_test_data', 'source.csv')
+ref_path = os.path.join('local_test_data', 'ref.csv')
 
 match_cols = [{'source': 'departement', 'ref': 'departement'},
               {'source': 'commune', 'ref': 'localite_acheminement_uai'},
               {'source': 'lycees_sources', 'ref': 'full_name'}]
 
-source_cols = [x['source'] for x in match_cols]
-ref_cols = [x['ref'] for x in match_cols]
-
-temp_match_cols = {x['source']: x['ref'] for x in match_cols}
-
-# Replace column_names in source by those in ref
-source.columns = [temp_match_cols.get(x, x) for x in source.columns]
-
-fields = [{'crf': True, 'missing_values': True, 'type': 'String', 'field': x} for x in ref_cols]
-
 real_match_cols = [pair['ref'] for pair in match_cols]
 
-for col in real_match_cols:
-    source[col] = pd_pre_process(source[col], remove_punctuation=True)
-    ref[col] = pd_pre_process(ref[col], remove_punctuation=True)
+source = pd.read_csv(source_path, dtype=str)
+ref = pd.read_csv(ref_path, dtype=str)
+source_items, ref_items = prepare_data(source, ref, match_cols)
 
-# Replace np.nan 's by None 's
-source = source.where(source.notnull(), None)
-ref = ref.where(ref.notnull(), None)
 
-source_items = source[ref_cols].to_dict('index')
-ref_items = ref[ref_cols].to_dict('index')
-
-datamodel = dedupe.datamodel.DataModel(fields)
-my_predicates = list(datamodel.predicates(index_predicates=False, canopies=False)) # TODO: set to True
-
-compound_length = 1
+dedupe_datamodel = gen_dedupe_datamodel(real_match_cols)
+my_predicates = list(dedupe_datamodel.predicates(index_predicates=False, canopies=False)) # TODO: set to True
 
 blocker = blocking.Blocker(my_predicates)
 
@@ -301,16 +345,6 @@ def my_print(candidate):
 def my_other_print(record):
     for key, value in record.items():
         print(value)
-
-
-def pre_process_string(string):
-    '''DEPRECATE'''
-    TO_REPLACE = [('lycee', ''), (' de ', ' ')]
-    string = unidecode.unidecode(string.lower())
-    for pair in TO_REPLACE:
-        string = string.replace(pair[0], pair[1])
-    return string
-
 
 def make_n_cover(dupe_cover, n):
     '''Take a single dupe_cover and creates cover for intersection of covers'''
@@ -350,45 +384,6 @@ def make_n_cover(dupe_cover, n):
 #    return (source_id, ref_id)
 
 
-    
-
-'''
-loop:
-1) Choose predicate (50% with highest ratio ; 50% random not)
-2) Choose a sample (include string distance ?)
-3) Update predicate_info including precision, recall(exclude current) and
-    ratio (and sort ?)
-
-WARNING: elements are poped from predicate_cover    
-
-
-
-*****  
-
-We want to learn:
-
-1) Good blocking rule
-2) Good string distance (consider it to be a classifier) for this blocking rule.
-
-Ideas:
-Below threshold doesn't influence precision
-Keep string distance in labels and simultaneously learn the string distance
-In info keep all string distances and compute threshold from 2 matches
-and 2 non matches up.
-Compute threshold on best block each time    
-
-1) Build string distance CLASSIFIER on ALL examples and make prediction for each example
-2) Blocker rules: Compute Precision using new info. RECALL doesn't change. Compute RATIO
-3) 50% Choose best predicate (highest RATIO) and best sample (highest probability with distance CLASSIFIER) 
-
-Classifier should be corrected for precision of blocking
-Ratio should include absolute precision of blocking (without string distance)
-
-Choose pairs based on classifier probability
-'''
-
-import math
-from sklearn import linear_model
 
 class IDFDistance():
     ''''Class to compute distances based on inverse document frequency'''
@@ -413,7 +408,7 @@ class IDFDistance():
         
         idf = dict()
         for word, word_count in word_counts.items():
-            idf[word] =  math.log(num_docs / word_count) 
+            idf[word] =  math.log((num_docs / word_count))
         return idf
     
     @staticmethod
@@ -429,11 +424,11 @@ class IDFDistance():
         tokens_2 = self._tokenize(string_2)
         common = tokens_1 & tokens_2
         
-        val_0 = sum(idf[word] for word in common)
+        val_0 = sum(idf[word]**2 for word in common)
         val_1 = math.sqrt(sum(idf.get(word, self.default_idf_source)**2 for word in tokens_1))
         val_2 = math.sqrt(sum(idf[word]**2 for word in tokens_2))
         
-        return val_0 / (val_1 * val_2)
+        return 1 - val_0 / (val_1 * val_2)
         
     def distances(self, candidates):
         '''
@@ -612,10 +607,17 @@ class Learner():
         pair_id = random.choice(list(pair_ids))
         return predicate, pair_id
 
+    @staticmethod
+    def compute_ratio(precision, recall, target_precision=0.85):
+        if precision >= target_precision:
+            return precision * recall
+        else:
+            return target_precision * (precision/target_precision)**4 * recall
+
     def score_predicate(self, predicate, real_labelled):
         '''
         If real labels are available, scores the given predicate (precision, 
-        recall, ratio)
+        recall, ratio)        
         '''
         # Evaluate predicate
         guessed_as_dupes = {x for x in self.predicate_cover[predicate] \
@@ -625,9 +627,22 @@ class Learner():
         
         precision = len(guessed_as_dupes & actual_dupes) / max(len(guessed_as_dupes), 1)
         recall = len(guessed_as_dupes & actual_dupes) / max(len(actual_dupes), 1)
-        ratio = precision * recall
+        ratio = self.compute_ratio(precision, recall)
         
         return precision, recall, ratio
+
+
+
+class CompoundDatamodel():
+    '''
+    Creates an object with a "distances" method that concatenates results
+    of the "distances" methods of all objects passed as arguments for __init__
+    '''
+    def __init__(self, *datamodels):
+        self.datamodels = datamodels
+        
+    def distances(self, candidates):
+        return np.concatenate(list(dm.distances(candidates) for dm in self.datamodels), 1)
 
 
 def label(learner, real_labelled=None, verbose=True):
@@ -683,7 +698,7 @@ prop = 0.65
 n = 3
 min_pairs_for_classifier = 3
 
-num_matches = 12
+num_matches = 20
 
 # Load prelabelled data for testing
 with open('temp_labelling.json') as f:
@@ -695,16 +710,9 @@ candidates = [pair['candidate'] for pair in real_labelled]
 
 
 
-class CompoundDatamodel():
-    def __init__(self, *datamodels):
-        self.datamodels = datamodels
-        
-    def distances(self, candidates):
-        return np.concatenate(list(dm.distances(candidates) for dm in self.datamodels), 1)
-
 # Initiate
-my_datamodel = IDFDistance(ref, ref_cols)
-datamodel = CompoundDatamodel(datamodel, my_datamodel)
+my_datamodel = IDFDistance(ref, real_match_cols)
+datamodel = CompoundDatamodel(dedupe_datamodel, my_datamodel)
 learner = Learner(candidates, blocker, datamodel, n, min_pairs_for_classifier)
 
 # Perform latbelling
@@ -750,16 +758,16 @@ source_best_match = dict()
 for id_source, candidates in source_candidates.items():
     if len(candidates) == 0:
         source_best_match[id_source] = None
-    #    elif len(candidates) == 1:
-    #         id_ref = next(iter(candidates))
-    #         source_best_match[id_source] = id_ref
+    elif len(candidates) == 1:
+         id_ref = next(iter(candidates))
+         source_best_match[id_source] = id_ref
     else:
         list_candidates = list(candidates)
         distances = get_distances(datamodel, classifier, id_source, list_candidates)
         scores = zip(list_candidates, classifier.predict_proba(distances)[:,1])
         best_score = max(scores, key=lambda x: x[1])
-#        if best_score[1] >= 0.5:
-        source_best_match[id_source]  = best_score[0]
+        if best_score[1] >= 0.5:
+            source_best_match[id_source]  = best_score[0]
 #        else:
 #            source_best_match[id_source] = None
 
@@ -878,16 +886,17 @@ real_metric = [predicate_metrics[x['key']] for x in hist_metrics]
 # Print real score for top predicates 
 sorted_predicates = learner.get_sorted_predicates()
 for predicate in sorted_predicates[:10]:
-    print(class_id[predicate], ':', learner.score_predicate(predicate, real_labelled))
+    print(learner.score_predicate(predicate, real_labelled))
     
 # Check influence of using multiple dupes
 actual_dupes = {i for i, x in enumerate(real_labelled) if x['match']}
 
-for predicate in sorted_predicates[1:20]:
+for predicate in sorted_predicates[1:]:
     pair_ids = learner.predicate_cover[predicate] - learner.predicate_cover[learner.best_predicate]
-    precision = len(pair_ids & actual_dupes) / max(len(pair_ids), 1)
-    print({key: value for key, value in learner.predicate_info[predicate].items() if 'labelled' not in key})
-    print('Extra pairs:', len(pair_ids), ' | precision: ', precision)
+    precision = len(pair_ids & actual_dupes) / max(len(pair_ids), 1)    
+    if (precision >= 0.8) and (len(pair_ids) >= 1):
+        print({key: value for key, value in learner.predicate_info[predicate].items() if 'labelled' not in key})
+        print('Extra pairs:', len(pair_ids), ' | precision: ', precision)
     
     
     
