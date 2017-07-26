@@ -25,7 +25,6 @@ import pprint
 import unidecode
 
 
-
 def pd_pre_process(series, remove_punctuation=False):
     '''Applies pre-processing to series using builtin pandas.str'''
     series = series.str.replace(' +', ' ')
@@ -257,15 +256,12 @@ match_cols = [{'source': 'departement', 'ref': 'departement'},
 source_cols = [x['source'] for x in match_cols]
 ref_cols = [x['ref'] for x in match_cols]
 
-
 temp_match_cols = {x['source']: x['ref'] for x in match_cols}
-
 
 # Replace column_names in source by those in ref
 source.columns = [temp_match_cols.get(x, x) for x in source.columns]
 
 fields = [{'crf': True, 'missing_values': True, 'type': 'String', 'field': x} for x in ref_cols]
-
 
 real_match_cols = [pair['ref'] for pair in match_cols]
 
@@ -308,6 +304,7 @@ def my_other_print(record):
 
 
 def pre_process_string(string):
+    '''DEPRECATE'''
     TO_REPLACE = [('lycee', ''), (' de ', ' ')]
     string = unidecode.unidecode(string.lower())
     for pair in TO_REPLACE:
@@ -316,6 +313,7 @@ def pre_process_string(string):
 
 
 def make_n_cover(dupe_cover, n):
+    '''Take a single dupe_cover and creates cover for intersection of covers'''
     dupe_cover_n = dict() 
     for x in itertools.combinations(dupe_cover.keys(), n):
         elems = dupe_cover[x[0]]
@@ -389,20 +387,23 @@ Ratio should include absolute precision of blocking (without string distance)
 Choose pairs based on classifier probability
 '''
 
+import math
 from sklearn import linear_model
 
-class DistanceComputer():
+class IDFDistance():
+    ''''Class to compute distances based on inverse document frequency'''
     def __init__(self, ref, columns):
         self.columns = columns
         self.idfs = dict()
         for col in self.columns:
-            self.idfs[col] = self._get_idf(ref, col)
+            self.idfs[col] = self._gen_idf(ref, col)
         
         self.default_value = 0
         self.default_idf_source = 5
     
     @staticmethod        
-    def _get_idf(ref, col):
+    def _gen_idf(ref, col):
+        '''Generate IDF dict (key is word, value is idf)'''
         word_counts = defaultdict(int)
         num_docs = ref.shape[0]
 
@@ -420,7 +421,7 @@ class DistanceComputer():
         return set(string.split())
     
     def idf_cosine(self, idf, string_1, string_2):
-        
+        '''Computes cosine distance between string_1 and string_2'''
         if (string_1 is None) or (string_2 is None):
             return self.default_value
         
@@ -429,16 +430,15 @@ class DistanceComputer():
         common = tokens_1 & tokens_2
         
         val_0 = sum(idf[word] for word in common)
-        try:
-            val_1 = math.sqrt(sum(idf.get(word, self.default_idf_source)**2 for word in tokens_1))
-            val_2 = math.sqrt(sum(idf[word]**2 for word in tokens_2))
-        except:
-            import pdb
-            pdb.set_trace()
+        val_1 = math.sqrt(sum(idf.get(word, self.default_idf_source)**2 for word in tokens_1))
+        val_2 = math.sqrt(sum(idf[word]**2 for word in tokens_2))
         
         return val_0 / (val_1 * val_2)
         
     def distances(self, candidates):
+        '''
+        Computes matrix of distances for all fields for all records in candidates
+        '''
         distances = []
         for candidate in candidates:
             pair_distances = []
@@ -450,7 +450,11 @@ class DistanceComputer():
         return np.array(distances)
 
 
-class Labeller():
+class Learner():
+    '''
+    Class to learn generate training labels while learning good blocking
+    predicates and classifier.    
+    '''
     def __init__(self, candidates, blocker, datamodel, n=3, min_pairs_for_classifier=10**9):
         self.distances = datamodel.distances(candidates)
         self.classifier = self._init_classifier()
@@ -464,13 +468,8 @@ class Labeller():
         all_predicate_cover = cover(blocker, candidates, 1)
         all_predicate_cover = make_n_cover(all_predicate_cover, n) # TODO: hash before to save time ?
         
-        hashes_included = set()
-        self.predicate_cover = dict()
-        for predicate, cover_ in all_predicate_cover.items():
-            hash_ = hash(cover_.__str__())
-            if hash_ not in hashes_included:
-                self.predicate_cover[predicate] = cover_
-                hashes_included.add(hash_)
+        self.predicate_cover = self._restrict_predicate_cover(all_predicate_cover)
+
 
         
         self.predicate_info = {key: {'key': key, 
@@ -488,21 +487,46 @@ class Labeller():
         
         self.best_predicate = list(self.predicate_cover.keys())[0]
     
-
+    @staticmethod
+    def _restrict_predicate_cover(all_predicate_cover):
+        '''
+        Returns a version of predicate cover containing only predicates with
+        distinct covers (based on set string representation hash)
+        '''
+        hashes_included = set()
+        predicate_cover = dict()
+        for predicate, cover_ in all_predicate_cover.items():
+            hash_ = hash(cover_.__str__())
+            if hash_ not in hashes_included:
+                predicate_cover[predicate] = cover_
+                hashes_included.add(hash_)        
+        return predicate_cover
     
     def _init_classifier(self):
+        '''Initiate the distance-based classifier'''
         classifier = linear_model.LogisticRegression(class_weight="balanced")
         classifier.intercept_ = np.array([0])
         classifier.coef_ = np.array([[0.5 for _ in range(self.distances.shape[1])]])
         return classifier
     
-    def train_classifier(self):      
+    def train_classifier(self):
+        '''Train the distance-based classifier on all labelled pairs'''
         pair_match = list(self.is_match.items())
         X = self.distances[[pair_id for (pair_id, _) in pair_match]]
         Y = [is_match for (_, is_match) in pair_match]
         self.classifier.fit(X, Y)
         
     def update(self, selected_predicate, pair_id, is_match):
+        '''
+        Update both global (counts and classifier) and predicate specific 
+        information using the new label provided for the pair.
+        
+        INPUT: 
+            - selected_predicate: predicate used to generate pair_id
+            - pair_id: id of the pair that was labelled
+            - is_match: whether or not the pair is a match or not
+        '''
+        
         # Update global count
         self.num_labelled += 1
         self.num_matches += int(is_match)
@@ -560,6 +584,14 @@ class Labeller():
                 key=lambda x: x['ratio'] * x['has_pairs'], reverse=True)]
 
     def choose_pair(self, proba=0.5):
+        '''
+        Returns a pair to label
+        
+        INPUT:
+            - proba: probability with which the pair is selected from cover of 
+                    the current best predicate
+        
+        '''
         rand_val = random.random()
         
         sorted_predicates = self.get_sorted_predicates()
@@ -568,10 +600,10 @@ class Labeller():
             # Choose best_predicate
             print('Getting best')
             predicate = self.best_predicate 
-            pair_ids = labeller.predicate_cover[predicate]
+            pair_ids = self.predicate_cover[predicate]
         else:
             for predicate in sorted_predicates[1:]:
-                pair_ids = labeller.predicate_cover[predicate] - labeller.predicate_cover[self.best_predicate]
+                pair_ids = self.predicate_cover[predicate] - self.predicate_cover[self.best_predicate]
                 if pair_ids:
                     break
             else:
@@ -581,6 +613,10 @@ class Labeller():
         return predicate, pair_id
 
     def score_predicate(self, predicate, real_labelled):
+        '''
+        If real labels are available, scores the given predicate (precision, 
+        recall, ratio)
+        '''
         # Evaluate predicate
         guessed_as_dupes = {x for x in self.predicate_cover[predicate] \
                             if self.is_match_from_classifier[x]}
@@ -594,12 +630,56 @@ class Labeller():
         return precision, recall, ratio
 
 
+def label(learner, real_labelled=None, verbose=True):
+    '''Human interface for labeling data'''
+    manual_labelling = real_labelled is None
+    
+    quit_ = False
+    hist_metrics = []
+    final_metrics = []
+    while (not quit_) \
+            and learner.num_labelled <= max_labels\
+            and learner.num_matches <= num_matches:
+        predicate, pair_id = learner.choose_pair(prop)
+
+        if verbose:
+            pprint.pprint({key: val for key, val in learner.predicate_info[predicate].items() if 'labelled_pairs' not in key})
+            print('Num matches: {0} ; Num labelled: {1}'.format(learner.num_matches, learner.num_labelled))
+            print('Is match from classifier:', learner.is_match_from_classifier[pair_id])
+            print('Is match from real_labelling', real_labelled[pair_id]['match'])    
+            my_print(learner.candidates[pair_id])
+            
+        hist_metrics.append(copy.deepcopy(learner.predicate_info[learner.best_predicate]))
+        final_metrics.append(learner.predicate_info[learner.best_predicate])
+        
+        if manual_labelling:
+            while True:
+                input_ = input('>')
+                if input_ == 'y':
+                    is_match = True
+                    break
+                elif input_ == 'n':
+                    is_match = False
+                    break
+                elif input_ == 'f':
+                    quit_ = True
+                    break
+                else:
+                    print('(y)es, (n)o, or (f)inished')
+                    
+            if input_ in ['y', 'n']:
+                learner.update(predicate, pair_id, is_match)
+        else:
+            learner.update(predicate, pair_id, real_labelled[pair_id]['match'])
+            #labelled.append({'candidate': candidates[pair_id], 'match': is_match})
+    return learner
+
 
 import copy
 
 manual_labelling = False
 max_labels = 100
-prop = 0.5
+prop = 0.65
 n = 3
 min_pairs_for_classifier = 3
 
@@ -613,64 +693,35 @@ random.shuffle(real_labelled)
 # Candidates of pairs to be labelled
 candidates = [pair['candidate'] for pair in real_labelled]
 
+
+
+class CompoundDatamodel():
+    def __init__(self, *datamodels):
+        self.datamodels = datamodels
+        
+    def distances(self, candidates):
+        return np.concatenate(list(dm.distances(candidates) for dm in self.datamodels), 1)
+
 # Initiate
-datamodel = DistanceComputer(ref, ref_cols)
-labeller = Labeller(candidates, blocker, datamodel, n, min_pairs_for_classifier)
+my_datamodel = IDFDistance(ref, ref_cols)
+datamodel = CompoundDatamodel(datamodel, my_datamodel)
+learner = Learner(candidates, blocker, datamodel, n, min_pairs_for_classifier)
 
-quit_ = False
-hist_metrics = []
-final_metrics = []
-while (not quit_) \
-        and labeller.num_labelled <= max_labels\
-        and labeller.num_matches <= num_matches:
-    predicate, pair_id = labeller.choose_pair(prop)
-    
-    pprint.pprint({key: val for key, val in labeller.predicate_info[predicate].items() if 'labelled_pairs' not in key})
-    print('Num matches: {0} ; Num labelled: {1}'.format(labeller.num_matches, labeller.num_labelled))
-    print('Is match from classifier:', labeller.is_match_from_classifier[pair_id])
-    print('Is match from real_labelling', real_labelled[pair_id]['match'])
-
-    my_print(labeller.candidates[pair_id])
-    
-    hist_metrics.append(copy.deepcopy(labeller.predicate_info[labeller.best_predicate]))
-    final_metrics.append(labeller.predicate_info[labeller.best_predicate])
-    
-    if manual_labelling:
-        while True:
-            input_ = input('>')
-            if input_ == 'y':
-                is_match = True
-                break
-            elif input_ == 'n':
-                is_match = False
-                break
-            elif input_ == 'f':
-                quit_ = True
-                break
-            else:
-                print('(y)es, (n)o, or (f)inished')
-                
-        if input_ in ['y', 'n']:
-            labeller.update(predicate, pair_id, is_match)
-    else:
-        labeller.update(predicate, pair_id, real_labelled[pair_id]['match'])
-        #labelled.append({'candidate': candidates[pair_id], 'match': is_match})
-
-
-
+# Perform latbelling
+learner = label(learner, real_labelled)
 
 print('\n')
 
 # Print realest metric
-final_predicate = labeller.best_predicate
-precision, recall, ratio = labeller.score_predicate(final_predicate, real_labelled)
+final_predicate = learner.best_predicate
+precision, recall, ratio = learner.score_predicate(final_predicate, real_labelled)
 print(final_predicate)
 print('Precision: {0} ; Recall: {1} ; Ratio: {2}'.format(precision, recall, ratio))
 
 
 
-classifier = labeller.classifier
-predicate = predicates.CompoundPredicate(labeller.best_predicate)
+classifier = learner.classifier
+predicate = predicates.CompoundPredicate(learner.best_predicate)
 
 # Hash to set of ref_id's
 hash_to_ref = defaultdict(set)
@@ -684,7 +735,11 @@ for source_id, record in source_items.items():
     for hash_ in predicate(record):
         source_candidates[source_id] = source_candidates[source_id].union(hash_to_ref[hash_])
 
-#
+# Look at block sizes
+block_sizes = pd.Series([len(value) for key, value in source_candidates.items()]).describe([x/10. for x in range(10)])
+print(block_sizes)
+
+
 def get_distances(datamodel, classifier, id_source, candidates):
     source_record = source_items[id_source]
     ref_records = [ref_items[id_ref] for id_ref in candidates]
@@ -695,16 +750,18 @@ source_best_match = dict()
 for id_source, candidates in source_candidates.items():
     if len(candidates) == 0:
         source_best_match[id_source] = None
-    elif len(candidates) == 1:
-         id_ref = next(iter(candidates))
-         source_best_match[id_source] = id_ref
+    #    elif len(candidates) == 1:
+    #         id_ref = next(iter(candidates))
+    #         source_best_match[id_source] = id_ref
     else:
         list_candidates = list(candidates)
         distances = get_distances(datamodel, classifier, id_source, list_candidates)
         scores = zip(list_candidates, classifier.predict_proba(distances)[:,1])
         best_score = max(scores, key=lambda x: x[1])
-        if best_score[1] >= 0.5:
-            source_best_match[id_source]  = best_score[0]
+#        if best_score[1] >= 0.5:
+        source_best_match[id_source]  = best_score[0]
+#        else:
+#            source_best_match[id_source] = None
 
 
 # Print all matches found
@@ -729,7 +786,6 @@ def anal_print(id_source):
             my_other_print(ref_items[id_ref])
             print('  -> id_ref: {0} ; score: {1}'.format(id_ref, score(id_source, id_ref)))
 
-import numpy as np
 def _get_ref_uai(id_source):
     if source_best_match.get(id_source, None) is not None:
         return ref.loc[source_best_match[id_source], 'numero_uai']
@@ -751,6 +807,25 @@ print('Precision: {0} ; Recall: {1}'.format(precision, recall))
 # Print errors
 
 
+
+assert False
+
+# Explore bad result
+source_id = 1399
+print('\nREF')
+for ref_id in source_candidates[source_id]:
+    print(ref_items[ref_id], '\n')
+    print(predicates.CompoundPredicate(learner.best_predicate)(ref_items[ref_id]))
+    score = learner.classifier.predict_proba(get_distances(datamodel, classifier, source_id, [ref_id]))[0, 1]
+    print(' --> score:', score, '\n')
+print('SOURCE:\n', source_items[source_id], '\n')
+print(predicates.CompoundPredicate(learner.best_predicate)(source_items[source_id]))
+print('\n', learner.best_predicate)   
+
+# Should have been
+ref_id = 1581
+print('\n', ref_items[ref_id])
+print(predicates.CompoundPredicate(learner.best_predicate)(ref_items[ref_id]))
 
 assert False
 
@@ -795,22 +870,26 @@ predicate_metrics = dict()
 for x in hist_metrics:
     predicate = x['key']
     if predicate not in predicate_metrics:
-        predicate_metrics[predicate] = labeller.score_predicate(predicate, real_labelled)
+        predicate_metrics[predicate] = learner.score_predicate(predicate, real_labelled)
 
 real_metric = [predicate_metrics[x['key']] for x in hist_metrics]
 
 
 # Print real score for top predicates 
-sorted_predicates = labeller.get_sorted_predicates()
+sorted_predicates = learner.get_sorted_predicates()
 for predicate in sorted_predicates[:10]:
-    print(class_id[predicate], ':', labeller.score_predicate(predicate, real_labelled))
+    print(class_id[predicate], ':', learner.score_predicate(predicate, real_labelled))
     
 # Check influence of using multiple dupes
 actual_dupes = {i for i, x in enumerate(real_labelled) if x['match']}
 
 for predicate in sorted_predicates[1:20]:
-    pair_ids = labeller.predicate_cover[predicate] - labeller.predicate_cover[labeller.best_predicate]
+    pair_ids = learner.predicate_cover[predicate] - learner.predicate_cover[learner.best_predicate]
     precision = len(pair_ids & actual_dupes) / max(len(pair_ids), 1)
-    print({key: value for key, value in labeller.predicate_info[predicate].items() if 'labelled' not in key})
+    print({key: value for key, value in learner.predicate_info[predicate].items() if 'labelled' not in key})
     print('Extra pairs:', len(pair_ids), ' | precision: ', precision)
+    
+    
+    
+# src: 1368 ; ref: 1513
     
