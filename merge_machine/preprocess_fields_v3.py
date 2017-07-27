@@ -1740,7 +1740,7 @@ def generate_value_matchers(lvl = 0):
 		yield RegexMatcher(F_ZIP, "[0-9]{5}")
 
 	if lvl >= 1:
-		yield VariantExpander('country_latin.syn', targetType = F_COUNTRY, keepContext = True)
+		yield VariantExpander('country_fr_en.syn', targetType = F_COUNTRY, keepContext = True)
 	elif lvl >= 0:
 		yield LabelMatcher(F_COUNTRY, file_to_set('country'), MATCH_MODE_EXACT)
 
