@@ -9,7 +9,7 @@ Created on Mon Apr 24 17:18:28 2017
 from dedupe_linker import dedupe_linker
 from results_analyzer import link_results_analyzer
 from missing_values import infer_mvs, replace_mvs, sample_mvs_ilocs
-from preprocess_fields_v3 import inferTypes, normalizeValues, sample_types_ilocs
+from preprocess_fields_v3 import infer_types, normalize_values, sample_types_ilocs
 from restrict_reference import infer_restriction, perform_restriction
 
 
@@ -39,8 +39,8 @@ NORMALIZE_MODULES = {
                                 'use_in_full_run': True
                             },
                    'recode_types': {
-                               'func':  normalizeValues,
-                               'desc': normalizeValues.__doc__,
+                               'func':  normalize_values,
+                               'desc': normalize_values.__doc__,
                                'use_in_full_run': True
                            },
                    'concat_with_init': {
@@ -55,9 +55,9 @@ NORMALIZE_MODULES = {
                                 'desc': infer_mvs.__doc__
                             },
                 'infer_types': {
-                               'func': inferTypes,
+                               'func': infer_types,
                                'write_to': 'recode_types',
-                               'desc': inferTypes.__doc__
+                               'desc': infer_types.__doc__
                            }
                 },
         'sample': {
