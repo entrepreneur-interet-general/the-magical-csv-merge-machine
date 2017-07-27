@@ -1447,7 +1447,7 @@ class CustomAddressMatcher(TypeMatcher):
 		if len(comps) > 0:
 			self.register_full_match(c, self.t, 100, ' '.join(comps))
 
-COMMUNE_LEXICON = file_to_set('commune2')
+COMMUNE_LEXICON = file_to_set('commune')
 
 class FrenchAddressMatcher(LabelMatcher):
 	def __init__(self):
@@ -1813,7 +1813,7 @@ def generate_value_matchers(lvl = 0):
 	# Normalize by expanding alternative variants (such as acronyms, abbreviations and synonyms) to their main variant
 	if lvl >= 0:
 		yield VocabMatcher(F_RD_STRUCT, file_to_set('org_RD.vocab'), ignoreCase = True, partial = False,
-			matcher = VariantExpander('org_hal2.syn', targetType = F_RD_STRUCT, keepContext = True))
+			matcher = VariantExpander('org_hal.syn', targetType = F_RD_STRUCT, keepContext = True))
 		yield VocabMatcher(F_ENTREPRISE, file_to_set('org_entreprise.vocab'), ignoreCase = True, partial = False,
 			matcher = VariantExpander('org_entreprise.syn', targetType = F_ENTREPRISE, keepContext = True))
 		yield VocabMatcher(F_ETAB_ENSSUP, file_to_set('org_enseignement.vocab'), ignoreCase = True, partial = False,
