@@ -203,7 +203,7 @@ class Linker(AbstractDataProject):
                     + ' This method expects projects to have exactly 1 file as it'\
                     + ' uses the implicit get_last_written'.format(project_id))
  
-        
+        # TODO: last written is a bad idea because if we modify normalization then BOOM !
         (module_name, file_name) = proj.get_last_written()
     
         # TODO: add warning for implicit use of mini
