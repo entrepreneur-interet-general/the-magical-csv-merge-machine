@@ -23,6 +23,7 @@ METHODS:
 
 """
 from collections import defaultdict
+import copy
 import csv
 import gc
 from itertools import tee
@@ -62,8 +63,84 @@ class AbstractDataProject(AbstractProject):
         self.log_buffer = [] # List of logs not yet written to metadata.json    
         self.last_written = {}
 
+
     def default_log(self):
-        raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
+        '''Default log for a new file'''
+        return {module_name: copy.deepcopy(self.default_module_log) for module_name in self.MODULE_ORDER_log}
+        
+
+    def get_last_written(self, module_name=None, file_name=None, 
+                         before_module=None):
+        '''
+        Return info on data that was last successfully written (from log)
+        
+        INPUT:
+            - module_name: filter on given module
+            - file_name: filter on file_name
+            - before_module: (string with module name) Looks for file that was 
+                              written in a module previous to before_module 
+                              (in the order defined by self.MODULE_ORDER)
+            
+        OUTPUT:
+            - (module_name, file_name)
+        '''        
+        if (module_name is not None) and (before_module is not None):
+            raise Exception('Variables module_name and before_module cannot be \
+                            set simultaneously')
+
+        if module_name is not None:
+            modules_to_search = [module_name]
+        else:        
+            previous_modules = {self.MODULE_ORDER[i]: self.MODULE_ORDER[:i] for i in range(len(self.MODULE_ORDER))}
+            previous_modules[None] = self.MODULE_ORDER
+            modules_to_search = previous_modules[before_module][::-1]
+        
+        if file_name is None:
+            file_name = self.metadata['last_written']['file_name']
+        
+        for module_name in modules_to_search:
+            log = self.metadata['log'][file_name][module_name]
+            if (not log.get('error', False)) and (log.get('written', False)):
+                break
+        else:
+            import pdb
+            pdb.set_trace()
+            raise Exception('No written data could be found in logs')
+            
+        module_name = log['module_name']
+        file_name = log['file_name']        
+        return (module_name, file_name)
+
+
+    def clean_after(self, module_name, file_name, include_current_module=True):
+        '''
+        Removes all occurences of file and transformations
+        at and after the given module (self.MODULE_ORDER)
+        '''
+        # TODO: move to normalize
+        
+        if file_name not in self.metadata['log']:
+            # TODO: put warning here instead
+            pass
+            # raise Exception('This file cannot be cleaned: it cannot be found in log')
+        
+        start_idx = self.MODULE_ORDER_log.index(module_name) + int(not include_current_module)
+        for iter_module_name in self.MODULE_ORDER_log[start_idx:]:            
+            # module_log = self.metadata['log'][file_name]
+            # TODO: check skipped, written instead of try except            
+            
+            file_path = self.path_to(iter_module_name, file_name)
+            try:
+                os.remove(file_path)
+            except FileNotFoundError:
+                pass
+            
+            try:
+                self.metadata['log'][file_name][iter_module_name] = copy.deepcopy(self.default_module_log)
+            except:
+                pass
+            self.write_metadata()
+
 
     def upload_init_data(self, file, file_name, user_given_name=None):
         raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)

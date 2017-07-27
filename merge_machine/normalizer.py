@@ -36,6 +36,8 @@ class Normalizer(AbstractDataProject):
         - TODO: write this
     """
     MODULES = NORMALIZE_MODULES
+    MODULE_ORDER = NORMALIZE_MODULE_ORDER
+    MODULE_ORDER_log = NORMALIZE_MODULE_ORDER_log
     CHARS_TO_REPLACE = [' ', ',', '.', '(', ')', '\'', '\"', '/']
     
 #==============================================================================
@@ -73,10 +75,7 @@ class Normalizer(AbstractDataProject):
         return string
 
 
-    def default_log(self):
-        '''Default log for a new file'''
-        return {module_name: copy.deepcopy(self.default_module_log) for module_name in NORMALIZE_MODULE_ORDER_log}
-        
+
     def load_data(self, module_name, file_name, nrows=None, columns=None, restrict_to_selected=True):
         assert (columns is None) or (not restrict_to_selected)
         if restrict_to_selected:
@@ -129,47 +128,6 @@ class Normalizer(AbstractDataProject):
             resp[key] = list(group)
         return resp
 
-    def get_last_written(self, module_name=None, file_name=None, 
-                         before_module=None):
-        '''
-        Return info on data that was last successfully written (from log)
-        
-        INPUT:
-            - module_name: filter on given module
-            - file_name: filter on file_name
-            - before_module: (string with module name) Looks for file that was 
-                              written in a module previous to before_module 
-                              (in the order defined by NORMALIZE_MODULE_ORDER)
-            
-        OUTPUT:
-            - (module_name, file_name)
-        '''        
-        if (module_name is not None) and (before_module is not None):
-            raise Exception('Variables module_name and before_module cannot be \
-                            set simultaneously')
-
-        if module_name is not None:
-            modules_to_search = [module_name]
-        else:        
-            previous_modules = {NORMALIZE_MODULE_ORDER[i]: NORMALIZE_MODULE_ORDER[:i] for i in range(len(NORMALIZE_MODULE_ORDER))}
-            previous_modules[None] = NORMALIZE_MODULE_ORDER
-            modules_to_search = previous_modules[before_module][::-1]
-        
-        if file_name is None:
-            file_name = self.metadata['last_written']['file_name']
-        
-        for module_name in modules_to_search:
-            log = self.metadata['log'][file_name][module_name]
-            if (not log.get('error', False)) and (log.get('written', False)):
-                break
-        else:
-            import pdb
-            pdb.set_trace()
-            raise Exception('No written data could be found in logs')
-            
-        module_name = log['module_name']
-        file_name = log['file_name']        
-        return (module_name, file_name)
 
 
     def path_to_last_written(self, module_name=None, file_name=None, before_module=None):
@@ -390,10 +348,58 @@ class Normalizer(AbstractDataProject):
         self.metadata['log'][file_name] = self.default_log()
         self.write_metadata()
 
+    def default_log(self):
+        '''Default log for a new file'''
+        return {module_name: copy.deepcopy(self.default_module_log) for module_name in self.MODULE_ORDER_log}
+        
+
+    def get_last_written(self, module_name=None, file_name=None, 
+                         before_module=None):
+        '''
+        Return info on data that was last successfully written (from log)
+        
+        INPUT:
+            - module_name: filter on given module
+            - file_name: filter on file_name
+            - before_module: (string with module name) Looks for file that was 
+                              written in a module previous to before_module 
+                              (in the order defined by self.MODULE_ORDER)
+            
+        OUTPUT:
+            - (module_name, file_name)
+        '''        
+        if (module_name is not None) and (before_module is not None):
+            raise Exception('Variables module_name and before_module cannot be \
+                            set simultaneously')
+
+        if module_name is not None:
+            modules_to_search = [module_name]
+        else:        
+            previous_modules = {self.MODULE_ORDER[i]: self.MODULE_ORDER[:i] for i in range(len(self.MODULE_ORDER))}
+            previous_modules[None] = self.MODULE_ORDER
+            modules_to_search = previous_modules[before_module][::-1]
+        
+        if file_name is None:
+            file_name = self.metadata['last_written']['file_name']
+        
+        for module_name in modules_to_search:
+            log = self.metadata['log'][file_name][module_name]
+            if (not log.get('error', False)) and (log.get('written', False)):
+                break
+        else:
+            import pdb
+            pdb.set_trace()
+            raise Exception('No written data could be found in logs')
+            
+        module_name = log['module_name']
+        file_name = log['file_name']        
+        return (module_name, file_name)
+
+
     def clean_after(self, module_name, file_name, include_current_module=True):
         '''
         Removes all occurences of file and transformations
-        at and after the given module (NORMALIZE_MODULE_ORDER)
+        at and after the given module (self.MODULE_ORDER)
         '''
         # TODO: move to normalize
         
@@ -402,8 +408,8 @@ class Normalizer(AbstractDataProject):
             pass
             # raise Exception('This file cannot be cleaned: it cannot be found in log')
         
-        start_idx = NORMALIZE_MODULE_ORDER_log.index(module_name) + int(not include_current_module)
-        for iter_module_name in NORMALIZE_MODULE_ORDER_log[start_idx:]:            
+        start_idx = self.MODULE_ORDER_log.index(module_name) + int(not include_current_module)
+        for iter_module_name in self.MODULE_ORDER_log[start_idx:]:            
             # module_log = self.metadata['log'][file_name]
             # TODO: check skipped, written instead of try except            
             
@@ -496,7 +502,7 @@ class Normalizer(AbstractDataProject):
         all_run_infos = {}
         # Only run all if there is a MINI version of the file # TODO: check that this is valid
         if self.metadata['has_mini']:
-            for module_name in NORMALIZE_MODULE_ORDER:
+            for module_name in self.MODULE_ORDER:
                 if self.MODULES['transform'][module_name].get('use_in_full_run', False):
                     try:
                         run_info_name = MINI_PREFIX + self.mem_data_info['file_name'] + '__run_info.json'
