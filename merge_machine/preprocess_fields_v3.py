@@ -386,6 +386,7 @@ F_RD_PARTNER = u'Partenaire de recherche'
 F_CLINICALTRIAL_COLLAB = u'Collaborateur d\'essai clinique'
 F_RD = u'Institution de recherche'
 F_ETAB = u'Etablissement'
+F_EDUC_NAT = u'Education Nationale'
 F_ACADEMIE = u'Académie'
 F_ETAB_ENSSUP = u'Etablissement d\'Enseignement Supérieur'
 F_APB_MENTION = u'Mention APB'
@@ -437,8 +438,10 @@ TYPE_TAGS = {
 	F_RD_STRUCT: [u'Organisation', u'Structure', u'Recherche'],
 	F_RD_PARTNER: [u'Organisation', u'Structure', u'Recherche'],
 	F_RD: [u'Recherche'],
+	F_EDUC_NAT: [u'Education', u'Enseignement'],
 	F_ACADEMIE: [u'Enseignement'],
-	F_ETAB: [u'Enseignement', u'Enseignement supérieur'],
+	F_ETAB: [u'Enseignement'],
+	F_ETAB_ENSSUP: [u'Enseignement supérieur'],
 	F_PHYTO: [u'Agro'],
 	F_AGRO: [u'Agro'],
 	F_MEDICAL_SPEC: [u'Médecine'],
@@ -1810,11 +1813,13 @@ def generate_value_matchers(lvl = 0):
 	# Normalize by expanding alternative variants (such as acronyms, abbreviations and synonyms) to their main variant
 	if lvl >= 0:
 		yield VocabMatcher(F_RD_STRUCT, file_to_set('org_RD.vocab'), ignoreCase = True, partial = False,
-			matcher = VariantExpander('org_hal2.syn', targetType = F_RD_STRUCT, keepContext = True ))
+			matcher = VariantExpander('org_hal2.syn', targetType = F_RD_STRUCT, keepContext = True))
 		yield VocabMatcher(F_ENTREPRISE, file_to_set('org_entreprise.vocab'), ignoreCase = True, partial = False,
-			matcher = VariantExpander('org_entreprise.syn', targetType = F_ENTREPRISE, keepContext = True ))
+			matcher = VariantExpander('org_entreprise.syn', targetType = F_ENTREPRISE, keepContext = True))
 		yield VocabMatcher(F_ETAB_ENSSUP, file_to_set('org_enseignement.vocab'), ignoreCase = True, partial = False,
 			matcher = VariantExpander('etab_enssup.syn', targetType = F_ETAB_ENSSUP, keepContext = False, domainType = F_MESR))
+		yield VocabMatcher(F_EDUC_NAT, file_to_set('educ_nat.vocab'), ignoreCase = True, partial = False,
+			matcher = VariantExpander('educ_nat.syn', targetType = F_EDUC_NAT, keepContext = False))
 
 	if lvl >= 0:
 		yield VocabMatcher(F_RD_STRUCT, file_to_set('org_rnsr.vocab'), ignoreCase = True, partial = False,
