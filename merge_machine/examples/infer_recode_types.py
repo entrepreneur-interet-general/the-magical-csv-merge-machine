@@ -18,6 +18,8 @@ HOST = '0.0.0.0:5000'
 
 # CSV file to recode
 file_path = '../local_test_data/source.csv'
+
+# Paths of files to write
 inference_file_path_write = 'infer_types.json'
 output_file_path = 'source_recoded.csv'
 
