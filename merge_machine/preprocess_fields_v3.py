@@ -1540,7 +1540,7 @@ class VariantExpander(TypeMatcher):
 		self.tokenIdx = defaultdict(set) # map from alternative variant as joined-normalized-token-list to original alternative variant
 		self.minTokens = 3
 		self.maxTokens = DTC
-		# map of alternative variants (including main or not!), from normalized string to list of original strings:
+		# map of alternative variant`s (including main or not!), from normalized string to list of original strings:
 		phrasesMap = validated_lexical_map(self.variantsMap.keys(), tokenize = True)
 		for (phrase, altVariants) in phrasesMap.items():
 			tokens = phrase.split()
@@ -1570,16 +1570,17 @@ class VariantExpander(TypeMatcher):
 						v = split_and_case(c.value)
 						i1 = v.find(tokens[k1])
 						if i1 >= 0: i2 = v.find(tokens[k1 + k2 - 1], i1) if k2 > 1 else i1
-						if i1 < 0 or i2 < 0:
-							logging.warning('%s could not find tokens "%s ... %s" in original "%s"', self, tokens[k1], tokens[k1 + k2 - 1], v)
-							span = (0, len(c.value))
-						else:
-							span = (i1, i2 + len(tokens[k1 + k2 - 1]))
-						self.register_partial_match(c, self.t, score, altVariant, span)
 						mainVariant = self.variantsMap[altVariant]
 						logging.debug('%s matched on %s: %s expanded to main variant %s', self, matchRefPhrase, altVariant, mainVariant)
 						normedValue = ''.join([v[:i1], mainVariant, v[i2:]]) if self.keepContext else mainVariant
-						self.register_partial_match(c, '{} - {}'.format(F_VARIANTS, self.t), score, normedValue, span)
+						if i1 == 0 and k1 + k2 == len(tokens):
+							self.register_full_match(c, self.t, score, mainVariant) # , normedValue) 							
+						elif i1 < 0 or i2 < 0:
+							logging.warning('%s could not find tokens "%s ... %s" in original "%s"', self, tokens[k1], tokens[k1 + k2 - 1], v)
+							self.register_full_match(c, self.t, score, mainVariant) # , normedValue) 
+						else:
+							span = (i1, i2 + len(tokens[k1 + k2 - 1]))
+							self.register_partial_match(c, self.t, score, mainVariant, span) # , normedValue, span) 
 
 # Misc utilities related to value normalization
 
@@ -1690,6 +1691,8 @@ def generate_value_matchers(lvl = 0):
 	yield SubtypeMatcher(F_STRUCTURED_TYPE, [F_DATE, F_URL, F_EMAIL, F_PHONE])
 
 	# MESR Domain
+
+	## Recherche
 	PAT_SIREN = "[0-9]{9}"
 	if lvl >= 0: yield RegexMatcher(F_SIREN, PAT_SIREN, validator = validate_Luhn)
 	PAT_SIRET = "[0-9]{14}"
@@ -1715,15 +1718,19 @@ def generate_value_matchers(lvl = 0):
 	if lvl >= 2: yield TokenizedMatcher(F_CLINICALTRIAL_COLLAB, file_to_set('clinical_trial_sponsor_collab.col'),
 		maxTokens = 4)
 	yield SubtypeMatcher(F_RD, [F_RD_STRUCT, F_RD_PARTNER, F_CLINICALTRIAL_COLLAB])
+
+	## Enseignement et Enseignement Supérieur
+	yield VocabMatcher(F_MESR, file_to_set('org_enseignement.vocab'), ignoreCase = True, partial = False)
 	if lvl >= 0:
 		yield RegexMatcher(F_ACADEMIE, "acad.mie", ignoreCase = True)
 		yield LabelMatcher(F_ACADEMIE, file_to_set('academie'), MATCH_MODE_EXACT, stopWords = ['académie'])    # SIES/APB
 	if lvl >= 0: 
 		yield VocabMatcher(F_ETAB, file_to_set('etablissement.vocab'), ignoreCase = True, partial = False)
 	if lvl >= 0: 
-		etabEnssupLexicon = file_to_set('etab_enssup')
-		etabEnssupMatcher = TokenizedMatcher(F_ETAB_ENSSUP, etabEnssupLexicon, maxTokens = 6)
-		yield VocabMatcher(F_ETAB_ENSSUP, file_to_set('etab_enssup.vocab'), ignoreCase = True, partial = True, matcher = etabEnssupMatcher)
+		yield VocabMatcher(F_ETAB_ENSSUP, file_to_set('etab_enssup.vocab'), ignoreCase = True, partial = True, 
+			matcher = VariantExpander('etab_enssup.syn', targetType = F_ETAB_ENSSUP, keepContext = False, domainType = F_MESR))
+	if lvl >= 1:
+		yield TokenizedMatcher(F_ETAB_ENSSUP, file_to_set('etab_enssup'), maxTokens = 6)
 	yield SubtypeMatcher(F_ETAB, [F_ETAB_ENSSUP])
 	if lvl >= 1: 
 		yield LabelMatcher(F_APB_MENTION, file_to_set('mention_licence_sise'), MATCH_MODE_EXACT)
@@ -1731,8 +1738,8 @@ def generate_value_matchers(lvl = 0):
 		yield TokenizedMatcher(F_APB_MENTION, file_to_set('mention_licence_apb2017.col'), maxTokens = 5)
 	if lvl >= 2: 
 		yield TokenizedMatcher(F_RD_DOMAIN, file_to_set('domaine_recherche.col'), maxTokens = 4)
-	# yield CategoryMatcher(F_RD_DOMAIN, 'publi')
-	yield SubtypeMatcher(F_MESR, [F_RD, F_APB_MENTION, F_RD_DOMAIN])
+
+	yield SubtypeMatcher(F_MESR, [F_RD, F_APB_MENTION, F_RD_DOMAIN, F_ETAB, F_ACADEMIE])
 
 	# Geo Domain
 	# if lvl >= 2: 
@@ -1742,10 +1749,9 @@ def generate_value_matchers(lvl = 0):
 	if lvl >= 0: 
 		yield RegexMatcher(F_ZIP, "[0-9]{5}")
 
-	if lvl >= 1:
-		yield VariantExpander('country_fr_en.syn', targetType = F_COUNTRY, keepContext = True)
-	elif lvl >= 0:
+	if lvl >= 0:
 		yield LabelMatcher(F_COUNTRY, file_to_set('country'), MATCH_MODE_EXACT)
+		yield VariantExpander('country_fr_en.syn', targetType = F_COUNTRY, keepContext = True)
 
 	if lvl >= 2: 
 		yield TokenizedMatcher(F_CITY, COMMUNE_LEXICON, maxTokens = 3, stopWords = STOP_WORDS_CITY)
@@ -1816,8 +1822,6 @@ def generate_value_matchers(lvl = 0):
 			matcher = VariantExpander('org_hal.syn', targetType = F_RD_STRUCT, keepContext = True))
 		yield VocabMatcher(F_ENTREPRISE, file_to_set('org_entreprise.vocab'), ignoreCase = True, partial = False,
 			matcher = VariantExpander('org_entreprise.syn', targetType = F_ENTREPRISE, keepContext = True))
-		yield VocabMatcher(F_ETAB_ENSSUP, file_to_set('org_enseignement.vocab'), ignoreCase = True, partial = False,
-			matcher = VariantExpander('etab_enssup.syn', targetType = F_ETAB_ENSSUP, keepContext = False, domainType = F_MESR))
 		yield VocabMatcher(F_EDUC_NAT, file_to_set('educ_nat.vocab'), ignoreCase = True, partial = False,
 			matcher = VariantExpander('educ_nat.syn', targetType = F_EDUC_NAT, keepContext = False))
 
