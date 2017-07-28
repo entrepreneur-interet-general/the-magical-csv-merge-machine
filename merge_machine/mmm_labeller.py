@@ -42,6 +42,7 @@ Choose pairs based on classifier probability
 from future.utils import viewitems
 
 from collections import defaultdict, deque
+import copy
 import functools
 import itertools
 import json
@@ -57,7 +58,6 @@ import pandas as pd
 import pprint
 from sklearn import linear_model
 import unidecode
-
 
 
 def interleave(*iterables) :
@@ -308,24 +308,6 @@ def gen_dedupe_datamodel(ref_cols):
     return dedupe_datamodel
 
 
-source_path = os.path.join('local_test_data', 'source.csv')
-ref_path = os.path.join('local_test_data', 'ref.csv')
-
-match_cols = [{'source': 'departement', 'ref': 'departement'},
-              {'source': 'commune', 'ref': 'localite_acheminement_uai'},
-              {'source': 'lycees_sources', 'ref': 'full_name'}]
-
-real_match_cols = [pair['ref'] for pair in match_cols]
-
-source = pd.read_csv(source_path, dtype=str)
-ref = pd.read_csv(ref_path, dtype=str)
-source_items, ref_items = prepare_data(source, ref, match_cols)
-
-
-dedupe_datamodel = gen_dedupe_datamodel(real_match_cols)
-my_predicates = list(dedupe_datamodel.predicates(index_predicates=False, canopies=False)) # TODO: set to True
-
-blocker = blocking.Blocker(my_predicates)
 
 def invert_predicate_cover(dupe_cover):
     inv_dupe_cover = defaultdict(set)
@@ -356,9 +338,6 @@ def make_n_cover(dupe_cover, n):
         if elems:
             dupe_cover_n[x] = elems
     return dupe_cover_n
-
-
-
 
 
 
@@ -456,9 +435,9 @@ class Learner():
         self.classifier = self._init_classifier()
         self.min_pairs_for_classifier = min_pairs_for_classifier
         self.candidates = candidates
+        self.is_match_proba_from_classifier = np.array([1]*len(candidates))
         self.is_match_from_classifier = np.array([True]*len(candidates))
-        self.is_match = dict()
-        
+        self.is_match = dict()        
         
         # Include equivalent predicates
         all_predicate_cover = cover(blocker, candidates, 1)
@@ -500,11 +479,13 @@ class Learner():
     
     def _init_classifier(self):
         '''Initiate the distance-based classifier'''
+        from sklearn.ensemble import RandomForestClassifier
         #        classifier = linear_model.SGDClassifier(class_weight="balanced", 
         #                                                     fit_intercept=True, 
         #                                                     loss='modified_huber')
-        classifier = linear_model.LogisticRegressionCV(class_weight="balanced", 
-                                                     fit_intercept=True)
+        #        classifier = linear_model.LogisticRegression(class_weight="balanced", 
+        #                                                     fit_intercept=True)
+        classifier = RandomForestClassifier(n_estimators=30, class_weight='balanced')
         classifier.intercept_ = np.array([0.])
         classifier.coef_ = np.array([[0.5 for _ in range(self.distances.shape[1])]])
         return classifier
@@ -513,8 +494,13 @@ class Learner():
         '''Train the distance-based classifier on all labelled pairs'''
         pair_match = list(self.is_match.items())
         X = self.distances[[pair_id for (pair_id, _) in pair_match]]
-        Y = [is_match for (_, is_match) in pair_match]
-        self.classifier.fit(X, Y)
+        y = [is_match for (_, is_match) in pair_match]
+        try:
+            self.classifier.fit(X, y)
+        except:
+            import pdb
+            pdb.set_trace()
+        
         
     def update(self, selected_predicate, pair_id, is_match):
         '''
@@ -539,7 +525,8 @@ class Learner():
         use_classifier = (self.num_labelled - self.num_matches >= self.min_pairs_for_classifier) and self.num_matches
         if use_classifier:
             self.train_classifier()
-            self.is_match_from_classifier = self.classifier.predict(self.distances)
+            self.is_match_proba_from_classifier = self.classifier.predict_proba(self.distances)[:, 1]
+            self.is_match_from_classifier = self.is_match_proba_from_classifier >= 0.5
 
         # Update_blocking rules
         for predicate, this_predicate_info in self.predicate_info.items():
@@ -554,15 +541,18 @@ class Learner():
         
         
             # Compute pseudo-precision (classifier + blocking precision)
-            num_covered_matches = sum(self.is_match_from_classifier[pair_id] \
+            num_covered_matches_w_classifier = sum(self.is_match_from_classifier[pair_id] \
                                   and self.is_match[pair_id] \
                                   for pair_id in this_predicate_info['labelled_pairs'])
-            num_covered = sum(self.is_match_from_classifier[pair_id] \
+            num_covered_w_classifier = sum(self.is_match_from_classifier[pair_id] \
                                   for pair_id in this_predicate_info['labelled_pairs'])
-
+            
+            this_predicate_info['num_covered'] = len(this_predicate_info['labelled_pairs'])
+            this_predicate_info['num_covered_matches_w_classifier'] = num_covered_matches_w_classifier
+            this_predicate_info['num_covered_w_classifier'] = num_covered_w_classifier
         
-            if num_covered:
-                this_predicate_info['precision'] = num_covered_matches / num_covered
+            if num_covered_w_classifier:
+                this_predicate_info['precision'] = num_covered_matches_w_classifier / num_covered_w_classifier
             else:
                 this_predicate_info['precision'] = 0.1
             
@@ -574,16 +564,29 @@ class Learner():
             if (self.num_matches-num_covered_matches_selected) >= 2:
                 this_predicate_info['recall'] = (num_covered_matches-num_covered_matches_selected) \
                                                 / (self.num_matches-num_covered_matches_selected)   
+
+            this_predicate_info['num_covered_matches'] = num_covered_matches
+            this_predicate_info['num_covered_matches_selected'] = num_covered_matches_selected
+        
             
-            # Compute ratio$
-            this_predicate_info['ratio'] = this_predicate_info['precision'] * this_predicate_info['recall']
+            # Compute corrector based on block efficiency (more t)
+            target_num_by_block = 2
+            if len(this_predicate_info['labelled_pairs']):
+                corr = min(1, target_num_by_block * num_covered_matches_w_classifier / len(this_predicate_info['labelled_pairs']))
+            else:
+                corr = 1
+                
+            this_predicate_info['corr'] = corr
+            
+            # Compute ratio
+            this_predicate_info['ratio'] = corr * self.compute_ratio(this_predicate_info['precision'], this_predicate_info['recall'])
 
     def get_sorted_predicates(self):
         '''Returns the predicate that has the highest ratio'''
         return [x['key'] for x in sorted(self.predicate_info.values(), \
                 key=lambda x: x['ratio'] * x['has_pairs'], reverse=True)]
 
-    def choose_pair(self, proba=0.5):
+    def choose_pair(self, prop_predicate=0.5, prop_classifier=None):
         '''
         Returns a pair to label
         
@@ -592,26 +595,58 @@ class Learner():
                     the current best predicate
         
         '''
-        rand_val = random.random()
+        use_best_predicate = random.random() >= 0.5
         
         sorted_predicates = self.get_sorted_predicates()
         self.best_predicate = sorted_predicates[0]
-        if rand_val <= proba:
+        if use_best_predicate:
             # Choose best_predicate
             print('Getting best')
             predicate = self.best_predicate 
-            pair_ids = self.predicate_cover[predicate]
+            pair_ids = list(self.predicate_cover[predicate])
+            
+            # Get pair most uncertain pair
+            pair_id_idx = (np.abs(self.is_match_proba_from_classifier[pair_ids] - 0.5) \
+                           + 2*(np.sign(self.is_match_proba_from_classifier[pair_ids] - 0.5)) == -1).argmin()
+            print('id_idx', pair_id_idx, ' ; sign: ', np.sign(self.is_match_proba_from_classifier[pair_id_idx] - 0.5))
+            pair_id = pair_ids[pair_id_idx]
+            
         else:
             for predicate in sorted_predicates[1:]:
                 pair_ids = self.predicate_cover[predicate] - self.predicate_cover[self.best_predicate]
                 if pair_ids:
-                    break
+                    pair_ids = list(pair_ids)
+                    if self.is_match_from_classifier[pair_ids].any():
+                        pair_id_idx = self.is_match_proba_from_classifier[pair_ids].argmax()
+                        pair_id = pair_ids[pair_id_idx]   
+                        print('id_idx', pair_id_idx, ' ; sign: ', np.sign(self.is_match_proba_from_classifier[pair_id_idx] - 0.5))
+                        break
             else:
-                raise RuntimeError('Could not found predicate with pairs')      
-    
-        pair_id = random.choice(list(pair_ids))
+                predicate = self.best_predicate 
+                pair_ids = self.predicate_cover[predicate]
+                return predicate, random.choice(list(pair_ids))
+
         return predicate, pair_id
-    
+
+
+    def _bias(self):
+        positive = self.num_matches
+        n_examples = self.num_labelled
+
+        bias = 1 - (positive/n_examples if positive else 0)
+
+        # When we have just a few examples we are okay with getting
+        # examples where the model strongly believes the example is
+        # going to be positive or negative. As we get more examples,
+        # prefer to ask for labels of examples the model is more
+        # uncertain of.
+        uncertainty_weight = min(positive, n_examples - positive)
+        bias_weight = 10
+
+        weighted_bias = 0.5 * uncertainty_weight + bias * bias_weight
+        weighted_bias /= uncertainty_weight + bias_weight
+
+        return weighted_bias    
 
     def compute_ratio(self, precision, recall, target_precision=0.85):
         if (precision >= target_precision) or (self.num_labelled <= 10):
@@ -630,11 +665,12 @@ class Learner():
         
         actual_dupes = {i for i, x in enumerate(real_labelled) if x['match']}
         
+        num_guessed_as_dupes = len(guessed_as_dupes)
         precision = len(guessed_as_dupes & actual_dupes) / max(len(guessed_as_dupes), 1)
         recall = len(guessed_as_dupes & actual_dupes) / max(len(actual_dupes), 1)
         ratio = self.compute_ratio(precision, recall)
         
-        return precision, recall, ratio
+        return precision, recall, ratio, num_guessed_as_dupes
 
 
 
@@ -692,18 +728,37 @@ def label(learner, real_labelled=None, verbose=True):
         else:
             learner.update(predicate, pair_id, real_labelled[pair_id]['match'])
             #labelled.append({'candidate': candidates[pair_id], 'match': is_match})
-    return learner
+    hist_metrics.append(copy.deepcopy(learner.predicate_info[learner.best_predicate]))
+    final_metrics.append(learner.predicate_info[learner.best_predicate])
+    return learner, hist_metrics, final_metrics
 
 
-import copy
+source_path = os.path.join('local_test_data', 'source.csv')
+ref_path = os.path.join('local_test_data', 'ref.csv')
+
+match_cols = [{'source': 'departement', 'ref': 'departement'},
+              {'source': 'commune', 'ref': 'localite_acheminement_uai'},
+              {'source': 'lycees_sources', 'ref': 'full_name'}]
+
+real_match_cols = [pair['ref'] for pair in match_cols]
+
+source = pd.read_csv(source_path, dtype=str)
+ref = pd.read_csv(ref_path, dtype=str)
+source_items, ref_items = prepare_data(source, ref, match_cols)
+
+dedupe_datamodel = gen_dedupe_datamodel(real_match_cols)
+my_predicates = list(dedupe_datamodel.predicates(index_predicates=False, canopies=False)) # TODO: set to True
+
+blocker = blocking.Blocker(my_predicates)
+
 
 manual_labelling = False
 max_labels = 100
-prop = 0.65
+prop = 0.5
 n = 3
 min_pairs_for_classifier = 3
 
-num_matches = 12
+num_matches = 20
 
 # Load prelabelled data for testing
 with open('temp_labelling.json') as f:
@@ -713,24 +768,23 @@ random.shuffle(real_labelled)
 # Candidates of pairs to be labelled
 candidates = [pair['candidate'] for pair in real_labelled]
 
-
-
 # Initiate
 my_datamodel = IDFDistance(ref, real_match_cols)
 datamodel = CompoundDatamodel(dedupe_datamodel, my_datamodel)
+datamodel = datamodel
 learner = Learner(candidates, blocker, datamodel, n, min_pairs_for_classifier)
 
 # Perform latbelling
-learner = label(learner, real_labelled)
+learner, hist_metrics, final_metrics = label(learner, real_labelled)
 
 print('\n')
 
 # Print realest metric
 final_predicate = learner.best_predicate
-precision, recall, ratio = learner.score_predicate(final_predicate, real_labelled)
+precision, recall, ratio, num_guessed_as_dupes \
+                    = learner.score_predicate(final_predicate, real_labelled)
 print(final_predicate)
 print('Precision: {0} ; Recall: {1} ; Ratio: {2}'.format(precision, recall, ratio))
-
 
 
 classifier = learner.classifier
@@ -749,6 +803,8 @@ for source_id, record in source_items.items():
         source_candidates[source_id] = source_candidates[source_id].union(hash_to_ref[hash_])
 
 # Look at block sizes
+pprint.pprint(learner.predicate_info[predicate])
+print('\n')
 block_sizes = pd.Series([len(value) for key, value in source_candidates.items()]).describe([x/10. for x in range(10)])
 print(block_sizes)
 
@@ -763,9 +819,9 @@ source_best_match = dict()
 for id_source, candidates in source_candidates.items():
     if len(candidates) == 0:
         source_best_match[id_source] = None
-    elif len(candidates) == 1:
-         id_ref = next(iter(candidates))
-         source_best_match[id_source] = id_ref
+    #    elif len(candidates) == 1:
+    #         id_ref = next(iter(candidates))
+    #         source_best_match[id_source] = id_ref
     else:
         list_candidates = list(candidates)
         distances = get_distances(datamodel, classifier, id_source, list_candidates)
@@ -824,13 +880,16 @@ print('Precision: {0} ; Recall: {1}'.format(precision, recall))
 assert False
 
 # Explore bad result
-source_id = 1399
+source_id = 1223
 print('\nREF')
 for ref_id in source_candidates[source_id]:
-    print(ref_items[ref_id], '\n')
-    print(predicates.CompoundPredicate(learner.best_predicate)(ref_items[ref_id]))
     score = learner.classifier.predict_proba(get_distances(datamodel, classifier, source_id, [ref_id]))[0, 1]
-    print(' --> score:', score, '\n')
+    
+    if score >= 0.5:
+        print(ref_items[ref_id], '\n')
+        #print(predicates.CompoundPredicate(learner.best_predicate)(ref_items[ref_id]))
+        
+        print(' --> score:', score, '\n')
 print('SOURCE:\n', source_items[source_id], '\n')
 print(predicates.CompoundPredicate(learner.best_predicate)(source_items[source_id]))
 print('\n', learner.best_predicate)   
@@ -848,8 +907,6 @@ Ideas:
 - do not store most infrequent and use get install
 - index with 1 insertion distance
 '''
-
-import math
 
 col = 'full_name'
 
