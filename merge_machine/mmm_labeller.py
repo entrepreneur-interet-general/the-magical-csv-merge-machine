@@ -37,6 +37,28 @@ Classifier should be corrected for precision of blocking
 Ratio should include absolute precision of blocking (without string distance)
 
 Choose pairs based on classifier probability
+
+******
+
+Notes:
+http://dask.pydata.org/en/latest/index.html
+large files
+exact match first
+small blocks first
+post category blocking
+api-doc
+upload zip ?
+admin key
+problem: indistinguishable records (lycée without general or pro)
+add restriction on field None
+add example files
+autodoc flask ?
+iterate on source then ref for blocking
+check this for cover. https://github.com/dedupeio/dedupe/blob/master/dedupe/training.py#L55
+
+
+
+
 """
 
 from future.utils import viewitems
