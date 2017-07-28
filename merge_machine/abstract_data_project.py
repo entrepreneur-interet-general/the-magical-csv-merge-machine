@@ -495,7 +495,7 @@ class AbstractDataProject(AbstractProject):
         else:
             self.check_mem_data()
             self.mem_data, tab_gen = tee(self.mem_data)
-            data = pd.concat(tab_gen)
+            data = next(tab_gen) # pd.concat(tab_gen) # TODO: check that this is what we want
             valid_columns = [col for col in data if '__MODIFIED' not in col]
             data = data[valid_columns]
             
@@ -504,11 +504,9 @@ class AbstractDataProject(AbstractProject):
         
         # We duplicate the generator to load a full version of the table and
         # while leaving self.mem_data unchanged
-        try:
-            infered_params = self.MODULES['infer'][module_name]['func'](data, params)
-        except:
-            import pdb; pdb.set_trace()
-        
+        infered_params = self.MODULES['infer'][module_name]['func'](data, params)
+        del data
+    
         # Write result of inference
         module_to_write_to = self.MODULES['infer'][module_name]['write_to']
 
