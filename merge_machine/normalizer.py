@@ -282,12 +282,14 @@ class Normalizer(AbstractDataProject):
         # Write configuration (sep, encoding) to INIT dir
         config_dict = {
                         'file_name': file_name,
+                        'module_name': 'INIT',
                         'og_file_name': og_file_name,
                         'file_type': file_type, 
                         'sep': sep, 
                         'encoding': encoding, 
                         'ncols': len(columns)
                     }
+        
         self.run_info_buffer[('INIT', file_name)] = config_dict
         # TODO: duplicate with run_info and infered_config.json        
         
