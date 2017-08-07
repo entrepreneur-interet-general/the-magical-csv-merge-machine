@@ -6,6 +6,7 @@ Created on Thu Jun  1 21:10:15 2017
 @author: m75380
 """
 
+import logging
 import os
 
 # Change current path to path of api.py
@@ -271,18 +272,18 @@ def _linker(project_id, *argv):
                     }  
     
     # TODO: This should probably be moved
-    print('Performing deduplication')           
+    logging.info('Performing linking')           
     
     # Perform linking
     proj.linker('dedupe_linker', paths, module_params)
 
-    print('Writing data')
+    logging.info('Writing data')
     # Write transformations and log
     proj.write_data()
     
     file_path = proj.path_to(proj.mem_data_info['module_name'], 
                              proj.mem_data_info['file_name'])
-    print('Wrote data to: ', file_path)
+    logging.info('Wrote data to: {0}'.format(file_path))
 
     return {}
 

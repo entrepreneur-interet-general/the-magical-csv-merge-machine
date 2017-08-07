@@ -109,6 +109,7 @@ USES: /python-memcached
 
 import gzip
 import json
+import logging
 import os
 import shutil
 import tempfile
@@ -633,7 +634,7 @@ def web_get_answer(message_received):
     # TODO: add safeguards  if not enough train (front)
 
     message_received = json.loads(message_received)
-    print(message_received)
+    logging.info(message_received)
     project_id = message_received['project_id']
     user_input = message_received['user_input']
     
@@ -643,19 +644,19 @@ def web_get_answer(message_received):
     if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].answer_is_valid(user_input):
         flask._app_ctx_stack.labeller_mem[project_id]['labeller'].parse_valid_answer(user_input)
         if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].finished:
-            print('Writing train')
+            logging.info('Writing train')
             flask._app_ctx_stack.labeller_mem[project_id]['labeller'].write_training(flask._app_ctx_stack.labeller_mem[project_id]['paths']['train'])
-            print('Wrote train')
+            logging.info('Wrote train')
             
             try:
                 del flask._app_ctx_stack.labeller_mem[project_id]['labeller']
-                print('Deleted labeller for project: {0}'.format(project_id))
+                logging.info('Deleted labeller for project: {0}'.format(project_id))
             except:
-                print('Could not delete labeller for project: {0}'.format(project_id))
+                logging.warning('Could not delete labeller for project: {0}'.format(project_id))
             try:
                 del flask._app_ctx_stack.labeller_mem[project_id]['paths']
             except:
-                print('Could not delete paths for project: {0}'.format(project_id))
+                logging.warning('Could not delete paths for project: {0}'.format(project_id))
                 
             # TODO: Do dedupe
             next_url = url_for('web_select_return', project_type='link', project_id=project_id)
@@ -675,13 +676,13 @@ def web_terminate_labeller_load(message_received):
     
     try:
         del flask._app_ctx_stack.labeller_mem[project_id]['labeller']
-        print('Deleted labeller for project: {0}'.format(project_id))
+        logging.info('Deleted labeller for project: {0}'.format(project_id))
     except:
-        print('Could not delete labeller for project: {0}'.format(project_id))
+        logging.warning('Could not delete labeller for project: {0}'.format(project_id))
     try:
         del flask._app_ctx_stack.labeller_mem[project_id]['paths']
     except:
-        print('Could not delete paths for project: {0}'.format(project_id))
+        logging.warning('Could not delete paths for project: {0}'.format(project_id))
             
     
 @socketio.on('load_labeller', namespace='/')
@@ -1155,12 +1156,8 @@ def get_sample(project_type, project_id):
                             'randomize': (default True) If false, will return first values
                             }
     '''
-    print('Sample request is ', request.json)
-    
     proj = _init_project(project_type=project_type, project_id=project_id)    
     data_params, all_params = _parse_request() # TODO: add size limit on params
-    
-    print('1', request.json)
     
     if all_params is None:
         all_params = dict()
@@ -1179,9 +1176,7 @@ def get_sample(project_type, project_id):
                    restrict_to_selected=sample_params['restrict_to_selected'])
 
     sample_params.setdefault('randomize', True)
-    print('2', sample_params)
     sample_params.setdefault('num_rows', 50) # TODO: figure out how to put back min(50, proj.mem_data.shape[0]))
-    print('3', sample_params)
 
     if (sampler_module_name is not None) and (sampler_module_name not in API_SAMPLE_NAMES):
         raise ValueError('Requested sampler_module_name {0} is not valid. Valid'\
@@ -1561,7 +1556,7 @@ def schedule_job(job_name, project_id):
     
     # 
     job_id = job.get_id()
-    print(job_id)
+    logging.info('Scheduled job: {0}'.format(job_id))
     return jsonify(job_id=job_id,
                    job_result_api_url=url_for('get_job_result', job_id=job_id))    
     

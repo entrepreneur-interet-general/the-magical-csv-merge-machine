@@ -6,6 +6,7 @@ Created on Mon Apr 24 15:46:00 2017
 @author: leo
 """
 import gc
+import logging
 import os
 import pickle
 import time
@@ -337,20 +338,20 @@ class Linker(AbstractDataProject):
         my_variable_definition = self._gen_dedupe_variable_definition(col_matches)
         
         # Put to dedupe input format
-        print('loading ref')
+        logging.debug('loading reference file')
         ref = pd.read_csv(paths['ref'], encoding='utf-8', dtype=str)
         data_ref = format_for_dedupe(ref, my_variable_definition, 'ref')
         del ref
         gc.collect()
-        print('loaded ref')
+        logging.debug('finished loading reference file')
         
         # Put to dedupe input format
-        print('loading source')
+        logging.debug('loading source file')
         source = pd.read_csv(paths['source'], encoding='utf-8', dtype=str)
         data_source = format_for_dedupe(source, my_variable_definition, 'source')
         del source
         gc.collect()
-        print('loaded source')
+        logging.debug('finished loading source file')
         
         #==========================================================================
         # Should really start here
@@ -460,7 +461,6 @@ class UserLinker(Linker):
 
 if __name__ == '__main__':
     import json
-    import os    
     
     source_file_name = 'source.csv'
     source_user_given_name = 'my_source.csv'

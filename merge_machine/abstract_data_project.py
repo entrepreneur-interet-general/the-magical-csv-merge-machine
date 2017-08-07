@@ -26,6 +26,7 @@ from collections import defaultdict
 import copy
 import csv
 import gc
+import logging
 from itertools import tee
 import os
 import time
@@ -193,7 +194,7 @@ class AbstractDataProject(AbstractProject):
         dtype = {col: choose_dtype(col) for col in columns}
                                    
         if nrows is not None:
-            print('Nrows is: ', nrows)
+            logging.debug('Nrows is: {0}'.format(nrows))
             tab = pd.read_csv(file_path, encoding='utf-8', dtype=dtype, 
                                 nrows=nrows, usecols=columns, chunksize=self.CHUNKSIZE)
         else:
@@ -209,7 +210,7 @@ class AbstractDataProject(AbstractProject):
             - first element is a generator which generates pandas DataFrames
             - second element is a 
         '''
-        print('columns', columns)
+        logging.debug('Columns selected to load are: {0}'.format(columns))
 
         file_path = self.path_to(module_name, file_name)     
         self.mem_data = self.static_load_data(file_path, nrows, columns)
@@ -454,7 +455,7 @@ class AbstractDataProject(AbstractProject):
             # Enumerate to know whether or not to write header (i==0)
             try:
                 for i, part_tab in enumerate(self.mem_data):
-                    print('At part', i)
+                    logging.debug('At part {0}'.format(i))
                     part_tab.to_csv(w, encoding='utf-8', 
                                          index=False,  
                                          header=i==0, 
@@ -462,10 +463,10 @@ class AbstractDataProject(AbstractProject):
                     nrows += len(part_tab)
                     
             except Exception as e:
-                print('At error here:', e)
+                logging.error(e)
 
 
-        print('Wrote to ', file_path)
+        logging.info('Wrote to: {0}'.format(file_path))
         self.write_log_buffer(True)
         self.write_run_info_buffer()
 
@@ -546,7 +547,7 @@ class AbstractDataProject(AbstractProject):
         Runs the selected module on the dataframe in partial_data and stores
         modifications in the run_info buffer
         '''
-        print('At module ', module_name)
+        logging.info('At module: {0}'.format(module_name))
         # Apply module transformation
         valid_columns = [col for col in partial_data if '__MODIFIED' not in col] # TODO: test on upload      
         modified_columns = [col for col in partial_data if '__MODIFIED' in col]
