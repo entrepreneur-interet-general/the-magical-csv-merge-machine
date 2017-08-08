@@ -462,12 +462,13 @@ class Learner():
         self.is_match = dict()        
         
         # Include equivalent predicates
-        all_predicate_cover = cover(blocker, candidates, 1)
-        all_predicate_cover = make_n_cover(all_predicate_cover, n) # TODO: hash before to save time ?
+        single_predicate_cover = cover(blocker, candidates, 1)
+        all_predicate_cover = dict()
+        for i in range(1, n+1):
+            all_predicate_cover.update(make_n_cover(single_predicate_cover, i)) # TODO: hash before to save time ?
         
-        self.predicate_cover = self._restrict_predicate_cover(all_predicate_cover)
-
-
+        self.predicate_cover = self._remove_duplicate_predicates_from_cover(\
+                                                            all_predicate_cover)
         
         self.predicate_info = {key: {'key': key, 
                                      'labelled_pairs': set(), # Labelled pairs covered by this predicate
@@ -485,7 +486,7 @@ class Learner():
         self.best_predicate = list(self.predicate_cover.keys())[0]
     
     @staticmethod
-    def _restrict_predicate_cover(all_predicate_cover):
+    def _remove_duplicate_predicates_from_cover(all_predicate_cover):
         '''
         Returns a version of predicate cover containing only predicates with
         distinct covers (based on set string representation hash)
