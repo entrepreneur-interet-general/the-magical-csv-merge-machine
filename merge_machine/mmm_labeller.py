@@ -56,9 +56,10 @@ autodoc flask ?
 iterate on source then ref for blocking
 check this for cover. https://github.com/dedupeio/dedupe/blob/master/dedupe/training.py#L55
 
+Hierarchical n_cover
+Sort predicates by cover size for equivalent predicate
 
-
-
+Multiple predicates
 """
 
 from future.utils import viewitems

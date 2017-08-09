@@ -4,6 +4,9 @@
 Created on Thu Jun 29 18:18:51 2017
 
 @author: leo
+
+# TODO: max length for file reading to generate sample
+
 """
 
 from future.utils import viewitems, viewvalues
@@ -241,33 +244,53 @@ def get_col(predicate):
 
 linkBlockedSample = functools.partial(blockedSample, linkSamplePredicates) 
 
-dir_path = 'local_test_data'
+#==============================================================================
+# Lyceees
+#==============================================================================
 
-source = pd.read_csv(os.path.join(dir_path, 'source.csv'), dtype=str)
-ref = pd.read_csv(os.path.join(dir_path, 'ref.csv'), dtype=str)
+#dir_path = 'local_test_data'
+#
+#source = pd.read_csv(os.path.join(dir_path, 'source.csv'), dtype=str)
+#ref = pd.read_csv(os.path.join(dir_path, 'ref.csv'), dtype=str)
+#
+#match_cols = [{'source': 'departement', 'ref': 'departement'},
+#              {'source': 'commune', 'ref': 'localite_acheminement_uai'},
+#              {'source': 'lycees_sources', 'ref': 'full_name'}]
 
-match_cols = [{'source': 'departement', 'ref': 'departement'},
-              {'source': 'commune', 'ref': 'localite_acheminement_uai'},
-              {'source': 'lycees_sources', 'ref': 'full_name'}]
+#==============================================================================
+# Autres
+#==============================================================================
+
+dir_path = 'data/sirene'
+
+source = pd.read_csv(os.path.join('local_test_data', 'source.csv'), dtype=str)
+ref = pd.read_csv(os.path.join('local_test_data', 'sirene', 'petit_sirene.csv'), dtype=str)
+
+match_cols = [{'source': 'commune', 'ref': 'L6_DECLAREE'},
+              {'source': 'lycees_sources', 'ref': 'NOMEN_LONG'}]
+
+#==============================================================================
+# 
+#==============================================================================
 
 source_cols = [x['source'] for x in match_cols]
 ref_cols = [x['ref'] for x in match_cols]
 
-
 temp_match_cols = {x['source']: x['ref'] for x in match_cols}
-
 
 # Replace column_names in source by those in ref
 source.columns = [temp_match_cols.get(x, x) for x in source.columns]
 
-fields = [{'crf': True, 'missing_values': True, 'type': 'String', 'field': x} for x in ref_cols]
-
+fields = [{'crf': True, 'missing_values': True, 'type': 'String', 'field': x} 
+            for x in ref_cols]
 
 real_match_cols = [pair['ref'] for pair in match_cols]
 
 for col in real_match_cols:
+    print('cleaning up for ', col)
     source[col] = pd_pre_process(source[col], remove_punctuation=True)
     ref[col] = pd_pre_process(ref[col], remove_punctuation=True)
+print('done cleaning')
 
 # Replace np.nan 's by None 's
 source = source.where(source.notnull(), None)
@@ -351,6 +374,15 @@ def excl_1(candidate):
             and (dep_2[0] == '0') \
             and (dep_1 != dep_2[1:])
 
+def excl_2(candidate, field):
+    field_1 = candidate[0][field]
+    field_2 = candidate[1][field]
+    
+    ngrams_1 = n_grams(pre_process_string(field_1), 3)
+    ngrams_2 = n_grams(pre_process_string(field_2), 3)
+    
+    return not (ngrams_1 & ngrams_2)
+
 def n_grams(string, N):
     return {string[i:i+N] for i in range(len(string)-N+1)}
 
@@ -362,18 +394,11 @@ def pre_process_string(string):
         string = string.replace(pair[0], pair[1])
     return string
 
-def excl_2(candidate, field):
-    field_1 = candidate[0][field]
-    field_2 = candidate[1][field]
-    
-    ngrams_1 = n_grams(pre_process_string(field_1), 3)
-    ngrams_2 = n_grams(pre_process_string(field_2), 3)
-    
-    return not (ngrams_1 & ngrams_2)
+
 
 
 load_labelling = True
-do_labelling = False
+do_labelling = True
 write_labelling = False
 
 if load_labelling:
