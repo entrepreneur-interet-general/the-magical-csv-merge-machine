@@ -7,6 +7,10 @@ Created on Thu Jun 29 18:18:51 2017
 
 # TODO: max length for file reading to generate sample
 
+# 1 is source, 2 is ref
+
+# Problem: small file? proba of finding is low
+
 """
 
 from future.utils import viewitems, viewvalues
@@ -51,27 +55,35 @@ def sort_pair(a, b) :
 
 def blockedSample(sampler, sample_size, my_predicates, *args) :
     
-    blocked_sample = set()
+    blocked_sample = dict()
     remaining_sample = sample_size - len(blocked_sample)
     previous_sample_size = 0
 
     while remaining_sample and my_predicates :
         random.shuffle(my_predicates)
 
-        new_sample = sampler(remaining_sample, # change here
+        new_sample = sampler(remaining_sample, # TODO: change here
                              my_predicates,
                              *args)
 
-        filtered_sample = ([(predicate, pair) for pair in subsample] for (predicate, subsample) 
-                           in new_sample if subsample)
-        
-        blocked_sample.update(itertools.chain.from_iterable(filtered_sample))
+        filtered_sample = ([(predicate, pair, candidate) for (pair, candidate) \
+                            in zip(subsample, subcandidates)] \
+                            for (predicate, subsample, subcandidates) \
+                            in new_sample if subsample)
+
+        # TODO: look at set + data
+        # blocked_sample.update(itertools.chain.from_iterable(filtered_sample)) (from set)
+
+        blocked_sample.update({(predicate, pair): candidate for \
+                        (predicate, pair, candidate) in list(filtered_sample)})
 
         growth = len(blocked_sample) - previous_sample_size
         growth_rate = growth/remaining_sample
 
         remaining_sample = sample_size - len(blocked_sample)
         previous_sample_size = len(blocked_sample)
+
+        import pdb; pdb.set_trace()
 
         if growth_rate < 0.001 :
             print("%s blocked samples were requested, "
@@ -85,57 +97,59 @@ def blockedSample(sampler, sample_size, my_predicates, *args) :
         
     return blocked_sample
 
-def linkSamplePredicate(subsample_size, predicate, items1, items2) :
+def linkSamplePredicate(subsample_size, predicate, items1, items2_gen) :
     sample = []
 
     predicate_function = predicate.func
     field = predicate.field
+    
+    for items2 in items2_gen:
 
-    red = defaultdict(list)
-    blue = defaultdict(list)
-
-    for i, (index, record) in enumerate(interleave(items1, items2)):
-        if i == 20000:
-            if min(len(red), len(blue)) + len(sample) < 10 :
-                return sample
-
-        column = record[field]
-        if not column :
+        red = defaultdict(list)
+        blue = defaultdict(list)
+    
+        for i, (index, record) in enumerate(interleave(items1, items2)):
+            if i == 20000:
+                if min(len(red), len(blue)) + len(sample) < 10 :
+                    return sample
+    
+            column = record[field]
+            if not column :
+                red, blue = blue, red
+                continue
+    
+            block_keys = predicate_function(column)
+            for block_key in block_keys:
+                if blue.get(block_key):
+                    pair = sort_pair(blue[block_key].pop(), index)
+                    sample.append(pair)
+    
+                    subsample_size -= 1
+                    if subsample_size :
+                        break
+                    else :
+                        return sample
+                else:
+                    red[block_key].append(index)
+    
             red, blue = blue, red
-            continue
-
-        block_keys = predicate_function(column)
-        for block_key in block_keys:
-            if blue.get(block_key):
-                pair = sort_pair(blue[block_key].pop(), index)
-                sample.append(pair)
-
-                subsample_size -= 1
-                if subsample_size :
-                    break
-                else :
-                    return sample
-            else:
-                red[block_key].append(index)
-
-        red, blue = blue, red
-
-    for index, record in itertools.islice(items2, len(items1)) :
-        column = record[field]
-        if not column :
-            continue
-
-        block_keys = predicate_function(column)
-        for block_key in block_keys:
-            if red.get(block_key):
-                pair = sort_pair(red[block_key].pop(), index)
-                sample.append(pair)
-
-                subsample_size -= 1
-                if subsample_size :
-                    break
-                else :
-                    return sample
+    
+        for index, record in itertools.islice(items2, len(items1)) :
+            column = record[field]
+            if not column :
+                continue
+    
+            block_keys = predicate_function(column)
+            for block_key in block_keys:
+                if red.get(block_key):
+                    pair = sort_pair(red[block_key].pop(), index)
+                    sample.append(pair)
+    
+                    subsample_size -= 1
+                    if subsample_size :
+                        break
+                    else :
+                        return sample
 
     return sample
 
@@ -151,30 +165,70 @@ def subsample(total_size, my_predicates) :
     for split, predicate in zip(splits, my_predicates) :
         yield split, predicate
 
-def linkSamplePredicates(sample_size, my_predicates, items1, items2) :
-    n_1 = len(items1)
-    n_2 = len(items2)
+#def linkSamplePredicates(sample_size, my_predicates, items1, items2) :
+#    n_1 = len(items1)
+#    n_2 = len(items2)
+#
+#    for subsample_size, predicate in subsample(sample_size, my_predicates) :
+#        
+#        if not subsample_size :
+#            yield predicate, None # change here
+#            continue
+#
+#        try:
+#            items1.rotate(random.randrange(n_1))
+#            items2.rotate(random.randrange(n_2))
+#        except ValueError :
+#            raise ValueError("Empty itemset.")
+#
+#        try :
+#            items1.reverse()
+#            items2.reverse()
+#        except AttributeError :
+#            items1 = deque(reversed(items1))
+#            items2 = deque(reversed(items2))
+#
+#        yield predicate, linkSamplePredicate(subsample_size, predicate, items1, items2) # change here
 
-    for subsample_size, predicate in subsample(sample_size, my_predicates) :
-        
+def linkSamplePredicates(sample_size, my_predicates, items1, items2_gen):
+
+    n_1 = len(items1)
+    #n_2 = len(items2)
+    
+    for subsample_size, predicate in subsample(sample_size, my_predicates):
+
         if not subsample_size :
             yield predicate, None # change here
             continue
 
         try:
             items1.rotate(random.randrange(n_1))
-            items2.rotate(random.randrange(n_2))
+            #items2.rotate(random.randrange(n_2))
         except ValueError :
             raise ValueError("Empty itemset.")
 
         try :
             items1.reverse()
-            items2.reverse()
+            #items2.reverse()
         except AttributeError :
             items1 = deque(reversed(items1))
-            items2 = deque(reversed(items2))
+            #items2 = deque(reversed(items2))
 
-        yield predicate, linkSamplePredicate(subsample_size, predicate, items1, items2) # change here
+        # Correspondance between key and position in items
+        items1_correspondance = {key: i for i, (key, _) in enumerate(items1)}
+        #        items2_correspondance = {key: i for i, (key, _) in enumerate(items2)}
+                
+        items2_gen_copy, items2_gen = itertools.tee(items2_gen)
+        pairs = linkSamplePredicate(subsample_size, predicate, items1, items2_gen_copy)
+        del items2_gen_copy
+
+        # pair actually contains multiple pairs
+        #        candidates = []
+        #        for pair in pairs:
+        #            candidate = {'source': items1[items1_correspondance[pair[0]]], 
+        #                         'ref': items2[items2_correspondance[pair[1]]]}                  
+        #            candidates.append(candidate)
+        yield predicate, pairs, candidates # change here
 
 
 
@@ -262,9 +316,12 @@ linkBlockedSample = functools.partial(blockedSample, linkSamplePredicates)
 #==============================================================================
 
 dir_path = 'data/sirene'
+chunksize = 50000
 
-source = pd.read_csv(os.path.join('local_test_data', 'source.csv'), dtype=str)
-ref = pd.read_csv(os.path.join('local_test_data', 'sirene', 'petit_sirene.csv'), dtype=str)
+source = pd.read_csv(os.path.join('local_test_data', 'source.csv'), 
+                     dtype=str, nrows=chunksize)
+ref_gen = pd.read_csv(os.path.join('local_test_data', 'sirene', 'petit_sirene.csv'), 
+                  dtype=str, chunksize=chunksize)
 
 match_cols = [{'source': 'commune', 'ref': 'L6_DECLAREE'},
               {'source': 'lycees_sources', 'ref': 'NOMEN_LONG'}]
@@ -273,43 +330,58 @@ match_cols = [{'source': 'commune', 'ref': 'L6_DECLAREE'},
 # 
 #==============================================================================
 
-source_cols = [x['source'] for x in match_cols]
-ref_cols = [x['ref'] for x in match_cols]
+
+def gen_items(tab, real_match_cols):
+    '''
+    Generate "items" (dict) view of records in tab. This includes cleaning 
+    the file
+    '''
+    for col in real_match_cols:
+        tab[col] = pd_pre_process(tab[col], remove_punctuation=True)
+    
+    tab.loc[:, real_match_cols] = tab.loc[:, real_match_cols].where(tab.loc[:, real_match_cols], None)
+    
+    # ref_cols_to_match_on = [pair['ref'] for pair in match_cols]
+    items = tab[real_match_cols].to_dict('index')
+    return items
+
+#
+source_cols_to_match_on = [x['source'] for x in match_cols]
 
 temp_match_cols = {x['source']: x['ref'] for x in match_cols}
 
-# Replace column_names in source by those in ref
-source.columns = [temp_match_cols.get(x, x) for x in source.columns]
-
-fields = [{'crf': True, 'missing_values': True, 'type': 'String', 'field': x} 
-            for x in ref_cols]
-
 real_match_cols = [pair['ref'] for pair in match_cols]
+fields = [{'crf': True, 'missing_values': True, 'type': 'String', 'field': x} 
+            for x in real_match_cols]
 
-for col in real_match_cols:
-    print('cleaning up for ', col)
-    source[col] = pd_pre_process(source[col], remove_punctuation=True)
-    ref[col] = pd_pre_process(ref[col], remove_punctuation=True)
-print('done cleaning')
+# Replace column_names in source by those in ref
+def rename_columns(tab, og_to_new_dict):
+    tab.columns = [og_to_new_dict.get(col, col) for col in tab.columns]
+    return tab
 
-# Replace np.nan 's by None 's
-source = source.where(source.notnull(), None)
-ref = ref.where(ref.notnull(), None)
+def print_and_gen(gen, msg):
+    for i, x in enumerate(gen):
+        print(msg, '(', i, ')')
+        yield x
 
-source_items = source[ref_cols].to_dict('index')
-ref_items = ref[ref_cols].to_dict('index')
+ref_gen = print_and_gen(ref_gen, 'ref')
 
-#deque_1 = sampling.randomDeque(source_items)
-#deque_2 = sampling.randomDeque(ref_items)
+source = rename_columns(source, temp_match_cols)
+
+source_items = gen_items(source, real_match_cols)
+ref_items_gen = (gen_items(tab, real_match_cols) for tab in ref_gen)
+
+deque_1 = sampling.randomDeque(source_items)
+deque_2_gen = (sampling.randomDeque(ref_items) for ref_items in ref_items_gen)
 
 datamodel = dedupe.datamodel.DataModel(fields)
 my_predicates = list(datamodel.predicates(index_predicates=False, canopies=False)) # TODO: set to True
 
-#blocked_sample_keys = linkBlockedSample(5000,
-#                                         my_predicates,
-#                                         deque_1,
-#                                         deque_2)
-
+blocked_sample_keys = linkBlockedSample(5000,
+                                         my_predicates,
+                                         deque_1,
+                                         deque_2_gen)
+assert False
 
 
 #candidates = [(source[k1], ref[k2])
@@ -472,7 +544,6 @@ def make_n_cover(dupe_cover, n):
             dupe_cover_n[x] = elems
 
     return dupe_cover_n
-
 
 candidates = [x['candidate'] for x in labelled]
 dupe_cover = cover(blocker, candidates, compound_length)
