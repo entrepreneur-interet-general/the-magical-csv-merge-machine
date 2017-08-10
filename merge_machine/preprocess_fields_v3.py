@@ -1851,7 +1851,7 @@ def type_tags():
 	allTags = defaultdict(list)
 	allTags.update(TYPE_TAGS)
 	for mainTag in allTags.keys():
-		allTags[mainTag].add(mainTag)
+		allTags[mainTag].append(mainTag)
 	for parent, children in PARENT_CHILD_RELS.items():
 		for parentTag in allTags[parent]:
 			for child in children:
