@@ -12,7 +12,6 @@ Created on Thu Jun 29 18:18:51 2017
 # Problem: small file? proba of finding is low
 
 """
-
 from future.utils import viewitems, viewvalues
 
 from collections import defaultdict, deque
@@ -28,9 +27,11 @@ import numpy as np
 import pandas as pd
 import unidecode
 
+import time
+
 
 def pd_pre_process(series, remove_punctuation=False):
-    '''Applies pre-processing to series using builtin pandas.str'''
+    '''Applies pre-processing to series using builtin pandas.str'''    
     series = series.str.replace(' +', ' ')
     series = series.str.replace('\n', ' ')
     if remove_punctuation:
@@ -55,35 +56,35 @@ def sort_pair(a, b) :
 
 def blockedSample(sampler, sample_size, my_predicates, *args) :
     
-    blocked_sample = dict()
+    blocked_sample = set()
     remaining_sample = sample_size - len(blocked_sample)
     previous_sample_size = 0
 
     while remaining_sample and my_predicates :
         random.shuffle(my_predicates)
 
-        new_sample = sampler(remaining_sample, # TODO: change here
+        new_sample = list(sampler(remaining_sample, # TODO: change here
                              my_predicates,
-                             *args)
+                             *args))
 
-        filtered_sample = ([(predicate, pair, candidate) for (pair, candidate) \
-                            in zip(subsample, subcandidates)] \
-                            for (predicate, subsample, subcandidates) \
-                            in new_sample if subsample)
+        filtered_sample = ([(predicate, pair) for pair \
+                            in this_subsample] \
+                            for (predicate, this_subsample) \
+                            in new_sample if this_subsample)
+
 
         # TODO: look at set + data
         # blocked_sample.update(itertools.chain.from_iterable(filtered_sample)) (from set)
+        
+        blocked_sample.update(itertools.chain.from_iterable(filtered_sample))
+        
 
-        blocked_sample.update({(predicate, pair): candidate for \
-                        (predicate, pair, candidate) in list(filtered_sample)})
 
         growth = len(blocked_sample) - previous_sample_size
         growth_rate = growth/remaining_sample
 
         remaining_sample = sample_size - len(blocked_sample)
         previous_sample_size = len(blocked_sample)
-
-        import pdb; pdb.set_trace()
 
         if growth_rate < 0.001 :
             print("%s blocked samples were requested, "
@@ -97,19 +98,22 @@ def blockedSample(sampler, sample_size, my_predicates, *args) :
         
     return blocked_sample
 
-def linkSamplePredicate(subsample_size, predicate, items1, items2_gen) :
+def linkSamplePredicate(subsample_size, predicate, deque_1, deque_2_gen) :
     sample = []
-
+    candidates = []
+    
     predicate_function = predicate.func
     field = predicate.field
     
-    for items2 in items2_gen:
-
+    for deque_2 in deque_2_gen:
+ 
+        print('Subsample size:', subsample_size)
+        
         red = defaultdict(list)
         blue = defaultdict(list)
     
-        for i, (index, record) in enumerate(interleave(items1, items2)):
-            if i == 20000:
+        for i, (index, record) in enumerate(interleave(deque_1, deque_2)):
+            if i >= 20000:
                 if min(len(red), len(blue)) + len(sample) < 10 :
                     return sample
     
@@ -134,7 +138,7 @@ def linkSamplePredicate(subsample_size, predicate, items1, items2_gen) :
     
             red, blue = blue, red
     
-        for index, record in itertools.islice(items2, len(items1)) :
+        for index, record in itertools.islice(deque_2, len(deque_1)) :
             column = record[field]
             if not column :
                 continue
@@ -228,7 +232,7 @@ def linkSamplePredicates(sample_size, my_predicates, items1, items2_gen):
         #            candidate = {'source': items1[items1_correspondance[pair[0]]], 
         #                         'ref': items2[items2_correspondance[pair[1]]]}                  
         #            candidates.append(candidate)
-        yield predicate, pairs, candidates # change here
+        yield predicate, pairs # change here
 
 
 
@@ -320,8 +324,13 @@ chunksize = 50000
 
 source = pd.read_csv(os.path.join('local_test_data', 'source.csv'), 
                      dtype=str, nrows=chunksize)
-ref_gen = pd.read_csv(os.path.join('local_test_data', 'sirene', 'petit_sirene.csv'), 
-                  dtype=str, chunksize=chunksize)
+
+ref_file_name = 'sirc-17804_9075_14209_201612_L_M_20170104_171522721.csv' # 'petit_sirene.csv'
+ref_sep = ';'
+ref_encoding = 'windows-1252'
+ref_gen = pd.read_csv(os.path.join('local_test_data', 'sirene', ref_file_name), 
+                  sep=ref_sep, encoding=ref_encoding,
+                  dtype=str, chunksize=chunksize, nrows=200000)
 
 match_cols = [{'source': 'commune', 'ref': 'L6_DECLAREE'},
               {'source': 'lycees_sources', 'ref': 'NOMEN_LONG'}]
@@ -336,13 +345,19 @@ def gen_items(tab, real_match_cols):
     Generate "items" (dict) view of records in tab. This includes cleaning 
     the file
     '''
+    a = time.time()
     for col in real_match_cols:
         tab[col] = pd_pre_process(tab[col], remove_punctuation=True)
+    print('pre-processing took ', time.time() - a, ' seconds')
     
-    tab.loc[:, real_match_cols] = tab.loc[:, real_match_cols].where(tab.loc[:, real_match_cols], None)
+    a = time.time()
+    # Transform NaNs to Nones
+    tab.loc[:, real_match_cols] = tab.loc[:, real_match_cols].where(tab.loc[:, real_match_cols].notnull(), None)
     
     # ref_cols_to_match_on = [pair['ref'] for pair in match_cols]
     items = tab[real_match_cols].to_dict('index')
+    print('Replacing None and creating dict took ', time.time() - a, ' seconds')    
+    
     return items
 
 #
@@ -382,6 +397,26 @@ blocked_sample_keys = linkBlockedSample(5000,
                                          deque_1,
                                          deque_2_gen)
 assert False
+
+blocked_sample_keys_sorted = sorted(blocked_sample_keys, key=lambda x: x[1][1])
+# Sort blocked sample keys by reference id to load
+
+ref_gen = pd.read_csv(os.path.join('local_test_data', 'sirene', ref_file_name), 
+                  sep=ref_sep, encoding=ref_encoding,
+                  dtype=str, chunksize=chunksize)
+
+ref_gen = print_and_gen(ref_gen, 'ref')
+ref_items_gen = (gen_items(tab, real_match_cols) for tab in ref_gen)
+
+
+candidates = []
+ref_items_cur = {}
+for predicate, (k1, k2) in blocked_sample_keys_sorted:
+    while k2 not in ref_items_cur:
+        ref_items_cur = next(ref_items_gen)
+    candidates.append((source_items[k1], ref_items_cur[k2]))
+
+
 
 
 #candidates = [(source[k1], ref[k2])
