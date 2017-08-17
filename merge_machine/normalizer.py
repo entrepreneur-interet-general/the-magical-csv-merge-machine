@@ -148,44 +148,47 @@ class Normalizer(AbstractDataProject):
         class        
         '''
         ENCODINGS = ['utf-8', 'windows-1252']
-        SEPARATORS = [',', ';', '\t']
         
         first_lines = b''.join([file.readline() for _ in range(self.CHUNKSIZE)])
         could_read = False        
         for encoding in ENCODINGS:
-            for sep in SEPARATORS:
-                try:
-                    first_lines_io = io.BytesIO(first_lines)
-                                        
-                    # Just read column name and first few lines for encoding
-                    tab_part = pd.read_csv(first_lines_io, 
-                                           sep=sep, 
-                                           encoding=encoding, 
-                                           dtype=str)
-                    columns = tab_part.columns
+            try:
+                # Just read column name and first few lines for encoding and separator
+                first_lines_io = io.BytesIO(first_lines)
+                sep = pd.read_csv(first_lines_io, 
+                                       sep=None, 
+                                       encoding=encoding,
+                                       iterator=True,
+                                       dtype=str)._engine.data.dialect.delimiter
+                                  
+                first_lines_io = io.BytesIO(first_lines)
+                tab_part = pd.read_csv(first_lines_io, 
+                                       sep=sep, 
+                                       encoding=encoding, 
+                                       dtype=str)
+                columns = tab_part.columns
 
-                    could_read = True
-                    break
-                except Exception as e:
-                    print(e)
-                    
-            if could_read:
-                # Create actual generator
-                try:
-                    tab_next = pd.read_csv(file, 
-                                         sep=sep, 
-                                         encoding=encoding,     
-                                         dtype=str,
-                                         header=None,
-                                         chunksize=self.CHUNKSIZE)
-                    tab = itertools.chain([tab_part], tab_next)
-                except:
-                    tab = itertools.chain([tab_part])
+                could_read = True
                 break
+            except Exception as e:
+                print(e)
+                    
+        if could_read:
+            # Create actual generator
+            try:
+                tab_next = pd.read_csv(file, 
+                                     sep=sep, 
+                                     encoding=encoding,     
+                                     dtype=str,
+                                     header=None,
+                                     chunksize=self.CHUNKSIZE)
+                tab = itertools.chain([tab_part], tab_next)
+            except:
+                tab = itertools.chain([tab_part])
             
         if not could_read:
-            raise Exception('Separator and/or Encoding not detected. Try uploading \
-                            a csv with "," as separator with utf-8 encoding')            
+            raise Exception('Separator and/or Encoding not detected. Try uploading' \
+                          + ' a csv with "," as separator with utf-8 encoding')            
         
         return tab, sep, encoding, columns
     
@@ -475,7 +478,7 @@ if __name__ == '__main__':
     
     # Upload file to normalize
     file_path = os.path.join('local_test_data', source_file_name)
-    with open(file_path) as f:
+    with open(file_path, 'rb') as f:
         proj.upload_init_data(f, source_file_name, user_given_name)
 
     # Select only interesting columns
