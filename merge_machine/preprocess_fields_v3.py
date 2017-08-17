@@ -1909,7 +1909,9 @@ def normalize_values(tab, params):
 	types = params['column_types']
 	for (originalField, newCol) in fields.normalize_values_in_place(types):
 		modified[originalField] = (tab[originalField] == newCol)
-		tab[originalField] = newCol #  = newCol.values
+		# tab[originalField] = newCol
+		for i, v in enumerate(newCol):
+			tab.loc[i][originalField] = v		
 	return tab, modified
 
 def sample_types_ilocs(tab, params, sample_params):
