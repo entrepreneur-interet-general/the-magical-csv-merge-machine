@@ -330,7 +330,7 @@ ref_sep = ';'
 ref_encoding = 'windows-1252'
 ref_gen = pd.read_csv(os.path.join('local_test_data', 'sirene', ref_file_name), 
                   sep=ref_sep, encoding=ref_encoding,
-                  dtype=str, chunksize=chunksize, nrows=200000)
+                  dtype=str, chunksize=chunksize, nrows=400000)
 
 match_cols = [{'source': 'commune', 'ref': 'L6_DECLAREE'},
               {'source': 'lycees_sources', 'ref': 'NOMEN_LONG'}]
@@ -396,7 +396,7 @@ blocked_sample_keys = linkBlockedSample(5000,
                                          my_predicates,
                                          deque_1,
                                          deque_2_gen)
-assert False
+
 
 blocked_sample_keys_sorted = sorted(blocked_sample_keys, key=lambda x: x[1][1])
 # Sort blocked sample keys by reference id to load
@@ -417,6 +417,14 @@ for predicate, (k1, k2) in blocked_sample_keys_sorted:
     candidates.append((source_items[k1], ref_items_cur[k2]))
 
 
+keys = candidates[0][0].keys()
+for candidate in [x for x in candidates if'lycee' in x[1]['NOMEN_LONG']]:
+    print('\n*******')
+    for key in keys:
+        print(key, ' : ', candidate[0][key])
+        print(key, ' : ', candidate[1][key])
+
+assert False
 
 
 #candidates = [(source[k1], ref[k2])
