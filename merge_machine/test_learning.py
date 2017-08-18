@@ -392,7 +392,7 @@ deque_2_gen = (sampling.randomDeque(ref_items) for ref_items in ref_items_gen)
 datamodel = dedupe.datamodel.DataModel(fields)
 my_predicates = list(datamodel.predicates(index_predicates=False, canopies=False)) # TODO: set to True
 
-blocked_sample_keys = linkBlockedSample(5000,
+blocked_sample_keys = linkBlockedSample(15000,
                                          my_predicates,
                                          deque_1,
                                          deque_2_gen)
