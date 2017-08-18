@@ -1906,7 +1906,7 @@ def normalize_values(tab, params):
 	modified = pd.DataFrame(False, index=tab.index, columns=tab.columns)
 	fields = parse_fields_from_Panda(tab)
 	# Fetch results of previous step (type inference) so as to avoid duplicative work
-	types = params['column_types']
+	types = fields.infer_types()
 	for (originalField, newCol) in fields.normalize_values_in_place(types):
 		modified[originalField] = (tab[originalField] == newCol)
 		# tab[originalField] = newCol
