@@ -2,7 +2,7 @@
 # coding=utf-8
 
 # Standard modules
-import csv, itertools, re, unicodedata, logging, optparse, time, sys, math, os
+import csv, itertools, re, logging, optparse, time, sys, math, os, unidecode
 from functools import partial, reduce, lru_cache
 from collections import defaultdict, Counter, Iterable
 from operator import itemgetter, add
@@ -170,11 +170,13 @@ def lower_or_not(token, keepAcronyms, keepInitialized = False):
 			return toKeep + lower_or_not(token[len(toKeep):], keepAcronyms, keepInitialized)
 	return token.lower()
 
-def to_ASCII(phrase): return unicodedata.normalize('NFKD', phrase)
+def to_ASCII(phrase): return unidecode.unidecode(phrase)
 
 def rejoin(v): return to_ASCII(v)
 
-def case_token(t, keepAcronyms): return to_ASCII(lower_or_not(t.strip(), keepAcronyms))
+def case_phrase(p, keepAcronyms = False):
+	ps = pre_split(p)
+	return to_ASCII(lower_or_not(ps.strip(), keepAcronyms))
 
 def replace_by_space(str, *patterns): return reduce(lambda s, p: re.sub(p, ' ', s), patterns, str)
 
@@ -194,19 +196,16 @@ def pre_split(v):
 	s = replace_by_space(s, '[\{\}\[\](),\.\"\';:!?&\^\/\*-]')
 	return re.sub('([^\d\'])-([^\d])', '\1 \2', s)
 
-def split_and_case(phrase, keepAcronyms = False):
-	return case_token(pre_split(phrase), keepAcronyms)
-
-def fold_for_changes(s, normalizeCase = False):
-	''' Override this if we want to skip minor changes (case, hyphenation, etc.) '''
-	return split_and_case(s) if normalizeCase else s
+# def fold_for_changes(s, normalizeCase = False):
+# 	''' Override this if we want to skip minor changes (case, hyphenation, etc.) '''
+# 	return split_and_case(s) if normalizeCase else s
 
 def normalize_and_validate_tokens(phrase,
 	keepAcronyms = False, tokenValidator = is_valid_token, phraseValidator = is_valid_phrase, stopWords = None):
 	''' Returns a list of normalized, valid tokens for the input phrase (an empty list
 		if no valid tokens were found) '''
 	if phrase:
-		tokens = map(lambda t: case_token(t, keepAcronyms), str.split(pre_split(phrase)))
+		tokens = str.split(case_phrase(phrase, keepAcronyms))
 		validTokens = []
 		for token in tokens:
 			if tokenValidator(token) and (stopWords is None or token not in stopWords): validTokens.append(token)
@@ -227,7 +226,7 @@ def validated_lexicon(lexicon, tokenize = False):
 def validated_lexical_map(lexicon, tokenize = False, stopWords = None, synMap = None):
 	''' Returns a dictionary from normalized string to list of original strings. '''
 	def add_to_lexicon_map(lm, s, tokenize, stopWords):
-		k = normalize_and_validate_phrase(s, stopWords = stopWords) if tokenize else case_token(s, False)
+		k = normalize_and_validate_phrase(s, stopWords = stopWords) if tokenize else case_phrase(s, False)
 		if k is None: return
 		lm[k].append(s)
 	lm = defaultdict(list)
@@ -569,7 +568,7 @@ def tokenization_based_score(matchedSrcTokens, srcTokens, matchedRefPhrase, refP
 	return 0 if refCharRatio < minRefCharRatio else refCharRatio
 
 def stop_words_as_normalized_list(stopWords): 
-	return [] if stopWords is None else list([case_token(s, False) for s in stopWords])
+	return [] if stopWords is None else list([case_phrase(s, False) for s in stopWords])
 
 DTC = 6 # Dangerous Token Count (becomes prohibitive to tokenize many source strings above this!)
 class TokenizedMatcher(TypeMatcher):
@@ -611,7 +610,7 @@ class TokenizedMatcher(TypeMatcher):
 							raise RuntimeError('Normalized phrase {} not found in phrases map'.format(nm))
 							continue
 						hit = self.phrasesMap[nm]
-						v = split_and_case(c.value)
+						v = case_phrase(c.value)
 						# The next line joins on '' and not on ' ' because non-pure space chars might have been transformed
 						# during tokenization (hyphens, punctuation, etc.)
 						subStr = ''.join(matchSrcTokens)
@@ -638,7 +637,7 @@ def fast_sim_score(r, l = 1024):
 	else: return (r[1], 5) if len(r[1]) > 0 else ([], 0)
 
 def normalize_or_not(v, tokenize = False, stopWords = None): 
-	return normalize_and_validate_phrase(v, stopWords = stopWords) if tokenize else split_and_case(v)
+	return normalize_and_validate_phrase(v, stopWords = stopWords) if tokenize else case_phrase(v)
 
 class LabelMatcher(TypeMatcher):
 	def __init__(self, t, lexicon, mm, stopWords = None, synMap = None):
@@ -819,6 +818,16 @@ class Fields(object):
 				for vc in f.cells:
 					vm.match(vc)
 				vm.check_diversity(f.cells)
+	def match_by_types(self, trusted_types):
+		for vm in value_matchers():
+			if isinstance(vm, SubtypeMatcher): continue
+			if isinstance(vm, CompositeMatcher): continue
+			for (hc, f) in self.fields.items():
+				if hc.value not in trusted_types or vm.t != trusted_types[hc.value]:
+					continue
+				logging.debug('TRUSTING %s on %s values', vm, hc.value)
+				for vc in f.cells:
+					vm.match(vc)
 	def likeliest_types(self, h, f, singleType = False):
 		''' Returns None rather than an empty list to signify that not a single type has been inferred.
 
@@ -956,8 +965,8 @@ class Fields(object):
 								b[i] = [b[i]] + nc[of]
 							else: 
 								b[i] = [b[i], nc[of]]
-					oldValue = fold_for_changes(f.cells[i].value)
-					newValues = list([fold_for_changes(s) for s in (nc[of] if isinstance(nc[of], list) else [nc[of]])])
+					oldValue = f.cells[i].value
+					newValues = list([s for s in (nc[of] if isinstance(nc[of], list) else [nc[of]])])
 					isNewValue = len(newValues) > 0 and oldValue not in newValues
 					if isNewValue: 
 						self.modifiedByColumn[fieldName][i] += 1
@@ -1184,11 +1193,11 @@ class CustomDateMatcher(TypeMatcher):
 			if dp == 'year':
 				self.register_full_match(c, F_YEAR, 100, ds)
 				return
-			ds = '{}/{}'.format(do.month, ds)
+			ds = "{:02}/{}".format(do.month, ds)
 			if dp == 'month':
 				self.register_full_match(c, F_MONTH, 100, ds)
 			else:
-				self.register_full_match(c, F_DATE, 100, '{}/{}'.format(do.day, ds))
+				self.register_full_match(c, F_DATE, 100, "{:02}/{}".format(do.day, ds))
 		except TypeError as te:
 			logging.error('Error while parsing value which is not a date %s: %s', c.value, te)
 		except OverflowError as oe:
@@ -1501,7 +1510,7 @@ class FrenchAddressMatcher(LabelMatcher):
 				return
 
 def address_filter_score(src, ref):
-	a1, a2 = split_and_case(src), split_and_case(ref)
+	a1, a2 = case_phrase(src), case_phrase(ref)
 	return fuzz.partial_ratio(a1, a2) + fuzz.ratio(a1, a2)
 
 # Acronym handling
@@ -1567,7 +1576,7 @@ class VariantExpander(TypeMatcher):
 						continue
 					for altVariant in self.tokenIdx[matchRefPhrase]:
 						score = self.scorer(matchSrcTokens, tokens, matchRefPhrase, altVariant)
-						v = split_and_case(c.value)
+						v = case_phrase(c.value)
 						i1 = v.find(tokens[k1])
 						if i1 >= 0: i2 = v.find(tokens[k1 + k2 - 1], i1) if k2 > 1 else i1
 						mainVariant = self.variantsMap[altVariant]
@@ -1598,7 +1607,7 @@ def check_non_consecutive_subsequence(superStr, subStr):
 			pos += 1
 	return (res, i) if pos == len(b) else None
 
-def sum_digits(n): return sum_digits(n / 10) + n if n > 9 else n
+def sum_digits(n): return sum_digits(math.floor(n / 10)) + n if n > 9 else n
 
 def validate_Luhn(s):
 	try:
@@ -1720,10 +1729,12 @@ def generate_value_matchers(lvl = 0):
 	yield SubtypeMatcher(F_RD, [F_RD_STRUCT, F_RD_PARTNER, F_CLINICALTRIAL_COLLAB])
 
 	## Enseignement et Enseignement Supérieur
+	academy_labels = file_to_set('academie') | file_to_set('region')
 	yield VocabMatcher(F_MESR, file_to_set('org_enseignement.vocab'), ignoreCase = True, partial = False)
 	if lvl >= 0:
 		yield RegexMatcher(F_ACADEMIE, "acad.mie", ignoreCase = True)
-		yield LabelMatcher(F_ACADEMIE, file_to_set('academie'), MATCH_MODE_EXACT, stopWords = ['académie'])    # SIES/APB
+		yield LabelMatcher(F_ACADEMIE, academy_labels, MATCH_MODE_EXACT, stopWords = ['académie'])    # SIES/APB
+		yield TokenizedMatcher(F_ACADEMIE, academy_labels, distinctCount = 3)
 	if lvl >= 0: 
 		yield VocabMatcher(F_ETAB, file_to_set('etablissement.vocab'), ignoreCase = True, partial = False)
 	if lvl >= 0: 
@@ -1906,8 +1917,9 @@ def normalize_values(tab, params):
 	modified = pd.DataFrame(False, index=tab.index, columns=tab.columns)
 	fields = parse_fields_from_Panda(tab)
 	# Fetch results of previous step (type inference) so as to avoid duplicative work
-	types = fields.infer_types()
-	for (originalField, newCol) in fields.normalize_values_in_place(types):
+	trusted_types = params['column_types']
+	fields.match_by_types(trusted_types)
+	for (originalField, newCol) in fields.normalize_values_in_place(trusted_types):
 		modified[originalField] = (tab[originalField] == newCol)
 		# tab[originalField] = newCol
 		for i, v in enumerate(newCol):
