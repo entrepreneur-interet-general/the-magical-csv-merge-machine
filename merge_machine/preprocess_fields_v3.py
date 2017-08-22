@@ -10,6 +10,8 @@ from fuzzywuzzy import fuzz
 import pandas as pd
 import numpy as np
 
+import pdb
+
 # Parsing/normalization packages
 import urllib, json # For BAN address API on data.gouv.fr
 from dateparser import DateDataParser
@@ -823,11 +825,14 @@ class Fields(object):
 			if isinstance(vm, SubtypeMatcher): continue
 			if isinstance(vm, CompositeMatcher): continue
 			for (hc, f) in self.fields.items():
-				if hc.value not in trusted_types or vm.t != trusted_types[hc.value]:
+				if hc.value not in trusted_types:
+					continue
+				if vm.t != trusted_types[hc.value]:
 					continue
 				logging.debug('TRUSTING %s on %s values', vm, hc.value)
 				for vc in f.cells:
 					vm.match(vc)
+
 	def likeliest_types(self, h, f, singleType = False):
 		''' Returns None rather than an empty list to signify that not a single type has been inferred.
 
@@ -984,9 +989,14 @@ class Fields(object):
 			lvt = types[fieldName]
 			assert self.entries == len(f.cells)
 			newCol = [''] * self.entries
+			mod_count = 0
 			for i, c in enumerate(f.cells):
 				nvs = list(c.normalized_values_in_place(lvt))
 				newCol[i] = ', '.join(nvs)
+				if c.value != newCol[i]: 
+					logging.debug('Field {} recoded: {} --> {}'.format(fieldName, c.value, newCol[i]))
+					mod_count += 1
+			logging.debug('Field {} recoded: {} / {} total'.format(fieldName, mod_count, len(f.cells)))
 			yield (fieldName, newCol)
 
 @lru_cache(maxsize = 1048576, typed = False)
@@ -1639,7 +1649,7 @@ def value_matchers():
 			VALUE_MATCHERS.append(vm)
 	return VALUE_MATCHERS
 
-def generate_value_matchers(lvl = 0):
+def generate_value_matchers(lvl = 1):
 	''' Generates type matcher objects that can be applied to each value cell in a column in order to infer
 		whether that column's type is the matcher's type (or alternatively a parent type or a child type).
 
@@ -1693,9 +1703,11 @@ def generate_value_matchers(lvl = 0):
 	if lvl >= 0: yield RegexMatcher(F_NIR, "[0-9]15")
 
 	# Date-time
-	if lvl >= 0: yield RegexMatcher(F_YEAR, "19[0-9]{2}")
-	if lvl >= 0: yield RegexMatcher(F_YEAR, "20[0-9]{2}")
-	if lvl >= 1: yield CustomDateMatcher()
+	if lvl >= 0: 
+		yield RegexMatcher(F_YEAR, "19[0-9]{2}")
+		yield RegexMatcher(F_YEAR, "20[0-9]{2}")
+	if lvl >= 1:
+		yield CustomDateMatcher()
 	yield SubtypeMatcher(F_DATE, [F_YEAR])
 	yield SubtypeMatcher(F_STRUCTURED_TYPE, [F_DATE, F_URL, F_EMAIL, F_PHONE])
 
@@ -1729,7 +1741,7 @@ def generate_value_matchers(lvl = 0):
 	yield SubtypeMatcher(F_RD, [F_RD_STRUCT, F_RD_PARTNER, F_CLINICALTRIAL_COLLAB])
 
 	## Enseignement et Enseignement Supérieur
-	academy_labels = file_to_set('academie') | file_to_set('region')
+	academy_labels = file_to_set('academie') # file_to_set('academie') | file_to_set('region')
 	yield VocabMatcher(F_MESR, file_to_set('org_enseignement.vocab'), ignoreCase = True, partial = False)
 	if lvl >= 0:
 		yield RegexMatcher(F_ACADEMIE, "acad.mie", ignoreCase = True)
@@ -1770,9 +1782,10 @@ def generate_value_matchers(lvl = 0):
 		yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT, stopWords = STOP_WORDS_CITY)
 		yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
 
-	if lvl >= 2:
+	if lvl >= 0:
 		yield TokenizedMatcher(F_DPT, file_to_set('departement'), distinctCount = 7)
 		yield TokenizedMatcher(F_REGION, file_to_set('region'), distinctCount = 3)
+	if lvl >= 2: 
 		yield TokenizedMatcher(F_STREET, file_to_set('voie.col'), maxTokens = 2)
 	yield CompositeMatcher(F_ADDRESS, [F_STREET, F_ZIP, F_CITY, F_COUNTRY])
 	yield SubtypeMatcher(F_GEO, [F_ADDRESS, F_ZIP, F_CITY, F_DPT, F_REGION, F_COUNTRY])
@@ -1920,8 +1933,7 @@ def normalize_values(tab, params):
 	trusted_types = params['column_types']
 	fields.match_by_types(trusted_types)
 	for (originalField, newCol) in fields.normalize_values_in_place(trusted_types):
-		modified[originalField] = (tab[originalField] == newCol)
-		# tab[originalField] = newCol
+		modified[originalField] = (tab[originalField] != newCol)
 		for i, v in enumerate(newCol):
 			tab.loc[i][originalField] = v		
 	return tab, modified
