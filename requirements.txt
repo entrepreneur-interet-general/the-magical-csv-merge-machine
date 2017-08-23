@@ -16,3 +16,4 @@ phonenumbers
 dateparser
 postal
 persistent
+python-stdnum

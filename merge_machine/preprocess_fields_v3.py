@@ -7,15 +7,16 @@ from functools import partial, reduce, lru_cache
 from collections import defaultdict, Counter, Iterable
 from operator import itemgetter, add
 from fuzzywuzzy import fuzz
+from stdnum.fr import siren, siret
 import pandas as pd
 import numpy as np
 
-import pdb
-
 # Parsing/normalization packages
-import urllib, json # For BAN address API on data.gouv.fr
+import urllib.request, urllib.parse, json # For BAN address API on data.gouv.fr
 from dateparser import DateDataParser
 import phonenumbers
+
+import pdb # DEBUG ONLY: to remove!
 
 from CONFIG import RESOURCE_PATH
 
@@ -342,7 +343,6 @@ F_JOURNAL = u'Titre de revue'
 F_EMAIL = u'Email'
 F_URL = u'URL'
 F_INSEE = u'Code INSEE'
-F_NIR = u'NIR'
 F_YEAR = u'Année'
 F_MONTH = u'Mois'
 F_DATE = u'Date'
@@ -369,6 +369,9 @@ F_PERSON_ID = u'ID personne'
 F_ENTREPRISE = u'Entreprise' # Nom ou raison sociale de l'entreprise
 F_SIREN = u'SIREN'
 F_SIRET = u'SIRET'
+F_NIF = u'NIF' # Numéro d'Immatriculation Fiscale
+F_NIR = u'NIR' # French personal identification number
+F_TVA = u'TVA'
 
 F_PUBLI = u'Publication'
 F_ARTICLE = u'Article'
@@ -415,7 +418,9 @@ TYPE_TAGS = {
 	F_EMAIL: [F_ADDRESS, u'Courriel'],
 	F_URL: [F_ADDRESS],
 	F_INSEE: [F_ID, u'Code', u'Numéro'],
+	F_NIF: [F_ID], 
 	F_NIR: [F_ID], 
+	F_TVA: [F_ID], 
 	F_YEAR: [F_DATE],
 	F_MONTH: [F_DATE],
 	F_PHONE: [u'Numéro'],
@@ -489,6 +494,20 @@ class TypeMatcher(object):
 
 MATCH_MODE_EXACT = 0
 MATCH_MODE_CLOSE = 1
+
+# stdnum-based matcher-normalizer class
+
+class StdnumMatcher(TypeMatcher):
+	def __init__(self, t, stdnum_pkg):
+		super(StdnumMatcher, self).__init__(t)
+		self.t = t
+		self.stdnum_pkg = stdnum_pkg
+	@timed
+	def match(self, c):
+		nv = c.value
+		if self.stdnum_pkg.is_valid(nv):
+			nv0 = self.stdnum_pkg.compact(nv)
+			self.register_full_match(c, self.t, 100, nv0)
 
 # Regex-based matcher-normalizer class
 
@@ -1063,12 +1082,13 @@ def checkSpan(hit, span):
 	if not span or span[0] < 0 or span[1] <= span[0]:
 		logging.warning('Invalid span for hit=%s: %s', hit, span)
 
+CONVERT_NAN_TO_EMPTY = True
+
 class Cell(object):
 	def __init__(self, value, fieldName):
 		# Original value, of type string
 		self.value = value
-		if self.value is np.nan:
-			logging.warning('Converting nan value to ""')
+		if CONVERT_NAN_TO_EMPTY and self.value is np.nan:
 			self.value = ''
 		self.f = fieldName
 		# Map from type to a list of TypeInferences
@@ -1169,7 +1189,7 @@ def unique_cell_values(vs, maxListLength = 3):
 	em = defaultdict(set) # an equivalence map
 	for v in vs:
 		if v is None or len(v) < 1: continue
-		key = normalize_and_validate_phrase(v)
+		key = normalize_and_phrase(v)
 		if key is None: continue
 		em[merger_by_token_list(v)].add(v)
 	return list([select_best_value(vs) for vs in em.values()])[:maxListLength]
@@ -1332,14 +1352,6 @@ PN_TITLE_VARIANTS = {
 	'Pr': ['pr', 'professeur', 'prof', 'professor']
 }
 
-def custom_parse_person_names(l):
-	s = DELIMITER_TOKENS_RE.sub(PN_DELIMITERS[0], l)
-	s0 = s.translate({ PN_STRIP_CHARS: None }) # re.sub(PN_STRIP_CHARS, '', s)
-	for d in PN_DELIMITERS:
-		(s1, s2, s3) = s0.partition(d)
-		if len(s2) == 1: return custom_parse_person_names(s1) + custom_parse_person_names(s3)
-	return person_name_singleton(s0)
-
 def person_name_singleton(s):
 	d = extract_person_name(s)
 	return [] if d is None else [d]
@@ -1435,12 +1447,13 @@ BAN_MAPPING = [
 class CustomAddressMatcher(TypeMatcher):
 	def __init__(self):
 		super(CustomAddressMatcher, self).__init__(F_ADDRESS)
-		from postal.parser import parse_address
+		from postal.parser import parse_address		
 	@timed
 	def match(self, c):
 		if c.value.isdigit():
 			logging.debug('Bailing out of %s for numeric value: %s', self, c)
 			return
+		from postal.parser import parse_address
 		parsed = parse_address(c.value)
 		if not parsed: return
 		ps = {key: value for (value, key) in parsed}
@@ -1473,7 +1486,7 @@ class FrenchAddressMatcher(LabelMatcher):
 		super(FrenchAddressMatcher, self).__init__(F_ADDRESS, COMMUNE_LEXICON, MATCH_MODE_CLOSE)
 	@timed
 	def match(self, c):
-		response = urllib.urlopen("http://api-adresse.data.gouv.fr/search/?q=%s" % c.value)
+		response = urllib.request.urlopen("http://api-adresse.data.gouv.fr/search/?q=" + urllib.parse.quote_plus(c.value))
 		try:
 			data = json.loads(response.read())
 		except ValueError as e:
@@ -1499,7 +1512,7 @@ class FrenchAddressMatcher(LabelMatcher):
 				hits[1].add(l)
 			elif kind in ['town', 'city', 'municipality']: # Sanity check on the commune name : exclude []
 				v = normalize_and_validate_phrase(c.value)
-				if v is not None and fast_sim_score(self.fss.search(v), len(v)) > 0:
+				if v is not None and fast_sim_score(self.fss.search(v), len(v))[1] > 0:
 					l = props['label']
 					if l not in iIdx: iIdx[l] = props
 					hits[0].add(l)
@@ -1617,15 +1630,6 @@ def check_non_consecutive_subsequence(superStr, subStr):
 			pos += 1
 	return (res, i) if pos == len(b) else None
 
-def sum_digits(n): return sum_digits(math.floor(n / 10)) + n if n > 9 else n
-
-def validate_Luhn(s):
-	try:
-		return sum([sum_digits(int(c) * (1 if i % 2 == 0 else 2)) for (i, c) in enumerate(s)]) % 10 == 0
-	except ValueError:
-		logging.warning('Non-numeric value passed to Luhn validation: %s', s)
-		return False
-
 def non_zero_ratio_score(scores, minRatio = 10):
 	r = sum([(100 if s > 0 else 0) for s in scores]) / len(scores)
 	return r if r >= minRatio else 0
@@ -1661,14 +1665,16 @@ def generate_value_matchers(lvl = 1):
 	# yield TemplateMatcher('Identifiant', 90) # TODO distinguish unique vs. non-unique
 
 	# Person names
-	if lvl >= 0: yield LabelMatcher(F_FIRST, PRENOM_LEXICON, MATCH_MODE_EXACT)
-	if lvl >= 2: yield TokenizedMatcher(F_FIRST, PRENOM_LEXICON,
+	if lvl >= 0: 
+		yield LabelMatcher(F_FIRST, PRENOM_LEXICON, MATCH_MODE_EXACT)
+	if lvl >= 2: 
 		# maxTokens set to 2 in order to deal with composite first names
-		maxTokens = 2, scorer = partial(tokenization_based_score, minSrcTokenRatio = 20, minSrcCharRatio = 10))
-	if lvl >= 0: yield LabelMatcher(F_LAST, PATRONYME_LEXICON, MATCH_MODE_EXACT)
+		yield TokenizedMatcher(F_FIRST, PRENOM_LEXICON,
+			maxTokens = 2, scorer = partial(tokenization_based_score, minSrcTokenRatio = 20, minSrcCharRatio = 10))
+	if lvl >= 0: 
+		yield LabelMatcher(F_LAST, PATRONYME_LEXICON, MATCH_MODE_EXACT)
 	if lvl >= 2:
-		titleLexicon = file_to_set('titre_appel') | file_to_set('titre_academique')
-		yield TokenizedMatcher(F_TITLE, titleLexicon, maxTokens = 1)
+		yield TokenizedMatcher(F_TITLE, file_to_set('titre_appel') | file_to_set('titre_academique'), maxTokens = 1)
 	if lvl >= 2:
 		yield CustomPersonNameMatcher()
 		fullNameValidators = { F_FIRST: lambda v: len(stripped(v)) > 1, F_LAST: lambda v: len(stripped(v)) > 2 }
@@ -1684,23 +1690,33 @@ def generate_value_matchers(lvl = 1):
 			ignoreCase = False, validators = fullNameValidators)
 	yield CompositeMatcher(F_PERSON, [F_TITLE, F_FIRST])
 	# Negate person name matches when it's a street name
-	if lvl >= 0: yield RegexMatcher(F_PERSON, "(rue|avenue|av|boulevard|bvd|bd|chemin|route|place|allee) .{0,10} (%s)" % PAT_FIRST_NAME,
-		g = 1, ignoreCase = True, partial = True, neg = True)
+	if lvl >= 0: 
+		yield RegexMatcher(F_PERSON, "(rue|avenue|av|boulevard|bvd|bd|chemin|route|place|allee) .{0,10} (%s)" % PAT_FIRST_NAME,
+			g = 1, ignoreCase = True, partial = True, neg = True)
 
 	# Web stuff: Email, URL
 	PAT_EMAIL = "[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
-	if lvl >= 0: yield RegexMatcher(F_EMAIL, PAT_EMAIL)
+	if lvl >= 0: 
+		yield RegexMatcher(F_EMAIL, PAT_EMAIL)
 	PAT_URL = "@^(https?|ftp)://[^\s/$.?#].[^\s]*$@iS"
-	if lvl >= 0: yield RegexMatcher(F_URL, PAT_URL)
+	if lvl >= 0: 
+		yield RegexMatcher(F_URL, PAT_URL)
 
 	# Phone number
-	if lvl >= 0: yield CustomTelephoneMatcher()
-	if lvl >= 2: yield CustomTelephoneMatcher(partial = True)
+	if lvl >= 0: 
+		yield CustomTelephoneMatcher()
+	if lvl >= 2: 
+		yield CustomTelephoneMatcher(partial = True)
 
 	# Other individual IDs
 
 	# from https://fr.wikipedia.org/wiki/Code_Insee#Identification_des_individus
-	if lvl >= 0: yield RegexMatcher(F_NIR, "[0-9]15")
+	if lvl >= 0: 
+		yield StdnumMatcher(F_NIR, stdnum.fr.nir)
+		yield StdnumMatcher(F_NIF, stdnum.fr.nif)
+		yield StdnumMatcher(F_TVA, stdnum.fr.tva)
+	# if lvl >= 0: 
+	# 	yield RegexMatcher(F_NIR, "[0-9]15")
 
 	# Date-time
 	if lvl >= 0: 
@@ -1714,15 +1730,23 @@ def generate_value_matchers(lvl = 1):
 	# MESR Domain
 
 	## Recherche
-	PAT_SIREN = "[0-9]{9}"
-	if lvl >= 0: yield RegexMatcher(F_SIREN, PAT_SIREN, validator = validate_Luhn)
-	PAT_SIRET = "[0-9]{14}"
-	if lvl >= 0: yield RegexMatcher(F_SIRET, PAT_SIRET, validator = validate_Luhn)
+	if lvl >= 0: 
+		yield StdnumMatcher(F_SIREN, stdnum.siren)
+		yield StdnumMatcher(F_SIRET, stdnum.siret)
+	# PAT_SIREN = "[0-9]{9}"
+	# if lvl >= 0: 
+	# 	yield RegexMatcher(F_SIREN, PAT_SIREN, validator = validate_Luhn)
+	# PAT_SIRET = "[0-9]{14}"
+	# if lvl >= 0: 
+	# 	yield RegexMatcher(F_SIRET, PAT_SIRET, validator = validate_Luhn)
 	PAT_NNS = "[0-9]{9}[a-zA-Z]"
-	if lvl >= 0: yield RegexMatcher(F_NNS, PAT_NNS)
+	if lvl >= 0: 
+		yield RegexMatcher(F_NNS, PAT_NNS)
 	PAT_UAI = "[0-9]{7}[a-zA-Z]"
-	if lvl >= 0: yield RegexMatcher(F_UAI, PAT_UAI)
-	if lvl >= 0: yield RegexMatcher(F_UMR, "UMR-?[ A-Z]{0,8}([0-9]{3,4})", g = 1, partial = True)
+	if lvl >= 0: 
+		yield RegexMatcher(F_UAI, PAT_UAI)
+	if lvl >= 0: 
+		yield RegexMatcher(F_UMR, "UMR-?[ A-Z]{0,8}([0-9]{3,4})", g = 1, partial = True)
 	# Negate dates for all thoses regex matches (which happen to match using our custom matcher, especially for UAI patterns)
 	if lvl >= 0:
 		yield RegexMatcher(F_DATE, PAT_SIREN, ignoreCase = True, neg = True)
@@ -1730,13 +1754,13 @@ def generate_value_matchers(lvl = 1):
 		yield RegexMatcher(F_DATE, PAT_NNS, ignoreCase = True, neg = True)
 		yield RegexMatcher(F_DATE, PAT_UAI, ignoreCase = True, neg = True)
 
-	if lvl >= 2: yield LabelMatcher(F_RD_STRUCT, file_to_set('structure_recherche_short.col'), MATCH_MODE_EXACT)
-	if lvl >= 2: yield TokenizedMatcher(F_RD_PARTNER,
-		file_to_set('partenaire_recherche_ANR.col') |
-		file_to_set('partenaire_recherche_FUI.col') |
-		file_to_set('institution_H2020.col'),
-		maxTokens = 6)
-	if lvl >= 2: yield TokenizedMatcher(F_CLINICALTRIAL_COLLAB, file_to_set('clinical_trial_sponsor_collab.col'),
+	if lvl >= 2: 
+		yield LabelMatcher(F_RD_STRUCT, file_to_set('structure_recherche_short.col'), MATCH_MODE_EXACT)
+	if lvl >= 2: 
+		yield TokenizedMatcher(F_RD_PARTNER, file_to_set('partenaire_recherche_ANR.col') | file_to_set('partenaire_recherche_FUI.col') |
+			file_to_set('institution_H2020.col'), maxTokens = 6)
+	if lvl >= 2: 
+		yield TokenizedMatcher(F_CLINICALTRIAL_COLLAB, file_to_set('clinical_trial_sponsor_collab.col'),
 		maxTokens = 4)
 	yield SubtypeMatcher(F_RD, [F_RD_STRUCT, F_RD_PARTNER, F_CLINICALTRIAL_COLLAB])
 
@@ -1765,8 +1789,8 @@ def generate_value_matchers(lvl = 1):
 	yield SubtypeMatcher(F_MESR, [F_RD, F_APB_MENTION, F_RD_DOMAIN, F_ETAB, F_ACADEMIE])
 
 	# Geo Domain
-	# if lvl >= 2: 
-	# 	yield FrenchAddressMatcher()
+	if lvl >= 2: 
+		yield FrenchAddressMatcher()
 	# if lvl >= 2: 
 	# 	yield CustomAddressMatcher()
 	if lvl >= 0: 
@@ -1785,7 +1809,7 @@ def generate_value_matchers(lvl = 1):
 	if lvl >= 0:
 		yield TokenizedMatcher(F_DPT, file_to_set('departement'), distinctCount = 7)
 		yield TokenizedMatcher(F_REGION, file_to_set('region'), distinctCount = 3)
-	if lvl >= 2: 
+	if lvl >= 1: 
 		yield TokenizedMatcher(F_STREET, file_to_set('voie.col'), maxTokens = 2)
 	yield CompositeMatcher(F_ADDRESS, [F_STREET, F_ZIP, F_CITY, F_COUNTRY])
 	yield SubtypeMatcher(F_GEO, [F_ADDRESS, F_ZIP, F_CITY, F_DPT, F_REGION, F_COUNTRY])
