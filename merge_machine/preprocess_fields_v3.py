@@ -372,6 +372,7 @@ F_SIRET = u'SIRET'
 F_NIF = u'NIF' # Numéro d'Immatriculation Fiscale
 F_NIR = u'NIR' # French personal identification number
 F_TVA = u'TVA'
+F_GRID_LABEL = u'Intitulé GRID'
 
 F_PUBLI = u'Publication'
 F_ARTICLE = u'Article'
@@ -421,6 +422,7 @@ TYPE_TAGS = {
 	F_NIF: [F_ID], 
 	F_NIR: [F_ID], 
 	F_TVA: [F_ID], 
+	F_GRID_LABEL: [F_ID, 'GRID', 'Recherche', 'Index'],
 	F_YEAR: [F_DATE],
 	F_MONTH: [F_DATE],
 	F_PHONE: [u'Numéro'],
@@ -480,6 +482,9 @@ class TypeMatcher(object):
 		outputFieldPrefix = None if self.t == t else self.t 
 		c.register_partial_match(t, outputFieldPrefix, ms, hit, span)
 		self.update_diversity(hit)
+	def match_all_field_values(self, f):
+		for vc in f.cells:
+			self.match(vc)
 	def update_diversity(self, hit):
 		self.diversion |= set(hit if isinstance(hit, list) else [hit])
 	def check_diversity(self, cells):
@@ -491,6 +496,16 @@ class TypeMatcher(object):
 		else:
 			logging.info('Positing value type {} by {}'.format(self.t, self))
 			for c in cells: c.posit_type(self.t)
+
+class GridMatcher(TypeMatcher):
+	def __init__(self):
+		self.t = F_GRID_LABEL
+	def match_all_field_values(self, f):
+		src_items_by_label = gridding.grid_by_label_set([vc.value for vc in f.cells])
+		for vc in f.cells:
+			item = src_items_by_label[vc.value]
+			if 'grid' in item:
+				self.register_full_match(vc, self.t, 100, item['label'])
 
 MATCH_MODE_EXACT = 0
 MATCH_MODE_CLOSE = 1
@@ -836,8 +851,7 @@ class Fields(object):
 			if isinstance(vm, CompositeMatcher): continue
 			for (hc, f) in self.fields.items():
 				logging.debug('RUNNING %s on %s values', vm, hc.value)
-				for vc in f.cells:
-					vm.match(vc)
+				vm.match_all_field_values(f)
 				vm.check_diversity(f.cells)
 	def match_by_types(self, trusted_types):
 		for vm in value_matchers():
@@ -849,9 +863,7 @@ class Fields(object):
 				if vm.t != trusted_types[hc.value]:
 					continue
 				logging.debug('TRUSTING %s on %s values', vm, hc.value)
-				for vc in f.cells:
-					vm.match(vc)
-
+				vm.match_all_field_values(f)
 	def likeliest_types(self, h, f, singleType = False):
 		''' Returns None rather than an empty list to signify that not a single type has been inferred.
 
