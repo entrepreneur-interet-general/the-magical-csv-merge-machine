@@ -11,6 +11,7 @@ redis
 rq
 
 fuzzywuzzy
+enchant
 python-Levenshtein
 phonenumbers
 dateparser

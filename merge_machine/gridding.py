@@ -586,7 +586,6 @@ def grid_label_set(labels):
 			if 'acronym' in src_item and ACRONYM_COUNT[src_item['acronym']] > 1: del src_item['acronym']
 		for ref_item in REF_ITEM_BY_GRID.values():
 			if 'acronym' in ref_item and ACRONYM_COUNT[ref_item['acronym']] > 1: del ref_item['acronym']
-
 	logging.warning('Matching unmatched src labels...')
 	attached_parent_grid_count = 0
 	src_items_index = dict()
