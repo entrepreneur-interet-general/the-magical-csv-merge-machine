@@ -11,8 +11,10 @@ redis
 rq
 
 fuzzywuzzy
+enchant
 python-Levenshtein
 phonenumbers
 dateparser
 postal
 persistent
+python-stdnum
