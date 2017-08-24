@@ -16,6 +16,7 @@ import os
 import time
 
 from elasticsearch import Elasticsearch, client
+import numpy as np
 import pandas as pd
 
 import pprint
@@ -30,7 +31,7 @@ file_len = 10*10**6
 test_num = 2
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
-    match_cols = [{'source': 'commune', 'ref': 'L6_NORMALISEE'},
+    match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},
                   {'source': 'lycees_sources', 'ref': 'NOMEN_LONG'}]    
     source_sep = ','
     source_encoding = 'utf-8'
@@ -44,10 +45,12 @@ elif test_num == 1:
     
 elif test_num == 2:
     source_file_path = 'local_test_data/integration_3/export_alimconfiance.csv'
-    match_cols = [{'source': 'Code_postal', 'ref': 'LIBCOM'},
+    match_cols = [{'source': 'Libelle_commune', 'ref': 'LIBCOM'},
                   #{'source': 'Libelle_commune', 'ref': 'L6_NORMALISEE'},
                   {'source': 'ods_adresse', 'ref': 'L4_NORMALISEE'},
-                  {'source': 'APP_Libelle_etablissement', 'ref': 'L1_NORMALISEE', 'boost': 3}]
+                  {'source': 'APP_Libelle_etablissement', 'ref': 'L1_NORMALISEE'},
+                  {'source': 'APP_Libelle_etablissement', 'ref': 'ENSEIGNE'},
+                  {'source': 'APP_Libelle_etablissement', 'ref': 'NOMEN_LONG'}]
     source_sep = ';'
     source_encoding = 'utf-8'
 else:
@@ -76,16 +79,16 @@ columns_to_index = ['SIREN', 'NIC', 'L1_NORMALISEE', 'L2_NORMALISEE', 'L3_NORMAL
 columns_to_index = {
                     'SIREN': [], 
                     'NIC': [],
-                    'L1_NORMALISEE': ['french', 'whitespace', 'integers'],
-                    'L4_NORMALISEE': ['french', 'whitespace', 'integers'], 
-                    'L6_NORMALISEE': ['french', 'whitespace', 'integers'],
-                    'L1_DECLAREE': ['french', 'whitespace', 'integers'], 
-                    'L4_DECLAREE': ['french', 'whitespace', 'integers'],
-                    'L6_DECLAREE': ['french', 'whitespace', 'integers'],
-                    'LIBCOM': ['french', 'whitespace', 'integers'], 
+                    'L1_NORMALISEE': ['french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'],
+                    'L4_NORMALISEE': ['french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'], 
+                    'L6_NORMALISEE': ['french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'],
+                    'L1_DECLAREE': ['french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'], 
+                    'L4_DECLAREE': ['french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'],
+                    'L6_DECLAREE': ['french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'],
+                    'LIBCOM': ['french', 'whitespace', 'end_n_grams', 'n_grams'], 
                     'CEDEX': [], 
-                    'ENSEIGNE': ['french', 'whitespace', 'integers'], 
-                    'NOMEN_LONG': ['french', 'whitespace', 'integers'],
+                    'ENSEIGNE': ['french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'], 
+                    'NOMEN_LONG': ['french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'],
                     # Keyword only
                     'LIBNATETAB': [],
                     'LIBAPET': [],
@@ -96,9 +99,7 @@ columns_to_index = {
 ref_gen = pd.read_csv(os.path.join('local_test_data', 'sirene', ref_file_name), 
                   sep=ref_sep, encoding=ref_encoding,
                   usecols=columns_to_index.keys(),
-                  dtype=str, chunksize=chunksize, nrows=10**50)
-
-
+                  dtype=str, chunksize=chunksize, nrows=10**50) 
 
 
 #==============================================================================
@@ -107,39 +108,62 @@ ref_gen = pd.read_csv(os.path.join('local_test_data', 'sirene', ref_file_name),
 testing = True
 
 if testing:
-    table_name = '123vivalalgerie2'
-else:
     table_name = '123vivalalgerie'
+else:
+    table_name = '123vivalalgerie3'
 
 es = Elasticsearch()
+
+# https://www.elastic.co/guide/en/elasticsearch/reference/1.4/analysis-edgengram-tokenizer.html
+
+tokenizers = {
+                "integers" : {
+                               "type" : "pattern",
+                               "preserve_original" : 0,
+                               "pattern" : '(\\d+)',
+                               'group': 1
+                               },
+                "n_grams": {
+                              "type": "ngram",
+                              "min_gram": 3,
+                              "max_gram": 3,
+                              "token_chars": [
+                                "letter",
+                                "digit"
+                              ]
+                            }
+                }
+
+filters =  {
+                "my_edgeNGram": {
+                    "type":       "edgeNGram",
+                    "min_gram": 3,
+                    "max_gram": 30
+            }}
+
+analyzers = {
+                "integers": {'tokenizer': 'integers'},
+                "n_grams": {'tokenizer': 'n_grams'},
+                "end_n_grams": {'tokenizer': 'keyword',
+                                "filter" : ["reverse", "my_edgeNGram", "reverse"]}
+            }
 
 
 index_settings = {
                      "settings": {
                             "analysis": {
-                                 "tokenizer" : {
-                                    "integers" : {
-                                       "type" : "pattern",
-                                       "preserve_original" : 0,
-                                       "pattern" : '(\\d+)',
-                                       'group': 1
-                                    }
-                                 },                          
-                                    
-                                    
-                                  "analyzer": {
-                                    "integers": {
-                                            'tokenizer': 'integers'
-                                    }
-                              }
+                                 "tokenizer": tokenizers,
+                                 "filter": filters,
+                                 "analyzer": analyzers
                             }
                           },
-                
+                            
                     "mappings": {
                             "structure": {                      
                             }
                           }
                 }
+                            
 
 
 field_mappings = {key: {'analyzer': 'keyword', 
@@ -247,19 +271,273 @@ After 3 matches: discard those with worst precision
 
 
 '''
-        
-query_template = {}
-        
+
+def compute_metrics(hits, ref_id):
+    '''Computes metrics for hits: res['hits']['hits']'''
+    metrics = dict()
     
+    # General query metrics
+    num_hits = len(hits)
+
+    if num_hits:
+        _score_first = hits[0]['_score']
+    else:
+        _score_first = 0
+    
+    # Match metrics
+    try:
+        i = next((i for i, hit in enumerate(hits) if hit['_id']==ref_id))
+        has_match = True
+    except StopIteration:
+        has_match = False
+        
+    if has_match:
+        is_first = i == 0        
+        es_id_score = hits[i]['_score']
+        pos_score = 1 / (1+i)
+    else:
+        is_first = False
+        es_id_score = 0
+        pos_score = 0
+        
+    metrics['_score_first'] = _score_first
+    metrics['num_hits'] = num_hits
+    metrics['has_match'] = has_match
+    metrics['is_first'] = is_first
+    metrics['es_id_score'] = es_id_score
+    metrics['pos_score'] = pos_score
+    
+    return metrics
+
+def _gen_suffix(analyzers):
+    '''Yields suffixes to add to field_names for the given analyzers'''
+    yield '' # No suffix for standard analyzer
+    for analyzer in analyzers:
+        yield '.' + analyzer
+
+    
+# test_bulk_search
+
+import itertools
+
+# TODO: bool levels for fields also (L4 for example)
+
+# query_template is ((source_key, ref_key, analyzer_suffix, boost), ...)
+
+max_num_levels = 2 # Number of match clauses
+bool_levels = {'.integers': ['must', 'should']}
+boost_levels = [1]
+single_queries = list(((bool_lvl, x['source'], x['ref'], suffix, boost) \
+                                   for x in match_cols \
+                                   for suffix in _gen_suffix(columns_to_index[x['ref']]) \
+                                   for bool_lvl in bool_levels.get(suffix, ['must']) \
+                                   for boost in boost_levels))
+all_query_templates = list(itertools.chain(*[list(itertools.combinations(single_queries, x)) \
+                                    for x in range(2, max_num_levels+1)][::-1]))
+
+all_query_templates = [((y, 'ods_adresse', 'L4_NORMALISEE', '.n_grams', 1), ('must', 'APP_Libelle_etablissement', 'NOMEN_LONG', '', 1)) for y in ['should', 'must']] + [((y, 'ods_adresse', 'L4_NORMALISEE', '.n_grams', 1), (z, 'APP_Libelle_etablissement', 'NOMEN_LONG', '.french', x), (v, 'APP_Libelle_etablissement', 'NOMEN_LONG', '.french', x2)) for x in range(1,4) for x2 in range(1,4) for y in ['should', 'must'] for z in ['should', 'must'] for v in ['should', 'must']]
+
+def _gen_body(query_template, row):
+    '''
+    query_template is ((source_col, ref_col, analyzer_suffix, boost), )
+    row is pandas.Series from the source object
+    '''
+    #    source_val = row[s_q_t[1]]
+    #    key = s_q_t[2] + s_q_t[3]
+    #    boost = s_q_t[4]
+    
+    body = {
+          'query': {
+            'bool': {
+               'must': [
+                          {'match': {
+                                  s_q_t[2] + s_q_t[3]: {'query': row[s_q_t[1]], # unidecode.unidecode(row[s_q_t[1]].lower()).replace('lycee', ''),
+                                                        'boost': s_q_t[4]}}
+                          } \
+                          for s_q_t in query_template if (s_q_t[0] == 'must')
+                        ],
+               'should': [
+                          {'match': {
+                                  s_q_t[2] + s_q_t[3]: {'query': row[s_q_t[1]],
+                                                        'boost': s_q_t[4]}}
+                          } \
+                          for s_q_t in query_template if (s_q_t[0] == 'should')
+                        ]#,
+#               'filter': [{'match': {'NOMEN_LONG.french': {'query': 'Lycee'}}
+#                         }],
+#               'must_not': [{'match': {'NOMEN_LONG.french': {'query': 'amicale du OR association OR foyer OR sportive OR parents OR MAISON DES'}}
+#                         }]
+                    }
+                  }
+           }
+    return body
+
+def calc_agg_query_metrics(query_metrics):
+    agg_query_metrics = dict()
+    for key, metrics in query_metrics.items():
+        thresh = compute_threshold(metrics)
+        agg_query_metrics[key] = dict()
+        agg_query_metrics[key]['precision'] = sum(x['is_first'] and (x['_score_first'] >= thresh) for x in metrics)\
+                                            / (sum(bool(x['num_hits'])  and (x['_score_first'] >= thresh) for x in metrics) or 1)
+        agg_query_metrics[key]['recall'] = sum(x['is_first'] and (x['_score_first'] >= thresh) for x in metrics) / len(metrics)
+    return agg_query_metrics
+
+def compute_threshold(metrics):
+    num_metrics = len(metrics)
+    
+    sorted_metrics = sorted(metrics, key=lambda x: x['_score_first'], reverse=True)
+    
+    score_vect = np.array([x['_score_first'] for x in sorted_metrics])
+    has_match_vect = np.array([bool(x['num_hits']) for x in sorted_metrics])
+    rolling_precision = score_vect.cumsum() / (np.arange(num_metrics) + 1)
+    rolling_recall = has_match_vect.cumsum() / (np.arange(num_metrics) + 1)
+
+    idx = max(num_metrics - rolling_precision[::-1].argmax() - 1, min(6, num_metrics-1))
+    
+    if rolling_precision[-1] == 0:
+        return 10**3
+    else:
+        return 0# rolling_precision[idx]
+    
+def find_match(full_responses, sorted_keys, row):
+    '''
+    User labelling going through potential results (order given by sorted_keys) looking for a 
+    match
+    
+    OUTPUT:
+        - found: If a match was found
+        - res: result of the match if it was found
+    '''
+    ids_done = []
+    for key in sorted_keys:
+        print('\nkey: ', key)
+        results = full_responses[key]['hits']['hits']
+        for res in results[:3]:
+            if res['_id'] not in ids_done and ((res['_score']>=0.001)):
+                ids_done.append(res['_id'])
+                print('\n***** {0} / {1}'.format(res['_id'], res['_score']))
+                for match in match_cols:
+                    print('\n{1}   -> [{0}][source]'.format(match['source'], row[match['source']]))
+                    print('> {1}   -> [{0}]'.format(match['ref'], res['_source'][match['ref']]))
+                
+                if test_num == 2:
+                    print(row['SIRET'][:-5], row['SIRET'][-5:], '[source]')
+                    print(res['_source']['SIREN'], res['_source']['NIC'], '[ref]')
+                    is_match = row['SIRET'] == res['_source']['SIREN'] + res['_source']['NIC']
+                else:
+                    is_match = input('Is match?\n > ') in ['1', 'y']
+                if is_match:
+                    return True, res
+                else:
+                    print('not first')
+    return False, None    
+
+
+def perform_queries(all_query_templates, row):
+    '''
+    Searches for the values in row with all the search templates in all_query_templates
+    '''
+    i = 1
+    full_responses = dict()
+    query_templates = all_query_templates
+    while query_templates:
+        print('At search iteration', i)
+        
+        bulk_body = ''
+        for q_t in query_templates:
+            bulk_body += json.dumps({"index" : table_name}) + '\n'
+            body = _gen_body(q_t, row)
+            bulk_body += json.dumps(body) + '\n'
+        responses = es.msearch(bulk_body)['responses'] #, index=table_name)
+        
+        has_error_vect = ['error' in x for x in responses]
+        has_hits_vect = [('error' not in x) and bool(x['hits']['hits']) for x in responses]
+        
+        # Update for valid responses
+        for q_t, res, has_error in zip(query_templates, responses, has_error_vect):
+            if not has_error:
+                full_responses[q_t] = res
+        
+        print('Num errors:', sum(has_error_vect))
+        print('Num hits', sum(has_hits_vect))
+        
+        # Limit query to those we couldn't get the first time
+        query_templates = [x for x, y in zip(query_templates, has_error_vect) if y]
+        i += 1
+        
+        if i >= 10:
+            raise Exception('Problem with elasticsearch')
+            
+    return full_responses
+    
+query_metrics = dict()
+for q_t in all_query_templates:
+    query_metrics[q_t] = []
+
+import random
+
+labels = []
+
+num_found = 0
+for idx in random.sample(list(source.index), 100):
+    row = source.loc[idx]
+    print('Doing', row)  
+        
+    # Search elasticsearch for all results
+    full_responses = perform_queries(all_query_templates, row)
+    
+    # Sort keys by score or most promising
+    use_precision = num_found > 2
+    if not use_precision:
+        sorted_keys = random.sample(list(full_responses.keys()), len(full_responses.keys()))
+        # sorted_keys = sorted(full_responses.keys(), key=lambda x: full_responses[x]['hits'].get('max_score') or 0, reverse=True)
+    else:
+        print('Using best precision')
+        if found:
+            agg_query_metrics = calc_agg_query_metrics(query_metrics)
+        sorted_keys = sorted(full_responses.keys(), key=lambda x: agg_query_metrics[x]['precision'], reverse=True)
+        [agg_query_metrics[x] for x in sorted_keys[:10]]
+    # Try to find the match somewhere
+
+
+    found, res = find_match(full_responses, sorted_keys, row)
+
+    if found:
+        num_found += 1
+        for key, response in full_responses.items():
+            query_metrics[key].append(compute_metrics(response['hits']['hits'], res['_id']))
+            
+
+        #        import pdb
+        #        pdb.set_trace()
+        
+# TODO: thresholder
+
+# Sort by max score?
+
+# Propose by descending score ?
+# Alternate between my precision score and ES max score (or combination)
+
+
+
+
+
+assert False
+
+# Number of results
+len(query_metrics[list(query_metrics.keys())[0]])
+
+# Sorted metrics
+for x in sorted_keys[:40]:
+    print(x, '\n -> ', agg_query_metrics[x], '\n')
 
 a = []
 good = []
 for i in range(100, 200):
     row = source.iloc[i]            
     
-    to_ask = {x['ref']: {'query': my_unidecode(row[x['source']]), 
-                        'boost': x.get('boost', 1)} \
-                        for x in match_cols}
+    #    to_ask = {x['ref']: {'query': my_unidecode(row[x['source']]),
+    #                        for x in match_cols}}
     
     body = {
           'query': {
@@ -295,27 +573,42 @@ for i in range(100, 200):
     good.append(is_good in {'1', 'y'})
     
     
-# test_bulk_search
-to_ask = {'L1_DECLAREE.french': {'boost': 4.5, 'query': 'ECOLe'}}
-body = {
-      'query': {
-        'bool': {
-          'should': [
-                {'match': {key: {'query': val['query'],
-                                 'boost': val['boost']}}} \
-                            for key, val in to_ask.items() if val['boost']
-                    ]
-                }
-              }
-    }
-          
-bulk_body = ''
-for x in range(10000):
-    bulk_body += json.dumps({"index" : table_name}) + '\n'
-    body = {'query': {'bool': {'should': [{'match': {'L1_DECLAREE.french': {'boost': 4.5,
-       'query': str(x)}}}]}}}
-    bulk_body += json.dumps(body) + '\n'
-res = es.msearch(bulk_body) #, index=table_name)
 
-print(sum('error' in x for x in res['responses']))
-print(sum(bool(x['hits']['hits']) for x in res['responses'] if 'error' not in x))
+to_ask = {'L1_DECLAREE.french': {'boost': 4.5, 'query': 'ECOLe'}}
+
+
+'''
+pre-process:
+COMMUNE: remove "commune de"
+
+pre-process: L1 + ENSEIGNE + NOMEN_LONG
+
+Redresser les noms propres A. Camuse
+
+'''
+
+
+'''
+DATA?
+Rungis   -> [Libelle_commune][source]
+> CHEVILLY LARUE   -> [LIBCOM]
+BAT E4 DU MIN DE PARIS RUNGIS   -> [ods_adresse][source]
+> 2 AVENUE DE FLANDRE   -> [L4_NORMALISEE]
+PALIMEX   -> [APP_Libelle_etablissement][source]
+> PALIMEX   -> [L1_NORMALISEE]
+330177635 00050 [source]
+330177635 00050 [ref]
+
+Marseille 7e  Arrondissement   -> [Libelle_commune][source]
+> CHALLES LES EAUX   -> [LIBCOM]
+LA LICORNE - PIZZERIA   -> [ods_adresse][source]
+> 72 ALL DE LA BREISSE - RESIDENCE   -> [L4_NORMALISEE]
+LA LICORNE   -> [APP_Libelle_etablissement][source]
+> LGDI   -> [L1_NORMALISEE]
+LA LICORNE   -> [APP_Libelle_etablissement][source]
+> None   -> [ENSEIGNE]
+822461620 00012 [source]
+823997358 00010 [ref]
+
+
+'''
