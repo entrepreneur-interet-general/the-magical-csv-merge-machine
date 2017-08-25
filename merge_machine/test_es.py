@@ -24,11 +24,11 @@ import unidecode
 
 
 dir_path = 'data/sirene'
-chunksize = 20000
+chunksize = 3000
 file_len = 10*10**6
 
 
-test_num = 2
+test_num = 0
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
     match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},
@@ -64,8 +64,11 @@ else:
 source = pd.read_csv(source_file_path, 
                     sep=source_sep, encoding=source_encoding,
                     dtype=str, nrows=chunksize)
+source = source.where(source.notnull(), '')
+
 
 ref_file_name = 'sirc-17804_9075_14209_201612_L_M_20170104_171522721.csv' # 'petit_sirene.csv'
+# ref_file_name = 'petit_sirene.csv'
 ref_sep = ';'
 ref_encoding = 'windows-1252'
 
@@ -211,6 +214,9 @@ if do_indexing:
     i = 0
     a = time.time()
     for ref_tab in ref_gen:
+        if ref_tab.index[-1] <= int(1.6*10**6):
+            continue
+        
         ref_tab = pre_process(ref_tab)
         body = ''
         for key, doc in ref_tab.where(ref_tab.notnull(), None).to_dict('index').items():
@@ -324,7 +330,7 @@ import itertools
 
 # query_template is ((source_key, ref_key, analyzer_suffix, boost), ...)
 
-max_num_levels = 2 # Number of match clauses
+max_num_levels = 3 # Number of match clauses
 bool_levels = {'.integers': ['must', 'should']}
 boost_levels = [1]
 single_queries = list(((bool_lvl, x['source'], x['ref'], suffix, boost) \
@@ -334,10 +340,23 @@ single_queries = list(((bool_lvl, x['source'], x['ref'], suffix, boost) \
                                    for boost in boost_levels))
 all_query_templates = list(itertools.chain(*[list(itertools.combinations(single_queries, x)) \
                                     for x in range(2, max_num_levels+1)][::-1]))
+# Queries must contain all columns at least two distinct columns
+if len(match_cols) >= 1:
+    all_query_templates = list(filter(lambda query: len(set((x[1], x[2]) for x in query)) >= 2, \
+                                all_query_templates))
 
-all_query_templates = [((y, 'ods_adresse', 'L4_NORMALISEE', '.n_grams', 1), ('must', 'APP_Libelle_etablissement', 'NOMEN_LONG', '', 1)) for y in ['should', 'must']] + [((y, 'ods_adresse', 'L4_NORMALISEE', '.n_grams', 1), (z, 'APP_Libelle_etablissement', 'NOMEN_LONG', '.french', x), (v, 'APP_Libelle_etablissement', 'NOMEN_LONG', '.french', x2)) for x in range(1,4) for x2 in range(1,4) for y in ['should', 'must'] for z in ['should', 'must'] for v in ['should', 'must']]
+#all_query_templates = [((y, 'ods_adresse', 'L4_NORMALISEE', '.n_grams', 1), 
+#                        ('must', 'APP_Libelle_etablissement', 'NOMEN_LONG', '', 1)) \
+#                    for y in ['should', 'must']] \
+#                + [((y, 'ods_adresse', 'L4_NORMALISEE', '.n_grams', 1), 
+#                  (z, 'APP_Libelle_etablissement', 'NOMEN_LONG', '.french', x), 
+#                  (v, 'APP_Libelle_etablissement', 'NOMEN_LONG', '.french', x2)) \
+#                for x in range(1,4) for x2 in range(1,4) \
+#                for y in ['should', 'must'] \
+#                for z in ['should', 'must'] \
+#                for v in ['should', 'must']]
 
-def _gen_body(query_template, row):
+def _gen_body(query_template, row, num_results=3):
     '''
     query_template is ((source_col, ref_col, analyzer_suffix, boost), )
     row is pandas.Series from the source object
@@ -347,6 +366,7 @@ def _gen_body(query_template, row):
     #    boost = s_q_t[4]
     
     body = {
+          'size': num_results,
           'query': {
             'bool': {
                'must': [
@@ -399,7 +419,7 @@ def compute_threshold(metrics):
     else:
         return 0# rolling_precision[idx]
     
-def find_match(full_responses, sorted_keys, row):
+def find_match(full_responses, sorted_keys, row, num_results):
     '''
     User labelling going through potential results (order given by sorted_keys) looking for a 
     match
@@ -412,7 +432,7 @@ def find_match(full_responses, sorted_keys, row):
     for key in sorted_keys:
         print('\nkey: ', key)
         results = full_responses[key]['hits']['hits']
-        for res in results[:3]:
+        for res in results[:num_results]:
             if res['_id'] not in ids_done and ((res['_score']>=0.001)):
                 ids_done.append(res['_id'])
                 print('\n***** {0} / {1}'.format(res['_id'], res['_score']))
@@ -432,59 +452,72 @@ def find_match(full_responses, sorted_keys, row):
                     print('not first')
     return False, None    
 
+def make_bulk(search_templates, rows, num_results):
+    queries = []
+    bulk_body = ''
+    for (q_t, row) in search_templates:
+        bulk_body += json.dumps({"index" : table_name}) + '\n'
+        body = _gen_body(q_t, row, num_results)
+        bulk_body += json.dumps(body) + '\n'
+        queries.append((q_t, row))
+    return bulk_body, queries
 
-def perform_queries(all_query_templates, row):
+def perform_queries(all_query_templates, rows, num_results=3):
     '''
-    Searches for the values in row with all the search templates in all_query_templates
+    Searches for the values in row with all the search templates in all_query_templates.
+    Retry on error
     '''
     i = 1
     full_responses = dict()
-    query_templates = all_query_templates
-    while query_templates:
+    og_search_templates = list(enumerate(itertools.product(all_query_templates, rows)))
+    search_templates = og_search_templates
+    # search_template is [(id, (query, row)), ...]
+    while search_templates:
         print('At search iteration', i)
         
-        bulk_body = ''
-        for q_t in query_templates:
-            bulk_body += json.dumps({"index" : table_name}) + '\n'
-            body = _gen_body(q_t, row)
-            bulk_body += json.dumps(body) + '\n'
+        bulk_body, queries = make_bulk([x[1] for x in search_templates], rows, num_results)
+        import pdb; pdb.set_trace()
         responses = es.msearch(bulk_body)['responses'] #, index=table_name)
         
         has_error_vect = ['error' in x for x in responses]
         has_hits_vect = [('error' not in x) and bool(x['hits']['hits']) for x in responses]
         
         # Update for valid responses
-        for q_t, res, has_error in zip(query_templates, responses, has_error_vect):
+        for (s_t, res, has_error) in zip(search_templates, responses, has_error_vect):
             if not has_error:
-                full_responses[q_t] = res
+                full_responses[s_t[0]] = res
         
         print('Num errors:', sum(has_error_vect))
         print('Num hits', sum(has_hits_vect))
         
         # Limit query to those we couldn't get the first time
-        query_templates = [x for x, y in zip(query_templates, has_error_vect) if y]
+        search_templates = [x for x, y in zip(search_templates, has_error_vect) if y]
         i += 1
         
         if i >= 10:
             raise Exception('Problem with elasticsearch')
             
-    return full_responses
-    
+    return og_search_templates, full_responses
+
+
 query_metrics = dict()
 for q_t in all_query_templates:
     query_metrics[q_t] = []
 
 import random
 
+num_results_labelling = 3
+
 labels = []
 
 num_found = 0
-for idx in random.sample(list(source.index), 100):
+for idx in random.sample(list(source.index), 0):
     row = source.loc[idx]
     print('Doing', row)  
         
     # Search elasticsearch for all results
-    full_responses = perform_queries(all_query_templates, row)
+    all_search_templates, full_responses = perform_queries(all_query_templates, [row], num_results_labelling)
+    full_responses = {all_search_templates[idx][1][0]: values for idx, values in full_responses.items()}
     
     # Sort keys by score or most promising
     use_precision = num_found > 2
@@ -500,13 +533,14 @@ for idx in random.sample(list(source.index), 100):
     # Try to find the match somewhere
 
 
-    found, res = find_match(full_responses, sorted_keys, row)
+    found, res = find_match(full_responses, sorted_keys, row, num_results_labelling)
 
     if found:
         num_found += 1
         for key, response in full_responses.items():
             query_metrics[key].append(compute_metrics(response['hits']['hits'], res['_id']))
-            
+
+
 
         #        import pdb
         #        pdb.set_trace()
@@ -518,9 +552,25 @@ for idx in random.sample(list(source.index), 100):
 # Propose by descending score ?
 # Alternate between my precision score and ES max score (or combination)
 
+# TODO: only on chunksize rows of source
+
+best_query_templates = (('must', 'commune', 'LIBCOM', '.french', 1),
+ ('must', 'lycees_sources', 'NOMEN_LONG', '.french', 1))
+#best_query_template = sorted_keys[0]
+
+rows = (x[1] for x in source.iterrows())
+all_search_templates, full_responses = perform_queries([best_query_template], rows, num_results=1)
+full_responses = [full_responses[i] for i in range(len(full_responses))] # Don't use items to preserve order
 
 
 
+matches_in_ref = pd.DataFrame([f_r['hits']['hits'][0]['_source'] if f_r['hits']['hits'] else {} \
+                               for f_r in full_responses])
+confidence = pd.Series([f_r['hits']['hits'][0]['_score'] if f_r['hits']['hits'] else np.nan \
+                               for f_r in full_responses])
+
+new_source = pd.concat([source, matches_in_ref], 1)
+new_source['_CONFIDENCE'] = confidence
 
 assert False
 
