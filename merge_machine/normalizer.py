@@ -150,28 +150,32 @@ class Normalizer(AbstractDataProject):
         ENCODINGS = ['utf-8', 'windows-1252']
         
         first_lines = b''.join([file.readline() for _ in range(self.CHUNKSIZE)])
-        could_read = False        
-        for encoding in ENCODINGS:
-            try:
-                # Just read column name and first few lines for encoding and separator
-                first_lines_io = io.BytesIO(first_lines)
-                sep = pd.read_csv(first_lines_io, 
-                                       sep=None, 
-                                       encoding=encoding,
-                                       iterator=True,
-                                       dtype=str)._engine.data.dialect.delimiter
-                                  
-                first_lines_io = io.BytesIO(first_lines)
-                tab_part = pd.read_csv(first_lines_io, 
-                                       sep=sep, 
-                                       encoding=encoding, 
-                                       dtype=str)
-                columns = tab_part.columns
-
-                could_read = True
-                break
-            except Exception as e:
-                print(e)
+        could_read = False    
+        for sep_arg in [None, ',']: # Fix for pandas that can't find separators for single columns
+            for encoding in ENCODINGS:
+                try:
+                    # Just read column name and first few lines for encoding and separator
+                    first_lines_io = io.BytesIO(first_lines)
+                    if sep_arg is None:
+                        sep = pd.read_csv(first_lines_io, 
+                                               sep=sep_arg, 
+                                               encoding=encoding,
+                                               iterator=True,
+                                               dtype=str)._engine.data.dialect.delimiter
+                    else:
+                        sep = sep_arg
+                            
+                    first_lines_io = io.BytesIO(first_lines)
+                    tab_part = pd.read_csv(first_lines_io, 
+                                           sep=sep, 
+                                           encoding=encoding, 
+                                           dtype=str)
+                    columns = tab_part.columns
+        
+                    could_read = True
+                    break
+                except Exception as e:
+                    print(e)
                     
         if could_read:
             # Create actual generator
@@ -477,6 +481,7 @@ if __name__ == '__main__':
     proj = UserNormalizer(None, create_new=True)
     
     # Upload file to normalize
+    source_file_name = 'errors/hal_labels.csv'
     file_path = os.path.join('local_test_data', source_file_name)
     with open(file_path, 'rb') as f:
         proj.upload_init_data(f, source_file_name, user_given_name)
