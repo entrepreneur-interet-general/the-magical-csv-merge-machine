@@ -7,16 +7,15 @@ from functools import partial, reduce, lru_cache
 from collections import defaultdict, Counter, Iterable
 from operator import itemgetter, add
 from fuzzywuzzy import fuzz
-from stdnum.fr import siren, siret
+import stdnum.fr.nir, stdnum.fr.nif, stdnum.fr.siren, stdnum.fr.siret, stdnum.fr.tva
 import pandas as pd
 import numpy as np
 
 # Parsing/normalization packages
+import custom_name_parsing
 import urllib.request, urllib.parse, json # For BAN address API on data.gouv.fr
 from dateparser import DateDataParser
 import phonenumbers
-
-import pdb # DEBUG ONLY: to remove!
 
 from CONFIG import RESOURCE_PATH
 
@@ -513,15 +512,16 @@ MATCH_MODE_CLOSE = 1
 # stdnum-based matcher-normalizer class
 
 class StdnumMatcher(TypeMatcher):
-	def __init__(self, t, stdnum_pkg):
+	def __init__(self, t, validator, normalizer):
 		super(StdnumMatcher, self).__init__(t)
 		self.t = t
-		self.stdnum_pkg = stdnum_pkg
+		self.validator = validator
+		self.normalizer = normalizer
 	@timed
 	def match(self, c):
 		nv = c.value
-		if self.stdnum_pkg.is_valid(nv):
-			nv0 = self.stdnum_pkg.compact(nv)
+		if self.validator(nv):
+			nv0 = self.normalizer(nv)
 			self.register_full_match(c, self.t, 100, nv0)
 
 # Regex-based matcher-normalizer class
@@ -1201,7 +1201,7 @@ def unique_cell_values(vs, maxListLength = 3):
 	em = defaultdict(set) # an equivalence map
 	for v in vs:
 		if v is None or len(v) < 1: continue
-		key = normalize_and_phrase(v)
+		key = normalize_and_validate_phrase(v)
 		if key is None: continue
 		em[merger_by_token_list(v)].add(v)
 	return list([select_best_value(vs) for vs in em.values()])[:maxListLength]
@@ -1426,14 +1426,15 @@ class CustomPersonNameMatcher(TypeMatcher):
 		super(CustomPersonNameMatcher, self).__init__(F_PERSON)
 	@timed
 	def match(self, c):
-		parsedList = parse_person_names(c.value)
-		if not parsedList: return
-		for parsedName in parsedList:
-			if isinstance(parsedName[0], str):
-				self.register_partial_match(c, self.t, 100, parsedName[0], (parsedName[1], parsedName[2]))
-			else:
-				for (k, v) in parsedName[0].items():
-					self.register_partial_match(c, k, 100, v, (parsedName[1], parsedName[2]))
+		parsed_names = custom_name_parsing.extractPersonNames(l)
+		if len(parsed_names) < 1: return
+		normalized_parsed_names = list([joinPersonName(pn) for pn in parsed_names])
+		# if len(normalized_parsed_names) == 1:
+		# 	self.register_full_match(c, self.t, 100, parsedName[0], (parsedName[1], parsedName[2]))
+		# else:
+		# 	for npn in normalized_parsed_names:
+		# 		self.register_partial_match(c, self.t, 100, v, (parsedName[1], parsedName[2]))
+		self.register_full_match(c, self.t, 100, '; '.join(normalized_parsed_names))
 
 # Phone number normalization
 
@@ -1724,9 +1725,9 @@ def generate_value_matchers(lvl = 1):
 
 	# from https://fr.wikipedia.org/wiki/Code_Insee#Identification_des_individus
 	if lvl >= 0: 
-		yield StdnumMatcher(F_NIR, stdnum.fr.nir)
-		yield StdnumMatcher(F_NIF, stdnum.fr.nif)
-		yield StdnumMatcher(F_TVA, stdnum.fr.tva)
+		yield StdnumMatcher(F_NIR, stdnum.fr.nir.is_valid, stdnum.fr.nir.compact)
+		yield StdnumMatcher(F_NIF, stdnum.fr.nif.is_valid, stdnum.fr.nif.compact)
+		yield StdnumMatcher(F_TVA, stdnum.fr.tva.is_valid, stdnum.fr.tva.compact)
 	# if lvl >= 0: 
 	# 	yield RegexMatcher(F_NIR, "[0-9]15")
 
@@ -1742,15 +1743,13 @@ def generate_value_matchers(lvl = 1):
 	# MESR Domain
 
 	## Recherche
+	PAT_SIREN = "[0-9]{9}"
+	PAT_SIRET = "[0-9]{14}"
 	if lvl >= 0: 
-		yield StdnumMatcher(F_SIREN, stdnum.siren)
-		yield StdnumMatcher(F_SIRET, stdnum.siret)
-	# PAT_SIREN = "[0-9]{9}"
-	# if lvl >= 0: 
-	# 	yield RegexMatcher(F_SIREN, PAT_SIREN, validator = validate_Luhn)
-	# PAT_SIRET = "[0-9]{14}"
-	# if lvl >= 0: 
-	# 	yield RegexMatcher(F_SIRET, PAT_SIRET, validator = validate_Luhn)
+		# yield RegexMatcher(F_DATE, PAT_SIREN, ignoreCase = True, neg = True)
+		# yield RegexMatcher(F_DATE, PAT_SIRET, ignoreCase = True, neg = True)
+		yield StdnumMatcher(F_SIREN, stdnum.fr.siren.is_valid, stdnum.fr.siren.compact)
+		yield StdnumMatcher(F_SIRET, stdnum.fr.siret.is_valid, stdnum.fr.siret.compact)
 	PAT_NNS = "[0-9]{9}[a-zA-Z]"
 	if lvl >= 0: 
 		yield RegexMatcher(F_NNS, PAT_NNS)
@@ -1761,8 +1760,6 @@ def generate_value_matchers(lvl = 1):
 		yield RegexMatcher(F_UMR, "UMR-?[ A-Z]{0,8}([0-9]{3,4})", g = 1, partial = True)
 	# Negate dates for all thoses regex matches (which happen to match using our custom matcher, especially for UAI patterns)
 	if lvl >= 0:
-		yield RegexMatcher(F_DATE, PAT_SIREN, ignoreCase = True, neg = True)
-		yield RegexMatcher(F_DATE, PAT_SIRET, ignoreCase = True, neg = True)
 		yield RegexMatcher(F_DATE, PAT_NNS, ignoreCase = True, neg = True)
 		yield RegexMatcher(F_DATE, PAT_UAI, ignoreCase = True, neg = True)
 
