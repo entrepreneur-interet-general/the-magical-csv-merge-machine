@@ -10,7 +10,7 @@ Created on Fri Aug 18 16:42:41 2017
 
 https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-fields.html
 """
- 
+import itertools
 import json
 import os
 import time
@@ -28,7 +28,7 @@ chunksize = 3000
 file_len = 10*10**6
 
 
-test_num = 0
+test_num = 2
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
     match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},
@@ -104,18 +104,20 @@ ref_gen = pd.read_csv(os.path.join('local_test_data', 'sirene', ref_file_name),
                   usecols=columns_to_index.keys(),
                   dtype=str, chunksize=chunksize, nrows=10**50) 
 
-
 #==============================================================================
 # Index in Elasticsearch and test
 #==============================================================================
 testing = True
+new_index = False
+do_indexing = False
+
 
 if testing:
     table_name = '123vivalalgerie'
 else:
     table_name = '123vivalalgerie3'
 
-es = Elasticsearch()
+es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
 
 # https://www.elastic.co/guide/en/elasticsearch/reference/1.4/analysis-edgengram-tokenizer.html
 
@@ -182,18 +184,12 @@ field_mappings.update({key: {'analyzer': 'keyword',
                         
 index_settings['mappings']['structure']['properties'] = field_mappings
 
-new_index = False
-do_indexing = False
 
 if new_index:
     ic = client.IndicesClient(es)
     if ic.exists(table_name):
         ic.delete(table_name)
     ic.create(table_name, body=json.dumps(index_settings))  
-    
-
-# ic.put_settings
-
 
 
 def pre_process(tab):
@@ -202,7 +198,8 @@ def pre_process(tab):
         tab.loc[:, x] = tab[x].str.strip()
     return tab
 
-if do_indexing:    
+def index(ref_gen, testing):
+    '''Index ref_gen'''
     # For efficiency, reset refresh interval
     # see https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-update-settings.html
     if not testing:
@@ -214,7 +211,8 @@ if do_indexing:
     i = 0
     a = time.time()
     for ref_tab in ref_gen:
-        if ref_tab.index[-1] <= int(1.6*10**6):
+        # TODO: REMOVE THIS
+        if ref_tab.index[-1] <= int(7.5*10**6):
             continue
         
         ref_tab = pre_process(ref_tab)
@@ -229,7 +227,7 @@ if do_indexing:
                                 })
             body += index_order + '\n'
             body += json.dumps(doc) + '\n'
-        res = es.bulk(body)
+        _ = es.bulk(body)
         i += len(ref_tab)
         
         # Display progress
@@ -244,6 +242,9 @@ if do_indexing:
         
     # TODO: what is this for ?
     es.indices.refresh(index=table_name)
+
+if do_indexing:
+    index(ref_gen, testing)
 
 def my_unidecode(string):
     if isinstance(string, str):
@@ -274,8 +275,6 @@ Hash the normalized weight vectors to avoid computing both [2,1] and [4,2]
                             
                             
 After 3 matches: discard those with worst precision
-
-
 '''
 
 def compute_metrics(hits, ref_id):
@@ -324,7 +323,6 @@ def _gen_suffix(analyzers):
     
 # test_bulk_search
 
-import itertools
 
 # TODO: bool levels for fields also (L4 for example)
 
@@ -371,7 +369,7 @@ def _gen_body(query_template, row, num_results=3):
             'bool': {
                'must': [
                           {'match': {
-                                  s_q_t[2] + s_q_t[3]: {'query': row[s_q_t[1]], # unidecode.unidecode(row[s_q_t[1]].lower()).replace('lycee', ''),
+                                  s_q_t[2] + s_q_t[3]: {'query': my_unidecode(row[s_q_t[1]].lower()).replace('lycee', ''),
                                                         'boost': s_q_t[4]}}
                           } \
                           for s_q_t in query_template if (s_q_t[0] == 'must')
@@ -385,7 +383,7 @@ def _gen_body(query_template, row, num_results=3):
                         ]#,
 #               'filter': [{'match': {'NOMEN_LONG.french': {'query': 'Lycee'}}
 #                         }],
-#               'must_not': [{'match': {'NOMEN_LONG.french': {'query': 'amicale du OR association OR foyer OR sportive OR parents OR MAISON DES'}}
+#               'must_not': [{'match': {'NOMEN_LONG.french': {'query': 'amicale du OR ass or association OR foyer OR sportive OR parents OR MAISON DES'}}
 #                         }]
                     }
                   }
@@ -443,6 +441,7 @@ def find_match(full_responses, sorted_keys, row, num_results):
                 if test_num == 2:
                     print(row['SIRET'][:-5], row['SIRET'][-5:], '[source]')
                     print(res['_source']['SIREN'], res['_source']['NIC'], '[ref]')
+                    print('LIBAPET', res['_source']['LIBAPET'])
                     is_match = row['SIRET'] == res['_source']['SIREN'] + res['_source']['NIC']
                 else:
                     is_match = input('Is match?\n > ') in ['1', 'y']
@@ -452,15 +451,22 @@ def find_match(full_responses, sorted_keys, row, num_results):
                     print('not first')
     return False, None    
 
-def make_bulk(search_templates, rows, num_results):
+def make_bulk(search_templates, rows, num_results, chunk_size=100):
     queries = []
     bulk_body = ''
+    i = 0
     for (q_t, row) in search_templates:
         bulk_body += json.dumps({"index" : table_name}) + '\n'
         body = _gen_body(q_t, row, num_results)
         bulk_body += json.dumps(body) + '\n'
         queries.append((q_t, row))
-    return bulk_body, queries
+        i += 1
+        if i == chunk_size:
+            yield bulk_body, queries
+            queries = []
+            bulk_body = ''
+            i = 0
+    yield bulk_body, queries
 
 def perform_queries(all_query_templates, rows, num_results=3):
     '''
@@ -468,16 +474,17 @@ def perform_queries(all_query_templates, rows, num_results=3):
     Retry on error
     '''
     i = 1
-    full_responses = dict()
+    full_responses = dict() 
     og_search_templates = list(enumerate(itertools.product(all_query_templates, rows)))
     search_templates = og_search_templates
     # search_template is [(id, (query, row)), ...]
     while search_templates:
         print('At search iteration', i)
         
-        bulk_body, queries = make_bulk([x[1] for x in search_templates], rows, num_results)
-        import pdb; pdb.set_trace()
-        responses = es.msearch(bulk_body)['responses'] #, index=table_name)
+        bulk_body_gen = make_bulk([x[1] for x in search_templates], rows, num_results)
+        responses = []
+        for bulk_body, _ in bulk_body_gen:
+            responses += es.msearch(bulk_body)['responses'] #, index=table_name)
         
         has_error_vect = ['error' in x for x in responses]
         has_hits_vect = [('error' not in x) and bool(x['hits']['hits']) for x in responses]
@@ -499,6 +506,27 @@ def perform_queries(all_query_templates, rows, num_results=3):
             
     return og_search_templates, full_responses
 
+def match(source, query_template, threshold):
+    '''Return concatenation of source and reference with the matches found'''
+    rows = (x[1] for x in source.iterrows())
+    all_search_templates, full_responses = perform_queries([query_template], rows, num_results=1)
+    full_responses = [full_responses[i] for i in range(len(full_responses))] # Don't use items to preserve order
+    
+    matches_in_ref = pd.DataFrame([f_r['hits']['hits'][0]['_source'] \
+                               if bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold) \
+                               else {} \
+                               for f_r in full_responses])
+                    
+    confidence = pd.Series([f_r['hits']['hits'][0]['_score'] \
+                            if bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold) \
+                            else np.nan \
+                            for f_r in full_responses])
+    
+    new_source = pd.concat([source, matches_in_ref], 1)
+    new_source['__CONFIDENCE'] = confidence
+    return new_source
+
+
 
 query_metrics = dict()
 for q_t in all_query_templates:
@@ -511,7 +539,11 @@ num_results_labelling = 3
 labels = []
 
 num_found = 0
-for idx in random.sample(list(source.index), 0):
+if test_num == 0:
+    num_samples = 0
+else:
+    num_samples = 100
+for idx in random.sample(list(source.index), num_samples):
     row = source.loc[idx]
     print('Doing', row)  
         
@@ -554,23 +586,22 @@ for idx in random.sample(list(source.index), 0):
 
 # TODO: only on chunksize rows of source
 
-best_query_templates = (('must', 'commune', 'LIBCOM', '.french', 1),
- ('must', 'lycees_sources', 'NOMEN_LONG', '.french', 1))
-#best_query_template = sorted_keys[0]
+if test_num == 0:
+    best_query_template = (('must', 'commune', 'LIBCOM', '.french', 1),
+     ('must', 'lycees_sources', 'NOMEN_LONG', '.french', 10))
+else:
+    best_query_template = sorted_keys[0]
 
-rows = (x[1] for x in source.iterrows())
-all_search_templates, full_responses = perform_queries([best_query_template], rows, num_results=1)
-full_responses = [full_responses[i] for i in range(len(full_responses))] # Don't use items to preserve order
+new_source = match(source, best_query_template, 5)
+new_source['has_match'] = new_source.__CONFIDENCE.notnull()
 
 
-
-matches_in_ref = pd.DataFrame([f_r['hits']['hits'][0]['_source'] if f_r['hits']['hits'] else {} \
-                               for f_r in full_responses])
-confidence = pd.Series([f_r['hits']['hits'][0]['_score'] if f_r['hits']['hits'] else np.nan \
-                               for f_r in full_responses])
-
-new_source = pd.concat([source, matches_in_ref], 1)
-new_source['_CONFIDENCE'] = confidence
+# Display results
+new_source.sort_values('__CONFIDENCE', inplace=True)
+for i, row in new_source[new_source.has_match].iloc[:100].iterrows(): 
+    print('**** ({0}) / score: {1}\n'.format(i, row['__CONFIDENCE']))
+    for match in match_cols:
+        print(row[match['source']], '\n', row[match['ref']], '\n')
 
 assert False
 
@@ -581,51 +612,6 @@ len(query_metrics[list(query_metrics.keys())[0]])
 for x in sorted_keys[:40]:
     print(x, '\n -> ', agg_query_metrics[x], '\n')
 
-a = []
-good = []
-for i in range(100, 200):
-    row = source.iloc[i]            
-    
-    #    to_ask = {x['ref']: {'query': my_unidecode(row[x['source']]),
-    #                        for x in match_cols}}
-    
-    body = {
-          'query': {
-            'bool': {
-              'should': [
-                    {'match': {key: {'query': val['query'],
-                                     'boost': val['boost']}}} \
-                                for key, val in to_ask.items() if val['boost']
-                        ]
-                    }
-                  }
-        }
-    
-    res = es.search(index=table_name, body=json.dumps(body), explain=False)
-    
-    #    may_have_match = 'lycee' in res.__str__().lower()
-    #    print(may_have_match)
-    #    if not may_have_match:
-    #        print(to_ask)
-    #    a.append(may_have_match)
-    
-    best_res = res['hits']['hits'][0]['_source']
-    
-    print('\n****')
-    
-    for key in sorted(to_ask.keys()):
-        print(key, ' : ', to_ask[key]['query'])
-        print(' '*len(key), '-> ', best_res[key])
-    
-    print('(', i, ') -> ', res['hits']['hits'][0]['_score'])
-    
-    is_good = input('Is good?\n >')
-    good.append(is_good in {'1', 'y'})
-    
-    
-
-to_ask = {'L1_DECLAREE.french': {'boost': 4.5, 'query': 'ECOLe'}}
-
 
 '''
 pre-process:
@@ -634,6 +620,8 @@ COMMUNE: remove "commune de"
 pre-process: L1 + ENSEIGNE + NOMEN_LONG
 
 Redresser les noms propres A. Camuse
+
+tags pour les LIBAPET sirene ?
 
 '''
 
@@ -660,5 +648,7 @@ LA LICORNE   -> [APP_Libelle_etablissement][source]
 822461620 00012 [source]
 823997358 00010 [ref]
 
+sans paramêtrage: Lycée Maxence Van der Meersch 
+ ASS MAXENCE VAN DER MEERSCH 
 
 '''
