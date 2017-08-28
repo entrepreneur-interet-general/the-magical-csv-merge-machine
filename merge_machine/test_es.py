@@ -19,8 +19,74 @@ from elasticsearch import Elasticsearch, client
 import numpy as np
 import pandas as pd
 
-import pprint
 import unidecode
+
+
+def pre_process_tab(tab):
+    ''' Clean tab before insertion '''
+    for x in tab.columns:
+        tab.loc[:, x] = tab[x].str.strip()
+    return tab
+
+def index(ref_gen, table_name, testing=False):
+    '''
+    Insert values from ref_gen in the Elasticsearch index
+    
+    INPUT:
+        - ref_gen: a pandas DataFrame generator (ref_gen=pd.read_csv(file_path, chunksize=XXX))
+        - table_name: name of the Elasticsearch index
+        - (testing): whether or not to refresh index at each insertion
+    '''
+    
+    # For efficiency, reset refresh interval
+    # see https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-update-settings.html
+    if not testing:
+        low_refresh = {"index" : {"refresh_interval" : "-1"}}
+        ic.put_settings(low_refresh, table_name)
+    
+    # Bulk insert
+    print('Started indexing')    
+    i = 0
+    a = time.time()
+    for ref_tab in ref_gen:
+        # TODO: REMOVE THIS
+        if ref_tab.index[-1] <= int(7.5*10**6):
+            continue
+        
+        ref_tab = pre_process_tab(ref_tab)
+        body = ''
+        for key, doc in ref_tab.where(ref_tab.notnull(), None).to_dict('index').items():
+            index_order = json.dumps({
+                                "index": {
+                                          "_index": table_name, 
+                                          "_type": 'structure', 
+                                          "_id": str(key)
+                                         }
+                                })
+            body += index_order + '\n'
+            body += json.dumps(doc) + '\n'
+        _ = es.bulk(body)
+        i += len(ref_tab)
+        
+        # Display progress
+        b = time.time()
+        eta = (file_len - i) * (b-a) / i
+        print('Indexed {0} rows / ETA: {1} s'.format(i, eta))
+
+    # Back to default refresh
+    if not testing:
+        default_refresh = {"index" : {"refresh_interval" : "1s"}}
+        ic.put_settings(default_refresh, table_name)
+        
+    # TODO: what is this for ?
+    es.indices.refresh(index=table_name)
+
+def my_unidecode(string):
+    '''unidecode or return empty string'''
+    if isinstance(string, str):
+        return unidecode.unidecode(string)
+    else:
+        return ''
 
 
 dir_path = 'data/sirene'
@@ -28,7 +94,7 @@ chunksize = 3000
 file_len = 10*10**6
 
 
-test_num = 2
+test_num = 1
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
     match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},
@@ -64,9 +130,6 @@ else:
 
 
 #
-
-
-
 source = pd.read_csv(source_file_path, 
                     sep=source_sep, encoding=source_encoding,
                     dtype=str, nrows=chunksize)
@@ -79,31 +142,9 @@ ref_sep = ';'
 ref_encoding = 'windows-1252'
 
 
-#columns_to_index = ['SIREN', 'NIC', 'L1_NORMALISEE', 'L2_NORMALISEE', 'L3_NORMALISEE',
-#       'L4_NORMALISEE', 'L5_NORMALISEE', 'L6_NORMALISEE', 'L7_NORMALISEE',
-#       'L1_DECLAREE', 'L2_DECLAREE', 'L3_DECLAREE', 'L4_DECLAREE',
-#       'L5_DECLAREE', 'L6_DECLAREE', 'L7_DECLAREE', 'LIBCOM', 'CEDEX', 'ENSEIGNE', 'NOMEN_LONG']
-
 # default is 'keyword
-columns_to_index = {
-                    'SIREN': {}, 
-                    'NIC': {},
-                    'L1_NORMALISEE': {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'},
-                    'L4_NORMALISEE': {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'}, 
-                    'L6_NORMALISEE': {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'},
-                    'L1_DECLAREE': {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'}, 
-                    'L4_DECLAREE': {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'},
-                    'L6_DECLAREE': {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'},
-                    'LIBCOM': {'french', 'whitespace', 'end_n_grams', 'n_grams'}, 
-                    'CEDEX': {}, 
-                    'ENSEIGNE': {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'}, 
-                    'NOMEN_LONG': {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'},
-                    # Keyword only
-                    'LIBNATETAB': {},
-                    'LIBAPET': {},
-                    'PRODEN': {},
-                    'PRODET': {}
-                    }
+
+from es_config import columns_to_index, index_settings
 
 ref_gen = pd.read_csv(os.path.join('local_test_data', 'sirene', ref_file_name), 
                   sep=ref_sep, encoding=ref_encoding,
@@ -111,7 +152,7 @@ ref_gen = pd.read_csv(os.path.join('local_test_data', 'sirene', ref_file_name),
                   dtype=str, chunksize=chunksize, nrows=10**50) 
 
 #==============================================================================
-# Index in Elasticsearch and test
+# Index in Elasticsearch 
 #==============================================================================
 testing = True
 new_index = False
@@ -127,69 +168,6 @@ es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
 
 # https://www.elastic.co/guide/en/elasticsearch/reference/1.4/analysis-edgengram-tokenizer.html
 
-tokenizers = {
-                "integers" : {
-                               "type" : "pattern",
-                               "preserve_original" : 0,
-                               "pattern" : '(\\d+)',
-                               'group': 1
-                               },
-                "n_grams": {
-                              "type": "ngram",
-                              "min_gram": 3,
-                              "max_gram": 3,
-                              "token_chars": [
-                                "letter",
-                                "digit"
-                              ]
-                            }
-                }
-
-filters =  {
-                "my_edgeNGram": {
-                    "type":       "edgeNGram",
-                    "min_gram": 3,
-                    "max_gram": 30
-            }}
-
-analyzers = {
-                "integers": {'tokenizer': 'integers'},
-                "n_grams": {'tokenizer': 'n_grams'},
-                "end_n_grams": {'tokenizer': 'keyword',
-                                "filter" : ["reverse", "my_edgeNGram", "reverse"]}
-            }
-
-
-index_settings = {
-                     "settings": {
-                            "analysis": {
-                                 "tokenizer": tokenizers,
-                                 "filter": filters,
-                                 "analyzer": analyzers
-                            }
-                          },
-                            
-                    "mappings": {
-                            "structure": {                      
-                            }
-                          }
-                }
-                            
-
-
-field_mappings = {key: {'analyzer': 'keyword', 
-                        'type': 'string',
-                        'fields': {analyzer: {'type': 'string', 'analyzer': analyzer} 
-                                    for analyzer in values}
-                        } 
-                for key, values in columns_to_index.items() if values}
-field_mappings.update({key: {'analyzer': 'keyword', 
-                             'type': 'string'
-                        } 
-                for key, values in columns_to_index.items() if not values})
-                        
-index_settings['mappings']['structure']['properties'] = field_mappings
-
 
 if new_index:
     ic = client.IndicesClient(es)
@@ -197,66 +175,10 @@ if new_index:
         ic.delete(table_name)
     ic.create(table_name, body=json.dumps(index_settings))  
 
-
-def pre_process(tab):
-    '''     '''
-    for x in tab.columns:
-        tab.loc[:, x] = tab[x].str.strip()
-    return tab
-
-def index(ref_gen, testing):
-    '''Index ref_gen'''
-    # For efficiency, reset refresh interval
-    # see https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-update-settings.html
-    if not testing:
-        low_refresh = {"index" : {"refresh_interval" : "-1"}}
-        ic.put_settings(low_refresh, table_name)
-    
-    # Bulk insert
-    print('Started indexing')    
-    i = 0
-    a = time.time()
-    for ref_tab in ref_gen:
-        # TODO: REMOVE THIS
-        if ref_tab.index[-1] <= int(7.5*10**6):
-            continue
-        
-        ref_tab = pre_process(ref_tab)
-        body = ''
-        for key, doc in ref_tab.where(ref_tab.notnull(), None).to_dict('index').items():
-            index_order = json.dumps({
-                                "index": {
-                                          "_index": table_name, 
-                                          "_type": 'structure', 
-                                          "_id": str(key)
-                                         }
-                                })
-            body += index_order + '\n'
-            body += json.dumps(doc) + '\n'
-        _ = es.bulk(body)
-        i += len(ref_tab)
-        
-        # Display progress
-        b = time.time()
-        eta = (file_len - i) * (b-a) / i
-        print('Indexed {0} rows / ETA: {1} s'.format(i, eta))
-
-    # Back to default refresh
-    if not testing:
-        default_refresh = {"index" : {"refresh_interval" : "1s"}}
-        ic.put_settings(default_refresh, table_name)
-        
-    # TODO: what is this for ?
-    es.indices.refresh(index=table_name)
-
 if do_indexing:
-    index(ref_gen, testing)
+    index(ref_gen, table_name, testing)
 
-def my_unidecode(string):
-    if isinstance(string, str):
-        return unidecode.unidecode(string)
-    else:
-        return ''
+
 
 '''
 Methodology:
@@ -284,7 +206,16 @@ After 3 matches: discard those with worst precision
 '''
 
 def compute_metrics(hits, ref_id):
-    '''Computes metrics for hits: res['hits']['hits']'''
+    '''
+    Computes metrics for based on the : res['hits']['hits']
+    
+    INPUT:
+        - hits: res['hits']['hits']
+        - ref_id: The real target Elasticsearch ID
+        
+    OUTPUT:
+        - metrics: dict with various information    
+    '''
     metrics = dict()
     
     # General query metrics
@@ -321,7 +252,16 @@ def compute_metrics(hits, ref_id):
     return metrics
 
 def _gen_suffix(columns_to_index, s_q_t_2):
-    '''Yields suffixes to add to field_names for the given analyzers'''
+    '''
+    Yields suffixes to add to field_names for the given analyzers
+    
+    INPUT:
+        - columns_to_index:
+        - s_q_t_2: column or columns from ref
+        
+    NB: s_q_t_2: element two of the single_query_template
+    
+    '''
     if isinstance(s_q_t_2, str):
         analyzers = columns_to_index[s_q_t_2]
     elif isinstance(s_q_t_2, tuple):
@@ -331,52 +271,30 @@ def _gen_suffix(columns_to_index, s_q_t_2):
         yield '.' + analyzer
 
 
-# TODO: bool levels for fields also (L4 for example)
-
-# query_template is ((source_key, ref_key, analyzer_suffix, boost), ...)
-
-max_num_levels = 3 # Number of match clauses
-bool_levels = {'.integers': ['must', 'should']}
-#len(query_metrics[list(query_metrics.keys())[0]])
-boost_levels = [1]
-single_queries = list(((bool_lvl, x['source'], x['ref'], suffix, boost) \
-                                   for x in match_cols \
-                                   for suffix in _gen_suffix(columns_to_index, x['ref']) \
-                                   for bool_lvl in bool_levels.get(suffix, ['must']) \
-                                   for boost in boost_levels))
-all_query_templates = list(itertools.chain(*[list(itertools.combinations(single_queries, x)) \
-                                    for x in range(2, max_num_levels+1)][::-1]))
-# Queries must contain all columns at least two distinct columns
-if len(match_cols) >= 1:
-    all_query_templates = list(filter(lambda query: len(set((x[1], x[2]) for x in query)) >= 2, \
-                                all_query_templates))
-
-#all_query_templates = [((y, 'ods_adresse', 'L4_NORMALISEE', '.n_grams', 1), 
-#                        ('must', 'APP_Libelle_etablissement', 'NOMEN_LONG', '', 1)) \
-#                    for y in ['should', 'must']] \
-#                + [((y, 'ods_adresse', 'L4_NORMALISEE', '.n_grams', 1), 
-#                  (z, 'APP_Libelle_etablissement', 'NOMEN_LONG', '.french', x), 
-#                  (v, 'APP_Libelle_etablissement', 'NOMEN_LONG', '.french', x2)) \
-#                for x in range(1,4) for x2 in range(1,4) \
-#                for y in ['should', 'must'] \
-#                for z in ['should', 'must'] \
-#                for v in ['should', 'must']]
 
 def _gen_body(query_template, row, num_results=3):
     '''
-    query_template is ((source_col, ref_col, analyzer_suffix, boost), )
-    row is pandas.Series from the source object
+    Generate the string to pass to Elastic search for it to execute query
     
-    s_q_t: single_query_template
+    INPUT:
+        - query_template: ((source_col, ref_col, analyzer_suffix, boost), ...)
+        - row: pandas.Series from the source object
+        - num_results: Max number of results for the query
+    
+    OUTPUT:
+        - body: the query as string
+    
+    NB: s_q_t: single_query_template
+        source_val = row[s_q_t[1]]
+        key = s_q_t[2] + s_q_t[3]
+        boost = s_q_t[4]
     '''
-    #    source_val = row[s_q_t[1]]
-    #    key = s_q_t[2] + s_q_t[3]
-    #    boost = s_q_t[4]
+
     
     body = {
           'size': num_results,
           'query': {
-            'bool': {
+            'bool': dict({
                must_or_should: [
                           {'match': {
                                   s_q_t[2] + s_q_t[3]: {'query': my_unidecode(row[s_q_t[1]].lower()).replace('lycee', ''),
@@ -395,23 +313,33 @@ def _gen_body(query_template, row, num_results=3):
                           for s_q_t in query_template if (s_q_t[0] == must_or_should) \
                                       and isinstance(s_q_t[2], tuple)
                         ] \
-                 for must_or_should in ['must', 'should']   
+                for must_or_should in ['must', 'should']
+                        },
+                        **{
+                           'must_not': [{'match': {'NOMEN_LONG.french': {'query': 'amicale du OR ass or association OR foyer OR sportive OR parents OR MAISON DES'}}
+                                     }]
+                        })
                     #,
 #               'filter': [{'match': {'NOMEN_LONG.french': {'query': 'Lycee'}}
-#                         }],
-#               'must_not': [{'match': {'NOMEN_LONG.french': {'query': 'amicale du OR ass or association OR foyer OR sportive OR parents OR MAISON DES'}}
-#                         }]
-                    }
+#                         }],                    
                   }
            }
     return body
 
-def compute_threshold(metrics, t_p=0.99, t_r=0.3):
+def compute_threshold(metrics, t_p=0.95, t_r=0.3):
     ''' 
-    Compute the optimale threshold and the metrics associated
+    Compute the optimal threshold and the associated metrics 
     
-    t_p = 0.9 # target_precision
-    t_r = 0.3 # target_recall    
+    INPUT:
+        - metrics: list of individual metrics for one query (result of compute_metrics)
+        - t_p: target_precision
+        - t_r: target_recall
+        
+    OUTPUT:
+        - thresh: optimal threshold (#TODO: explain more)
+        - precision
+        - recall
+        - ratio
     '''
     num_metrics = len(metrics)
 
@@ -436,37 +364,58 @@ def compute_threshold(metrics, t_p=0.99, t_r=0.3):
     # Find best index for threshold
     idx = max(num_metrics - rolling_ratio[::-1].argmax() - 1, min(6, num_metrics-1))
     
+    thresh = sorted_metrics[idx]['_score_first']
+    precision = rolling_precision[idx]
+    recall = rolling_recall[idx]
+    ratio = rolling_ratio[idx]
+    
     if sum(is_first_vect) == 0:
         return 10**3, 0, 0, 0
     else:
-        return sorted_metrics[idx]['_score_first'], rolling_precision[idx], rolling_recall[idx], rolling_ratio[idx]
+        return thresh, precision, recall, ratio
 
 
 def calc_agg_query_metrics(query_metrics):
+    '''
+    Find optimal threshold for each query and compute the aggregated metrics.
+    
+    INPUT:
+        - query_metrics: dict of all results of previous queries
+            
+    OUTPUT:
+        - agg_query_metrics: aggregated metrics for each query in query_metrics
+    '''
+    
     agg_query_metrics = dict()
     for key, metrics in query_metrics.items():
         thresh, precision, recall, ratio = compute_threshold(metrics)
         agg_query_metrics[key] = dict()
-        try:
-            agg_query_metrics[key]['precision'] = sum(x['is_first'] and (x['_score_first'] >= thresh) for x in metrics) \
-                                                / (sum(bool(x['num_hits'])  and (x['_score_first'] >= thresh) for x in metrics) or 1)
-        except:
-            import pdb; pdb.set_trace()
-        agg_query_metrics[key]['recall'] = sum(x['is_first'] and (x['_score_first'] >= thresh) for x in metrics) / len(metrics)
-        
+        agg_query_metrics[key]['thresh'] = thresh
+        agg_query_metrics[key]['other'] = precision
+        agg_query_metrics[key]['other'] = recall
+        agg_query_metrics[key]['ratio'] = ratio
     return agg_query_metrics
 
     
     
-def find_match(full_responses, sorted_keys, row, num_results, num_rows_labelled):
+def gen_label(full_responses, sorted_keys, row, num_results, num_rows_labelled):
     '''
-    User labelling going through potential results (order given by sorted_keys) looking for a 
-    match
+    User labelling going through potential results (order given by sorted_keys) 
+    looking for a match. This goes through all keys and all results (up to
+    num_results) and asks the user to label the data. Labelling ends once the 
+    user finds a match or there is no more potential matches.
     
+    INPUT:
+        - full_responses: result of "perform_queries" ; {query: response, ...}
+        - sorted_keys: order in which to perform labelling
+        - row: pandas.Series corresponding to the row being searched for
+        - num_rows_labelled: For display only
+        
     OUTPUT:
         - found: If a match was found
         - res: result of the match if it was found
     '''
+    
     ids_done = []
     for key in sorted_keys:
         print('\nkey: ', key)
@@ -491,13 +440,27 @@ def find_match(full_responses, sorted_keys, row, num_results, num_rows_labelled)
                     is_match = row['SIRET'] == res['_source']['SIREN'] + res['_source']['NIC']
                 else:
                     is_match = input('Is match?\n > ') in ['1', 'y']
+                    
                 if is_match:
                     return True, res
                 else:
                     print('not first')
     return False, None    
 
-def make_bulk(search_templates, rows, num_results, chunk_size=100):
+def make_bulk(search_templates, num_results, chunk_size=100):
+    '''
+    Create a bulk generator with all search templates
+    
+    INPUT:
+        - search_templates: iterator of form ((query_template, row), ...)
+        - num_results: max num results per individual query
+        - chunk_size: number of queries per bulk
+    
+    OUTPUT:
+        - bulk_body: string containing queries formated for ES
+        - queries: list of queries
+    
+    '''
     queries = []
     bulk_body = ''
     i = 0
@@ -512,12 +475,19 @@ def make_bulk(search_templates, rows, num_results, chunk_size=100):
             queries = []
             bulk_body = ''
             i = 0
-    yield bulk_body, queries
+            
+    if bulk_body:
+        yield bulk_body, queries
 
 def perform_queries(all_query_templates, rows, num_results=3):
     '''
-    Searches for the values in row with all the search templates in all_query_templates.
-    Retry on error
+    Searches for the values in row with all the search templates in 
+    all_query_templates. Retry on error.
+    
+    INPUT:
+        - all_query_templates: iterator of queries to perform
+        - rows: iterator of pandas.Series containing the rows to match
+        - num_results: max number of results per individual query    
     '''
     i = 1
     full_responses = dict() 
@@ -527,7 +497,7 @@ def perform_queries(all_query_templates, rows, num_results=3):
     while search_templates:
         print('At search iteration', i)
         
-        bulk_body_gen = make_bulk([x[1] for x in search_templates], rows, num_results)
+        bulk_body_gen = make_bulk([x[1] for x in search_templates], num_results)
         responses = []
         for bulk_body, _ in bulk_body_gen:
             responses += es.msearch(bulk_body)['responses'] #, index=table_name)
@@ -553,7 +523,14 @@ def perform_queries(all_query_templates, rows, num_results=3):
     return og_search_templates, full_responses
 
 def match(source, query_template, threshold):
-    '''Return concatenation of source and reference with the matches found'''
+    '''
+    Return concatenation of source and reference with the matches found
+    
+    INPUT:
+        source: pandas.DataFrame containing all source items
+        query_template: 
+        threshold: minimum value of score for this query_template for a match
+    '''
     rows = (x[1] for x in source.iterrows())
     all_search_templates, full_responses = perform_queries([query_template], rows, num_results=1)
     full_responses = [full_responses[i] for i in range(len(full_responses))] # Don't use items to preserve order
@@ -572,6 +549,26 @@ def match(source, query_template, threshold):
     new_source['__CONFIDENCE'] = confidence
     return new_source
 
+# TODO: bool levels for fields also (L4 for example)
+
+# query_template is ((source_key, ref_key, analyzer_suffix, boost), ...)
+
+max_num_levels = 3 # Number of match clauses
+bool_levels = {'.integers': ['must', 'should']}
+#len(query_metrics[list(query_metrics.keys())[0]])
+boost_levels = [1]
+single_queries = list(((bool_lvl, x['source'], x['ref'], suffix, boost) \
+                                   for x in match_cols \
+                                   for suffix in _gen_suffix(columns_to_index, x['ref']) \
+                                   for bool_lvl in bool_levels.get(suffix, ['must']) \
+                                   for boost in boost_levels))
+all_query_templates = list(itertools.chain(*[list(itertools.combinations(single_queries, x)) \
+                                    for x in range(2, max_num_levels+1)][::-1]))
+# Queries must contain all columns at least two distinct columns
+if len(match_cols) >= 1:
+    all_query_templates = list(filter(lambda query: len(set((x[1], x[2]) for x in query)) >= 2, \
+                                all_query_templates))
+
 
 
 query_metrics = dict()
@@ -589,12 +586,20 @@ if test_num == 0:
     num_samples = 0
 else:
     num_samples = 100
+    
+
+
+min_precision_tab = [(20, 0.7), (10, 0.5), (5, 0.3)] # (num_rows_labelled, min_prec)    
+    
+
+sorted_keys = all_query_templates
+
 for num_rows_labelled, idx in enumerate(random.sample(list(source.index), num_samples)):
     row = source.loc[idx]
     print('Doing', row)  
         
     # Search elasticsearch for all results
-    all_search_templates, full_responses = perform_queries(all_query_templates, [row], num_results_labelling)
+    all_search_templates, full_responses = perform_queries(sorted_keys, [row], num_results_labelling)
     full_responses = {all_search_templates[idx][1][0]: values for idx, values in full_responses.items()}
     
     # Sort keys by score or most promising
@@ -606,19 +611,29 @@ for num_rows_labelled, idx in enumerate(random.sample(list(source.index), num_sa
         print('Using best precision')
         if found:
             agg_query_metrics = calc_agg_query_metrics(query_metrics)
+            
+
+        # Sort by ratio but label by precision ?
         sorted_keys = sorted(full_responses.keys(), key=lambda x: agg_query_metrics[x]['precision'], reverse=True)
-        [agg_query_metrics[x] for x in sorted_keys[:10]]
+        
+        # Remove queries if precision is too low (thresh depends on number of labels)
+        min_precision = 0
+        for min_idx, min_precision in min_precision_tab:
+            if num_rows_labelled >= min_idx:
+                break
+        sorted_keys = list(filter(lambda x: agg_query_metrics[x]['precision'] >= min_precision, sorted_keys))
+    print('Number of keys left', len(sorted_keys))
     # Try to find the match somewhere
 
-
-    found, res = find_match(full_responses, sorted_keys, row, num_results_labelling, num_rows_labelled)
+    # Make user label data until the match is found
+    found, res = gen_label(full_responses, sorted_keys, row, num_results_labelling, num_rows_labelled)
 
     if found:
         num_found += 1
         for key, response in full_responses.items():
             query_metrics[key].append(compute_metrics(response['hits']['hits'], res['_id']))
 
-
+    
 
         #        import pdb
         #        pdb.set_trace()
@@ -636,18 +651,44 @@ if test_num == 0:
     best_query_template = (('must', 'commune', 'LIBCOM', '.french', 1),
      ('must', 'lycees_sources', 'NOMEN_LONG', '.french', 10))
 else:
-    best_query_template = sorted_keys[0]
+    best_query_template = sorted(full_responses.keys(), key=lambda x: agg_query_metrics[x]['ratio'], reverse=True)[0]
 
-new_source = match(source, best_query_template, 5)
+new_source = match(source, best_query_template, 6)# agg_query_metrics[best_query_template]['thresh'])
 new_source['has_match'] = new_source.__CONFIDENCE.notnull()
 
+if test_num == 2:
+    new_source['good'] = new_source.SIRET == (new_source.SIREN + new_source.NIC)
+    print('Precision:', new_source.loc[new_source.has_match, 'good'].mean())
+    print('Recall:', new_source.good.mean())
 
 # Display results
 new_source.sort_values('__CONFIDENCE', inplace=True)
-for i, row in new_source[new_source.has_match].iloc[:100].iterrows(): 
+
+for i, row in new_source.iloc[:100].iterrows(): 
     print('**** ({0}) / score: {1}\n'.format(i, row['__CONFIDENCE']))
     for match in match_cols:
-        print(row[match['source']], '\n', row[match['ref']], '\n')
+        if isinstance(match['ref'], str):
+            cols = [match['ref']]
+        else:
+            cols = match['ref']
+        for col in cols:
+            print('\n{1}   -> [{0}][source]'.format(match['source'], row[match['source']]))
+            print('> {1}   -> [{0}]'.format(col, row[col]))  
+        
+if test_num == 2:
+    for i, row in new_source[new_source.has_match & ~new_source.good].iloc[:100].iterrows(): 
+        print('**** ({0}) / score: {1}\n'.format(i, row['__CONFIDENCE']))
+        for match in match_cols + [{'source': 'SIRET', 'ref': ('SIREN', 'NIC')}]:
+            if isinstance(match['ref'], str):
+                cols = [match['ref']]
+            else:
+                cols = match['ref']
+            for col in cols:
+                print('\n{1}   -> [{0}][source]'.format(match['source'], row[match['source']]))
+                print('> {1}   -> [{0}]'.format(col, row[col]))  
+#            
+#        for match in match_cols:
+#            print(row[match['source']], '\n', row[match['ref']], '\n')
 
 assert False
 
@@ -658,20 +699,23 @@ len(query_metrics[list(query_metrics.keys())[0]])
 for x in sorted_keys[:40]:
     print(x, '\n -> ', agg_query_metrics[x], '\n')
 
-t_ps = [x/200. for x in range(2*80, 2*100)]
+t_ps = [x/400. for x in range(4*80, 4*100)]
 precs = []
 recs = []
+ratios = []
 
 for t_p in t_ps:
-    tab = pd.DataFrame([(key, *compute_threshold(metrics, t_p=t_p)) for key, metrics in query_metrics.items()])
+    tab = pd.DataFrame([(key, *compute_threshold(metrics, t_p=t_p, t_r=0)) for key, metrics in query_metrics.items() if key in sorted_keys])
     tab.columns = ['key', 'thresh', 'precision', 'recall', 'ratio']
     tab.sort_values('ratio', ascending=False, inplace=True)
     precs.append(tab.precision.iloc[0])
     recs.append(tab.recall.iloc[0])
+    ratios.append(tab.ratio.iloc[0])
     
 import matplotlib.pyplot as plt
 plt.plot(t_ps, precs)
 plt.plot(t_ps, recs)
+plt.plot(t_ps, ratios)
 print(tab.head(10))
 
 '''
