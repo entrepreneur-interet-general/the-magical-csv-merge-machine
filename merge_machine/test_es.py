@@ -45,12 +45,18 @@ elif test_num == 1:
     
 elif test_num == 2:
     source_file_path = 'local_test_data/integration_3/export_alimconfiance.csv'
+#    match_cols = [{'source': 'Libelle_commune', 'ref': 'LIBCOM'},
+#                  #{'source': 'Libelle_commune', 'ref': 'L6_NORMALISEE'},
+#                  {'source': 'ods_adresse', 'ref': 'L4_NORMALISEE'},
+#                  {'source': 'APP_Libelle_etablissement', 'ref': 'L1_NORMALISEE'},
+#                  {'source': 'APP_Libelle_etablissement', 'ref': 'ENSEIGNE'},
+#                  {'source': 'APP_Libelle_etablissement', 'ref': 'NOMEN_LONG'}]
     match_cols = [{'source': 'Libelle_commune', 'ref': 'LIBCOM'},
                   #{'source': 'Libelle_commune', 'ref': 'L6_NORMALISEE'},
                   {'source': 'ods_adresse', 'ref': 'L4_NORMALISEE'},
-                  {'source': 'APP_Libelle_etablissement', 'ref': 'L1_NORMALISEE'},
-                  {'source': 'APP_Libelle_etablissement', 'ref': 'ENSEIGNE'},
-                  {'source': 'APP_Libelle_etablissement', 'ref': 'NOMEN_LONG'}]
+                  {'source': 'APP_Libelle_etablissement', 'ref': ('L1_NORMALISEE', 
+                                                        'ENSEIGNE', 'NOMEN_LONG')}]
+
     source_sep = ';'
     source_encoding = 'utf-8'
 else:
@@ -73,30 +79,30 @@ ref_sep = ';'
 ref_encoding = 'windows-1252'
 
 
-columns_to_index = ['SIREN', 'NIC', 'L1_NORMALISEE', 'L2_NORMALISEE', 'L3_NORMALISEE',
-       'L4_NORMALISEE', 'L5_NORMALISEE', 'L6_NORMALISEE', 'L7_NORMALISEE',
-       'L1_DECLAREE', 'L2_DECLAREE', 'L3_DECLAREE', 'L4_DECLAREE',
-       'L5_DECLAREE', 'L6_DECLAREE', 'L7_DECLAREE', 'LIBCOM', 'CEDEX', 'ENSEIGNE', 'NOMEN_LONG']
+#columns_to_index = ['SIREN', 'NIC', 'L1_NORMALISEE', 'L2_NORMALISEE', 'L3_NORMALISEE',
+#       'L4_NORMALISEE', 'L5_NORMALISEE', 'L6_NORMALISEE', 'L7_NORMALISEE',
+#       'L1_DECLAREE', 'L2_DECLAREE', 'L3_DECLAREE', 'L4_DECLAREE',
+#       'L5_DECLAREE', 'L6_DECLAREE', 'L7_DECLAREE', 'LIBCOM', 'CEDEX', 'ENSEIGNE', 'NOMEN_LONG']
 
 # default is 'keyword
 columns_to_index = {
-                    'SIREN': [], 
-                    'NIC': [],
-                    'L1_NORMALISEE': ['french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'],
-                    'L4_NORMALISEE': ['french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'], 
-                    'L6_NORMALISEE': ['french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'],
-                    'L1_DECLAREE': ['french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'], 
-                    'L4_DECLAREE': ['french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'],
-                    'L6_DECLAREE': ['french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'],
-                    'LIBCOM': ['french', 'whitespace', 'end_n_grams', 'n_grams'], 
-                    'CEDEX': [], 
-                    'ENSEIGNE': ['french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'], 
-                    'NOMEN_LONG': ['french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'],
+                    'SIREN': {}, 
+                    'NIC': {},
+                    'L1_NORMALISEE': {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'},
+                    'L4_NORMALISEE': {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'}, 
+                    'L6_NORMALISEE': {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'},
+                    'L1_DECLAREE': {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'}, 
+                    'L4_DECLAREE': {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'},
+                    'L6_DECLAREE': {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'},
+                    'LIBCOM': {'french', 'whitespace', 'end_n_grams', 'n_grams'}, 
+                    'CEDEX': {}, 
+                    'ENSEIGNE': {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'}, 
+                    'NOMEN_LONG': {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'},
                     # Keyword only
-                    'LIBNATETAB': [],
-                    'LIBAPET': [],
-                    'PRODEN': [],
-                    'PRODET': []
+                    'LIBNATETAB': {},
+                    'LIBAPET': {},
+                    'PRODEN': {},
+                    'PRODET': {}
                     }
 
 ref_gen = pd.read_csv(os.path.join('local_test_data', 'sirene', ref_file_name), 
@@ -314,14 +320,15 @@ def compute_metrics(hits, ref_id):
     
     return metrics
 
-def _gen_suffix(analyzers):
+def _gen_suffix(columns_to_index, s_q_t_2):
     '''Yields suffixes to add to field_names for the given analyzers'''
+    if isinstance(s_q_t_2, str):
+        analyzers = columns_to_index[s_q_t_2]
+    elif isinstance(s_q_t_2, tuple):
+        analyzers = set.union(*[columns_to_index[col] for col in s_q_t_2])
     yield '' # No suffix for standard analyzer
     for analyzer in analyzers:
         yield '.' + analyzer
-
-    
-# test_bulk_search
 
 
 # TODO: bool levels for fields also (L4 for example)
@@ -330,10 +337,11 @@ def _gen_suffix(analyzers):
 
 max_num_levels = 3 # Number of match clauses
 bool_levels = {'.integers': ['must', 'should']}
+#len(query_metrics[list(query_metrics.keys())[0]])
 boost_levels = [1]
 single_queries = list(((bool_lvl, x['source'], x['ref'], suffix, boost) \
                                    for x in match_cols \
-                                   for suffix in _gen_suffix(columns_to_index[x['ref']]) \
+                                   for suffix in _gen_suffix(columns_to_index, x['ref']) \
                                    for bool_lvl in bool_levels.get(suffix, ['must']) \
                                    for boost in boost_levels))
 all_query_templates = list(itertools.chain(*[list(itertools.combinations(single_queries, x)) \
@@ -358,6 +366,8 @@ def _gen_body(query_template, row, num_results=3):
     '''
     query_template is ((source_col, ref_col, analyzer_suffix, boost), )
     row is pandas.Series from the source object
+    
+    s_q_t: single_query_template
     '''
     #    source_val = row[s_q_t[1]]
     #    key = s_q_t[2] + s_q_t[3]
@@ -367,20 +377,26 @@ def _gen_body(query_template, row, num_results=3):
           'size': num_results,
           'query': {
             'bool': {
-               'must': [
+               must_or_should: [
                           {'match': {
                                   s_q_t[2] + s_q_t[3]: {'query': my_unidecode(row[s_q_t[1]].lower()).replace('lycee', ''),
                                                         'boost': s_q_t[4]}}
                           } \
-                          for s_q_t in query_template if (s_q_t[0] == 'must')
-                        ],
-               'should': [
-                          {'match': {
-                                  s_q_t[2] + s_q_t[3]: {'query': row[s_q_t[1]],
-                                                        'boost': s_q_t[4]}}
+                          for s_q_t in query_template if (s_q_t[0] == must_or_should) \
+                                      and isinstance(s_q_t[2], str)
+                        ] \
+                        + [
+                          {'multi_match': {
+                                  'fields': [col + s_q_t[3] for col in s_q_t[2]], 
+                                  'query': my_unidecode(row[s_q_t[1]].lower()).replace('lycee', ''),
+                                  'boost': s_q_t[4]
+                                  }
                           } \
-                          for s_q_t in query_template if (s_q_t[0] == 'should')
-                        ]#,
+                          for s_q_t in query_template if (s_q_t[0] == must_or_should) \
+                                      and isinstance(s_q_t[2], tuple)
+                        ] \
+                 for must_or_should in ['must', 'should']   
+                    #,
 #               'filter': [{'match': {'NOMEN_LONG.french': {'query': 'Lycee'}}
 #                         }],
 #               'must_not': [{'match': {'NOMEN_LONG.french': {'query': 'amicale du OR ass or association OR foyer OR sportive OR parents OR MAISON DES'}}
@@ -390,34 +406,59 @@ def _gen_body(query_template, row, num_results=3):
            }
     return body
 
+def compute_threshold(metrics, t_p=0.99, t_r=0.3):
+    ''' 
+    Compute the optimale threshold and the metrics associated
+    
+    t_p = 0.9 # target_precision
+    t_r = 0.3 # target_recall    
+    '''
+    num_metrics = len(metrics)
+
+    # Scores deal with empty hits
+    sorted_metrics = sorted(metrics, key=lambda x: x['_score_first'], reverse=True)
+    
+    # score_vect = np.array([x['_score_first'] for x in sorted_metrics])
+    is_first_vect = np.array([bool(x['is_first']) for x in sorted_metrics])
+    # rolling_score_mean = score_vect.cumsum() / (np.arange(num_metrics) + 1)
+    rolling_precision = is_first_vect.cumsum() / (np.arange(num_metrics) + 1)
+    rolling_recall = is_first_vect.cumsum() / num_metrics
+    
+    # WHY is recall same as precision ?
+    
+    # Compute ratio
+    _f_precision = lambda x: max(x - t_p, 0) + min(t_p*(x/t_p)**3, t_p)
+    _f_recall = lambda x: max(x - t_r, 0) + min(t_p*(x/t_r)**3, t_r)
+    a = np.fromiter((_f_precision(xi) for xi in rolling_precision), rolling_precision.dtype)
+    b = np.fromiter((_f_recall(xi) for xi in rolling_recall), rolling_recall.dtype)
+    rolling_ratio = a*b
+
+    # Find best index for threshold
+    idx = max(num_metrics - rolling_ratio[::-1].argmax() - 1, min(6, num_metrics-1))
+    
+    if sum(is_first_vect) == 0:
+        return 10**3, 0, 0, 0
+    else:
+        return sorted_metrics[idx]['_score_first'], rolling_precision[idx], rolling_recall[idx], rolling_ratio[idx]
+
+
 def calc_agg_query_metrics(query_metrics):
     agg_query_metrics = dict()
     for key, metrics in query_metrics.items():
-        thresh = compute_threshold(metrics)
+        thresh, precision, recall, ratio = compute_threshold(metrics)
         agg_query_metrics[key] = dict()
-        agg_query_metrics[key]['precision'] = sum(x['is_first'] and (x['_score_first'] >= thresh) for x in metrics)\
-                                            / (sum(bool(x['num_hits'])  and (x['_score_first'] >= thresh) for x in metrics) or 1)
+        try:
+            agg_query_metrics[key]['precision'] = sum(x['is_first'] and (x['_score_first'] >= thresh) for x in metrics) \
+                                                / (sum(bool(x['num_hits'])  and (x['_score_first'] >= thresh) for x in metrics) or 1)
+        except:
+            import pdb; pdb.set_trace()
         agg_query_metrics[key]['recall'] = sum(x['is_first'] and (x['_score_first'] >= thresh) for x in metrics) / len(metrics)
+        
     return agg_query_metrics
 
-def compute_threshold(metrics):
-    num_metrics = len(metrics)
     
-    sorted_metrics = sorted(metrics, key=lambda x: x['_score_first'], reverse=True)
     
-    score_vect = np.array([x['_score_first'] for x in sorted_metrics])
-    has_match_vect = np.array([bool(x['num_hits']) for x in sorted_metrics])
-    rolling_precision = score_vect.cumsum() / (np.arange(num_metrics) + 1)
-    rolling_recall = has_match_vect.cumsum() / (np.arange(num_metrics) + 1)
-
-    idx = max(num_metrics - rolling_precision[::-1].argmax() - 1, min(6, num_metrics-1))
-    
-    if rolling_precision[-1] == 0:
-        return 10**3
-    else:
-        return 0# rolling_precision[idx]
-    
-def find_match(full_responses, sorted_keys, row, num_results):
+def find_match(full_responses, sorted_keys, row, num_results, num_rows_labelled):
     '''
     User labelling going through potential results (order given by sorted_keys) looking for a 
     match
@@ -433,10 +474,15 @@ def find_match(full_responses, sorted_keys, row, num_results):
         for res in results[:num_results]:
             if res['_id'] not in ids_done and ((res['_score']>=0.001)):
                 ids_done.append(res['_id'])
-                print('\n***** {0} / {1}'.format(res['_id'], res['_score']))
+                print('\n***** {0} / {1} / ({2})'.format(res['_id'], res['_score'], num_rows_labelled))
                 for match in match_cols:
-                    print('\n{1}   -> [{0}][source]'.format(match['source'], row[match['source']]))
-                    print('> {1}   -> [{0}]'.format(match['ref'], res['_source'][match['ref']]))
+                    if isinstance(match['ref'], str):
+                        cols = [match['ref']]
+                    else:
+                        cols = match['ref']
+                    for col in cols:
+                        print('\n{1}   -> [{0}][source]'.format(match['source'], row[match['source']]))
+                        print('> {1}   -> [{0}]'.format(col, res['_source'][col]))
                 
                 if test_num == 2:
                     print(row['SIRET'][:-5], row['SIRET'][-5:], '[source]')
@@ -543,7 +589,7 @@ if test_num == 0:
     num_samples = 0
 else:
     num_samples = 100
-for idx in random.sample(list(source.index), num_samples):
+for num_rows_labelled, idx in enumerate(random.sample(list(source.index), num_samples)):
     row = source.loc[idx]
     print('Doing', row)  
         
@@ -565,7 +611,7 @@ for idx in random.sample(list(source.index), num_samples):
     # Try to find the match somewhere
 
 
-    found, res = find_match(full_responses, sorted_keys, row, num_results_labelling)
+    found, res = find_match(full_responses, sorted_keys, row, num_results_labelling, num_rows_labelled)
 
     if found:
         num_found += 1
@@ -612,6 +658,21 @@ len(query_metrics[list(query_metrics.keys())[0]])
 for x in sorted_keys[:40]:
     print(x, '\n -> ', agg_query_metrics[x], '\n')
 
+t_ps = [x/200. for x in range(2*80, 2*100)]
+precs = []
+recs = []
+
+for t_p in t_ps:
+    tab = pd.DataFrame([(key, *compute_threshold(metrics, t_p=t_p)) for key, metrics in query_metrics.items()])
+    tab.columns = ['key', 'thresh', 'precision', 'recall', 'ratio']
+    tab.sort_values('ratio', ascending=False, inplace=True)
+    precs.append(tab.precision.iloc[0])
+    recs.append(tab.recall.iloc[0])
+    
+import matplotlib.pyplot as plt
+plt.plot(t_ps, precs)
+plt.plot(t_ps, recs)
+print(tab.head(10))
 
 '''
 pre-process:
@@ -650,5 +711,24 @@ LA LICORNE   -> [APP_Libelle_etablissement][source]
 
 sans paramêtrage: Lycée Maxence Van der Meersch 
  ASS MAXENCE VAN DER MEERSCH 
+
+Paris 14e  Arrondissement   -> [Libelle_commune][source]
+> PARIS 14   -> [LIBCOM]
+
+181 RUE DU CHATEAU   -> [ods_adresse][source]
+> 171 RUE DU CHATEAU   -> [L4_NORMALISEE]
+
+L'ASSIETTE   -> [APP_Libelle_etablissement][source]
+> L ASSIETTE   -> [L1_NORMALISEE]
+
+L'ASSIETTE   -> [APP_Libelle_etablissement][source]
+> L'ASSIETTE   -> [ENSEIGNE]
+
+L'ASSIETTE   -> [APP_Libelle_etablissement][source]
+> NUAGE SARL   -> [NOMEN_LONG]
+505240614 00014 [source]
+505240614 00014 [ref]
+
+Take queries with better precision first
 
 '''
