@@ -23,7 +23,6 @@ def my_unidecode(string):
     else:
         return ''
 
-
 def compute_metrics(hits, ref_id):
     '''
     Computes metrics for based on the : res['hits']['hits']
@@ -89,9 +88,7 @@ def _gen_suffix(columns_to_index, s_q_t_2):
     for analyzer in analyzers:
         yield '.' + analyzer
 
-
-
-def _gen_body(query_template, row, num_results=3):
+def _gen_body(query_template, row, must_not=[], must=[], num_results=3):
     '''
     Generate the string to pass to Elastic search for it to execute query
     
@@ -134,12 +131,11 @@ def _gen_body(query_template, row, num_results=3):
                 for must_or_should in ['must', 'should']
                         },
                         **{
-                           'must_not': [{'match': {'NOMEN_LONG.french': {'query': 'amicale du OR ass or association OR foyer OR sportive OR parents OR MAISON DES'}}
-                                     }]
-                        })
-                    #,
-#               'filter': [{'match': {'NOMEN_LONG.french': {'query': 'Lycee'}}
-#                         }],                    
+                           'must_not': [{'match': {'NOMEN_LONG.french': {'query': ' OR '.join(must_not)}}
+                                     }] if must_not else [],
+                           'filter': [{'match': {'NOMEN_LONG.french': {'query': ' AND '.join(must)}}
+                                     }] if must else [],
+                        })               
                   }
            }
     return body
@@ -280,7 +276,7 @@ def gen_all_query_templates(match_cols, columns_to_index, bool_levels,
 #                    print('not first')
 #    return False, None    
 
-def make_bulk(table_name, search_templates, num_results, chunk_size=100):
+def make_bulk(table_name, search_templates, must, must_not, num_results, chunk_size=100):
     '''
     Create a bulk generator with all search templates
     
@@ -299,7 +295,7 @@ def make_bulk(table_name, search_templates, num_results, chunk_size=100):
     i = 0
     for (q_t, row) in search_templates:
         bulk_body += json.dumps({"index" : table_name}) + '\n'
-        body = _gen_body(q_t, row, num_results)
+        body = _gen_body(q_t, row, must, must_not, num_results)
         bulk_body += json.dumps(body) + '\n'
         queries.append((q_t, row))
         i += 1
@@ -312,7 +308,7 @@ def make_bulk(table_name, search_templates, num_results, chunk_size=100):
     if bulk_body:
         yield bulk_body, queries
 
-def perform_queries(table_name, all_query_templates, rows, num_results=3):
+def perform_queries(table_name, all_query_templates, rows, must, must_not, num_results=3):
     '''
     Searches for the values in row with all the search templates in 
     all_query_templates. Retry on error.
@@ -330,7 +326,7 @@ def perform_queries(table_name, all_query_templates, rows, num_results=3):
     while search_templates:
         print('At search iteration', i)
         
-        bulk_body_gen = make_bulk(table_name, [x[1] for x in search_templates], num_results)
+        bulk_body_gen = make_bulk(table_name, [x[1] for x in search_templates], must, must_not, num_results)
         responses = []
         for bulk_body, _ in bulk_body_gen:
             responses += es.msearch(bulk_body)['responses'] #, index=table_name)
@@ -365,7 +361,7 @@ def match(table_name, source, query_template, threshold):
         threshold: minimum value of score for this query_template for a match
     '''
     rows = (x[1] for x in source.iterrows())
-    all_search_templates, full_responses = perform_queries(table_name, [query_template], rows, num_results=1)
+    all_search_templates, full_responses = perform_queries(table_name, [query_template], rows, must, must_not, num_results=1)
     full_responses = [full_responses[i] for i in range(len(full_responses))] # Don't use items to preserve order
     
     matches_in_ref = pd.DataFrame([f_r['hits']['hits'][0]['_source'] \
@@ -393,7 +389,7 @@ class Labeller():
     boost_levels = [1]
     
 
-    def __init__(self, source, ref_table_name, match_cols, columns_to_index):
+    def __init__(self, source, ref_table_name, match_cols, columns_to_index, must=[], must_not=[]):
         self.all_query_templates = gen_all_query_templates(match_cols, 
                                                            columns_to_index, 
                                                            self.bool_levels, 
@@ -406,6 +402,10 @@ class Labeller():
         self.match_cols = match_cols
         self.num_rows_labelled = 0
         self.query_metrics = dict()
+        
+        self.must = must
+        self.must_not = must_not
+        
         for q_t in self.all_query_templates:
             self.query_metrics[q_t] = []
             
@@ -479,22 +479,21 @@ class Labeller():
             self.row = self.source.loc[self.idx]
             
             print('in new_label / in self.next_row')
-            self.all_search_templates, self.full_responses = perform_queries(self.ref_table_name, self.sorted_keys, [self.row], self.num_results_labelling)
+            self.all_search_templates, self.full_responses = perform_queries(self.ref_table_name, self.sorted_keys, [self.row], self.must, self.must_not, self.num_results_labelling)
             self.full_responses = {self.all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
 
             # Sort keys by score or most promising
             if self.num_rows_labelled <= 2:
-                sorted_keys = random.sample(list(self.full_responses.keys()), len(self.full_responses.keys()))
+                sorted_keys_1 = random.sample(list(self.full_responses.keys()), len(self.full_responses.keys()))
+                sorted_keys_2 = sorted(self.full_responses.keys(), key=lambda x: self.full_responses[x]['hits'].get('max_score') or 0, reverse=True)
+                sorted_keys = list(itertools.chain(*zip(sorted_keys_1, sorted_keys_2)))
             else:
                 # Sort by ratio but label by precision ?
                 sorted_keys = sorted(self.full_responses.keys(), key=lambda x: self.agg_query_metrics[x]['precision'], reverse=True)
                 
                 # Remove queries if precision is too low (thresh depends on number of labels)
                 sorted_keys = list(filter(lambda x: self.agg_query_metrics[x]['precision'] \
-                                          >= self._min_precision(), sorted_keys))
-
-
-            
+                                          >= self._min_precision(), sorted_keys))            
                 
             self.label_row_gen = self.new_label_row(self.full_responses, sorted_keys, self.num_results_labelling)
         
