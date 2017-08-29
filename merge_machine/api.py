@@ -59,7 +59,7 @@ TODO:
     - Avoid import in scheduled 
     - fix cancel job
     
-    - test slack integration
+    - DEPRECATE restriction with (done in elasticsearch)
 
 
 DEV GUIDELINES:

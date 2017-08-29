@@ -15,6 +15,7 @@ import pandas as pd
 
 from abstract_data_project import AbstractDataProject
 from dedupe_linker import format_for_dedupe, current_load_gazetteer
+from es_match import Labeller as ESLabeller
 from labeller import Labeller, DummyLabeller
 from normalizer import InternalNormalizer, UserNormalizer
 from restrict_reference import perform_restriction
@@ -271,6 +272,21 @@ class Linker(AbstractDataProject):
         self.run_info_buffer[(module_name, self.mem_data_info['file_name'])] = run_info
         return 
 
+    def write_labeller(self, module_name, labeller):
+        '''Pickles the labeller object in project'''
+        # TODO: Add isinstance(labeller, Labeller)        
+        pickle_path = self.path_to(module_name, 'labeller.pkl')
+        with open(pickle_path, 'wb') as w:
+            pickle.dump(labeller, w)
+    
+    def _read_labeller(self, module_name):
+        '''Reads labeller stored in pickle'''
+        pickle_path = self.path_to(module_name, 'labeller.pkl')
+        with open(pickle_path, 'rb') as r:
+            labeller  = pickle.load(r)
+            
+        return labeller
+
     #==========================================================================
     #  Module specific: Dedupe Linker
     #==========================================================================
@@ -306,6 +322,8 @@ class Linker(AbstractDataProject):
                 }
         return paths
 
+
+
     @staticmethod
     def _gen_dedupe_variable_definition(col_matches):
         """Generate my_variable definition for use in dedupe_linker"""
@@ -322,11 +340,6 @@ class Linker(AbstractDataProject):
         paths = self._gen_paths_dedupe()
         return DummyLabeller(paths, use_previous=True)
 
-
-#        if self.metadata['current']['ref']['restricted']:
-#            file_path = self.path_to('restriction', file_name)
-#            self.ref.mem_data = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
-#                                            usecols=columns)
 
     def _gen_dedupe_labeller(self):
         '''Return a Labeller object'''
@@ -364,23 +377,60 @@ class Linker(AbstractDataProject):
                         training_path=paths['train'], 
                         use_previous=True)
 
-    def write_labeller(self, labeller):
-        '''Pickles the labeller object in project'''
-        # TODO: Add isinstance(labeller, Labeller)        
-        pickle_path = self.path_to('dedupe_linker', 'labeller.pkl')
-        with open(pickle_path, 'wb') as w:
-            pickle.dump(labeller, w)
-    
-    def _read_labeller(self):
-        '''Reads labeller stored in pickle'''
-        pickle_path = self.path_to('dedupe_linker', 'labeller.pkl')
-        with open(pickle_path, 'rb') as r:
-            labeller  = pickle.load(r)
-            
-        return labeller
 
     #==========================================================================
-    #  Module specific: Dedupe Linker
+    #  Module specific: ES Linker
+    #==========================================================================
+
+    def _gen_paths_es(self):        
+        self.check_select()
+        
+        # Get path to training file for dedupe
+        training_path = self.path_to('es_linker', 'training.json')
+        learned_settings_path = self.path_to('es_linker', 'learned_settings')
+        
+        # TODO: check that normalization projects are complete ?
+        
+        # Get path to source
+        file_name = self.metadata['current']['source']['file_name']
+        source_path = self.source.path_to_last_written(module_name=None, 
+                    file_name=file_name)
+        
+        # Add paths
+        paths = {
+                'source': source_path,
+                'train': training_path,
+                'learned_settings': learned_settings_path            
+                }
+        return paths
+
+    def _gen_es_labeller(self):
+        '''Return a es_labeller object'''
+        chunksize = 100
+        
+        col_matches = self.read_col_matches()
+        # TODO: lists to tuple in col_matches
+        
+        paths = self._gen_paths_es()
+        source = pd.read_csv(paths['source'], 
+                            sep=',', encoding='utf-8',
+                            dtype=str, nrows=chunksize)
+        source = source.where(source.notnull(), '')
+        
+        ref_table_name = self.ref.project_id
+        columns_to_index = self.ref.read_columns_to_index()
+        
+        labeller = ESLabeller(source, ref_table_name, col_matches, columns_to_index)
+    
+        # TODO: Add pre-load for 3 first queries
+    
+        return labeller
+
+
+
+
+    #==========================================================================
+    #  Module specific: Restriction
     #==========================================================================
 
 #    training_df = training_to_ref_df(training)
