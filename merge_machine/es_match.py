@@ -88,13 +88,15 @@ def _gen_suffix(columns_to_index, s_q_t_2):
     for analyzer in analyzers:
         yield '.' + analyzer
 
-def _gen_body(query_template, row, must_not=[], must=[], num_results=3):
+def _gen_body(query_template, row, must_not={}, must={}, num_results=3):
     '''
     Generate the string to pass to Elastic search for it to execute query
     
     INPUT:
         - query_template: ((source_col, ref_col, analyzer_suffix, boost), ...)
         - row: pandas.Series from the source object
+        - must_not: terms to exclude by field from search (OR: will exclude if ANY is found)
+        - must: terms to filter by field (AND: will include ONLY IF ALL are in text)
         - num_results: Max number of results for the query
     
     OUTPUT:
@@ -131,10 +133,10 @@ def _gen_body(query_template, row, must_not=[], must=[], num_results=3):
                 for must_or_should in ['must', 'should']
                         },
                         **{
-                           'must_not': [{'match': {'NOMEN_LONG.french': {'query': ' OR '.join(must_not)}}
-                                     }] if must_not else [],
-                           'filter': [{'match': {'NOMEN_LONG.french': {'query': ' AND '.join(must)}}
-                                     }] if must else [],
+                           'must_not': [{'match': {field: {'query': ' OR '.join(must_not)}}
+                                     } for field, values in must_not.items()],
+                           'filter': [{'match': {field: {'query': ' AND '.join(values)}}
+                                     } for field, values in must.items()],
                         })               
                   }
            }
@@ -389,7 +391,7 @@ class Labeller():
     boost_levels = [1]
     
 
-    def __init__(self, source, ref_table_name, match_cols, columns_to_index, must=[], must_not=[]):
+    def __init__(self, source, ref_table_name, match_cols, columns_to_index, must={}, must_not={}):
         self.all_query_templates = gen_all_query_templates(match_cols, 
                                                            columns_to_index, 
                                                            self.bool_levels, 
@@ -479,7 +481,7 @@ class Labeller():
             self.row = self.source.loc[self.idx]
             
             print('in new_label / in self.next_row')
-            self.all_search_templates, self.full_responses = perform_queries(self.ref_table_name, self.sorted_keys, [self.row], self.must, self.must_not, self.num_results_labelling)
+            self.all_search_templates, self.full_responses = perform_queries(self.ref_table_name, self.sorted_keys, [self.row], self.must_not, self.must, self.num_results_labelling)
             self.full_responses = {self.all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
 
             # Sort keys by score or most promising
