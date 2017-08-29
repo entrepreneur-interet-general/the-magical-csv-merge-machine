@@ -37,12 +37,6 @@ elif test_num == 1:
     
 elif test_num == 2:
     source_file_path = 'local_test_data/integration_3/export_alimconfiance.csv'
-#    match_cols = [{'source': 'Libelle_commune', 'ref': 'LIBCOM'},
-#                  #{'source': 'Libelle_commune', 'ref': 'L6_NORMALISEE'},
-#                  {'source': 'ods_adresse', 'ref': 'L4_NORMALISEE'},
-#                  {'source': 'APP_Libelle_etablissement', 'ref': 'L1_NORMALISEE'},
-#                  {'source': 'APP_Libelle_etablissement', 'ref': 'ENSEIGNE'},
-#                  {'source': 'APP_Libelle_etablissement', 'ref': 'NOMEN_LONG'}]
     match_cols = [{'source': 'Libelle_commune', 'ref': 'LIBCOM'},
                   #{'source': 'Libelle_commune', 'ref': 'L6_NORMALISEE'},
                   {'source': 'ods_adresse', 'ref': 'L4_NORMALISEE'},
@@ -111,7 +105,7 @@ for _ in range(100):
         break
     
     for x in range(10):
-        user_input = labeller._user_input(res, labeller.row)
+        user_input = labeller._user_input(res, labeller.row, test_num)
         if labeller.answer_is_valid(user_input):
             break
     else:

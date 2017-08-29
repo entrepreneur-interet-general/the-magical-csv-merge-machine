@@ -480,24 +480,24 @@ class Labeller():
                 return False
             self.row = self.source.loc[self.idx]
             
-            print('in new_label / in self.next_row')
-            self.all_search_templates, self.full_responses = perform_queries(self.ref_table_name, self.sorted_keys, [self.row], self.must_not, self.must, self.num_results_labelling)
+            print('in new_label / in self.next_row / len sorted_keys: {0}'.format(len(self.sorted_keys)))
+            self.all_search_templates, self.full_responses = perform_queries(self.ref_table_name, self.sorted_keys, [self.row], self.must, self.must_not, self.num_results_labelling)
             self.full_responses = {self.all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
 
             # Sort keys by score or most promising
             if self.num_rows_labelled <= 2:
                 sorted_keys_1 = random.sample(list(self.full_responses.keys()), len(self.full_responses.keys()))
                 sorted_keys_2 = sorted(self.full_responses.keys(), key=lambda x: self.full_responses[x]['hits'].get('max_score') or 0, reverse=True)
-                sorted_keys = list(itertools.chain(*zip(sorted_keys_1, sorted_keys_2)))
+                self.sorted_keys = list(itertools.chain(*zip(sorted_keys_1, sorted_keys_2)))
             else:
                 # Sort by ratio but label by precision ?
-                sorted_keys = sorted(self.full_responses.keys(), key=lambda x: self.agg_query_metrics[x]['precision'], reverse=True)
+                self.sorted_keys = sorted(self.full_responses.keys(), key=lambda x: self.agg_query_metrics[x]['precision'], reverse=True)
                 
                 # Remove queries if precision is too low (thresh depends on number of labels)
-                sorted_keys = list(filter(lambda x: self.agg_query_metrics[x]['precision'] \
-                                          >= self._min_precision(), sorted_keys))            
+                self.sorted_keys = list(filter(lambda x: self.agg_query_metrics[x]['precision'] \
+                                          >= self._min_precision(), self.sorted_keys))            
                 
-            self.label_row_gen = self.new_label_row(self.full_responses, sorted_keys, self.num_results_labelling)
+            self.label_row_gen = self.new_label_row(self.full_responses, self.sorted_keys, self.num_results_labelling)
         
         try:
             return next(self.label_row_gen)
