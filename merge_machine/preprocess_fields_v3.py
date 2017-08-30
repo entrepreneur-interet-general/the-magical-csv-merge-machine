@@ -12,6 +12,7 @@ import pandas as pd
 import numpy as np
 
 # Parsing/normalization packages
+import gridding
 import custom_name_parsing
 import urllib.request, urllib.parse, json # For BAN address API on data.gouv.fr
 from dateparser import DateDataParser
@@ -47,7 +48,7 @@ def timed(original_func):
 	return wrapper
 
 def chngrams(string="", n=3, top=None, threshold=0, exclude=[], **kwargs):
-	""" Returns a dictionary of (character n-gram, count)-items.
+	""" Returns a dictionary of (character n-gram, count)-`s.
 		N-grams in the exclude list are not counted.
 		N-grams whose count falls below (or equals) the given threshold are excluded.
 		N-grams that are not in the given top most counted are excluded.
@@ -499,8 +500,9 @@ class TypeMatcher(object):
 class GridMatcher(TypeMatcher):
 	def __init__(self):
 		self.t = F_GRID_LABEL
+		gridding.init_gridding()
 	def match_all_field_values(self, f):
-		src_items_by_label = gridding.grid_by_label_set([vc.value for vc in f.cells])
+		src_items_by_label = gridding.grid_label_set([vc.value for vc in f.cells])
 		for vc in f.cells:
 			item = src_items_by_label[vc.value]
 			if 'grid' in item:
@@ -1666,7 +1668,7 @@ def value_matchers():
 			VALUE_MATCHERS.append(vm)
 	return VALUE_MATCHERS
 
-def generate_value_matchers(lvl = 1):
+def generate_value_matchers(lvl = 2):
 	''' Generates type matcher objects that can be applied to each value cell in a column in order to infer
 		whether that column's type is the matcher's type (or alternatively a parent type or a child type).
 
@@ -1772,6 +1774,9 @@ def generate_value_matchers(lvl = 1):
 		yield TokenizedMatcher(F_CLINICALTRIAL_COLLAB, file_to_set('clinical_trial_sponsor_collab.col'),
 		maxTokens = 4)
 	yield SubtypeMatcher(F_RD, [F_RD_STRUCT, F_RD_PARTNER, F_CLINICALTRIAL_COLLAB])
+
+	if lvl >= 1:
+		yield GridMatcher()
 
 	## Enseignement et Enseignement Supérieur
 	academy_labels = file_to_set('academie') # file_to_set('academie') | file_to_set('region')

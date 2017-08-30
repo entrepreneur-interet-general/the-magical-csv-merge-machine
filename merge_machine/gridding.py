@@ -1,4 +1,4 @@
-import csv, difflib, functools, logging, re, os, sys
+import csv, difflib, functools, logging, re, os, sys, pickle
 import unicodedata, unidecode
 from collections import defaultdict, Counter
 
@@ -14,6 +14,9 @@ REQUIRES_SHARED_PROPER_NOUN = True
 DONT_DISCRIMINATE = False
 EXCLUDE_ADDRESS_AS_LABEL = False
 FORBID_DUPE_ACRONYMS = False
+ADD_VARIANT_WITHOUT_COUNTRY = False
+
+def item_to_str(item): return item['label']
 
 def acronymizeTokens(tokens, minAcroSize = 3, maxAcroSize = 7):
 	for s in range(max(minAcroSize, len(tokens)), min(maxAcroSize, len(tokens)) + 1):
@@ -39,19 +42,22 @@ def regex_variant(kind, m):
 	umr = m.replace(' ', '').replace('-', '')
 	return '{} {}'.format(kind, int(umr) if umr.isdigit() else umr)
 
-def enrich_item_with_variants(label):
-	res = dict(label = label, categories = set(), variants = set())
+def enrich_item_with_variants(item):
+	label = item['label']
+
 	# Acronyms
 	for (acro, variant) in extractAcronymsByColocation(label):
 		item['variants'].add(variant)
 		item['acros'].add(acro)
+
 	# Addresses (French or foreign)
 	addr = parse_address(label)
 	features = dict((f, v) for (v, f) in addr)
 	if len(REQUIRED_ADDR_FEATURES | features.keys()) > 0:
-		res['address_as_label'] = label
-		if 'city' in features: res['city'] = features['city']
-		if 'country' in features: res['country'] = features['country']
+		item['address_as_label'] = label
+		if 'city' in features: item['city'] = features['city']
+		if 'country' in features: item['country'] = features['country']
+
 	# Unité Mixte de Recherche and such things
 	for (kind, regex) in UR_REGEXES_LABEL.items():
 		ms = re.findall(regex, label)
@@ -59,19 +65,30 @@ def enrich_item_with_variants(label):
 			for m in ms:
 				variant = regex_variant(kind, m)
 				logging.info('Found UMR-type match: {} in label "{}"'.format(variant, label))
-				res['variants'].add(variant)
-				res['ur_id'] = variant
+				item['variants'].add(variant)
+				item['ur_id'] = variant
+	if 'url' in item:
+		url = item['url']
+		for (kind, regex) in UR_REGEXES_URL.items():
+			ms = re.findall(regex, url)
+			if ms:
+				for m in ms:
+					variant = regex_variant(m)
+					logging.info('Found UMR-type match: {} in URL {}'.format(variant, url))
+					item['variants'].add(variant)
+					item['ur_id']  =variant
+
 	# Categorization
-	tokens = validateTokens(label)
-	for token in tokens:
+	for token in item['tokens']:
 		cat = categorize(token)
-		if cat is not None: res['categories'].add(cat)
+		if cat is not None: item['categories'].add(cat)
+
 	# Duplicated tokens
 	i = label.find('')
 	if i > 0:
 		pre = justCase(label[:i])
 		post = justCase(label[i+1])
-		if post.startswitch(pre): res['variants'].add(post)
+		if post.startswitch(pre): item['variants'].add(post)
 
 def extractAcronymsByConstruction(phrase):
 	for acro in acronymizePhrase(phrase, True):
@@ -196,7 +213,6 @@ def fileToVariantMap(fileName, sep = '|', includeSelf = False):
 	l = list([(other, next(iter(main))) for (other, main) in otherToMain.items() if len(main) < 2])
 	if includeSelf: l = list([(main, main) for main in mainToOther.keys()]) + l
 	return dict(l)
-
 
 def fileToList(fileName, path = 'resource'): 
 	filePath = fileName if path is None else os.path.join(path, fileName)
@@ -459,94 +475,104 @@ def score_items(src, ref):
 def gridded_count(src_items_by_label):
 	return sum(['grid' in src_item or 'parent_grid' in src_item for src_item in src_items_by_label.values()])
 
-COUNTRY_SINS = dict()
-REF_ITEM_BY_GRID = dict()
-GRIDS_BY_TOKEN = defaultdict(set)
-ALL_CITIES = set()
-ACRONYM_COUNT = Counter()
-with open('resource/country_fr_en.csv') as countryFile:
-	country_reader =  csv.DictReader(countryFile, delimiter = '|')
-	for country_row in country_reader:
-		country_fr = country_row['Pays']
-		country_en = country_row['Country']
-		COUNTRY_SINS[justCase(country_fr)] = country_en
-		COUNTRY_SINS[justCase(country_en)] = country_en
-with open('resource/grid.csv') as refFile:
-	ref_reader =  csv.DictReader(refFile, delimiter = ',', quotechar = '"')
-	for refRow in ref_reader:
-		label = refRow['Name']
-		tokens = validateTokens(label)
-		grid = refRow['ID']
-		country = refRow['Country']
-		city = refRow['City']
-		if exclude_FR and country == 'France': continue
-		ref_item = dict( 
-				origin = REFERENCE, country = country, city = city, label = label, tokens = tokens, labels = dict(), categories = set(), 
-				grid = grid, variants = set([label]), acros = set(), aliases = set(), children = set() )
-		if len(country) > 0:
-			ref_item['variants'].add(' '.join([label, country]))
-			if len(city) > 0:
-				ALL_CITIES.add(justCase(city))
-			if len(country) > 0:
-				ref_item['variants'].add(' '.join([label, city, country]))
-		state = refRow['State']
-		if len(city) > 0 and len(country) > 0 and len(state) > 0:
-			ref_item['variants'].add(' '.join([label, city, state, country]))
-		enrich_item_with_variants(ref_item)
-		REF_ITEM_BY_GRID[grid] = ref_item
-		for token in tokens: 
-			GRIDS_BY_TOKEN[token].add(grid)
-		if len(REF_ITEM_BY_GRID) % 1000 == 0: logging.warning('Pre-processed {} reference entries'.format(len(REF_ITEM_BY_GRID)))
-with open('resource/grid_aliases.csv') as alias_file:
-	aliases_reader = csv.DictReader(alias_file, delimiter = ',', quotechar = '"')
-	for alias_row in aliases_reader:
-		grid = alias_row['grid_id']
-		if grid not in REF_ITEM_BY_GRID: continue
-		REF_ITEM_BY_GRID[grid]['aliases'].add(alias_row['alias'])
-with open('resource/grid_labels.csv') as labels_file:
-	labels_reader = csv.DictReader(labels_file, delimiter = ',', quotechar = '"')
-	for label_row in labels_reader:
-		grid = label_row['grid_id']
-		if grid not in REF_ITEM_BY_GRID: continue
-		REF_ITEM_BY_GRID[grid]['labels'][label_row['iso639']] = label_row['label']
-with open('resource/grid_acronyms.csv') as acronyms_file:
-	acronyms_reader = csv.DictReader(acronyms_file, delimiter = ',', quotechar = '"')
-	for acronym_row in acronyms_reader:
-		grid = acronym_row['grid_id']
-		if grid not in REF_ITEM_BY_GRID: continue
-		REF_ITEM_BY_GRID[grid]['acronym'] = acronym_row['acronym']
-		ACRONYM_COUNT[acronym_row['acronym']] += 1
-with open('resource/grid_links.csv') as links_file:
-	links_reader = csv.DictReader(links_file, delimiter = ',', quotechar = '"')
-	for link_row in links_reader:
-		grid = link_row['grid_id']
-		if grid not in REF_ITEM_BY_GRID: continue
-		REF_ITEM_BY_GRID[grid]['url'] = link_row['link']
-with open('resource/grid_relationships.csv') as rels_file:
-	rels_reader = csv.DictReader(rels_file, delimiter = ',', quotechar = '"')
-	for rel_row in rels_reader:
-		grid = rel_row['grid_id']
-		rel_grid = rel_row['related_grid_id']
-		if grid not in REF_ITEM_BY_GRID or rel_grid not in REF_ITEM_BY_GRID: continue
-		if rel_row['relationship_type'] == 'Child':
-			REF_ITEM_BY_GRID[grid]['children'].add(rel_grid)
-			REF_ITEM_BY_GRID[rel_grid]['parent'] = grid
-		elif rel_row['relationship_type'] == 'Parent':
-			REF_ITEM_BY_GRID[rel_grid]['children'].add(grid)
-			REF_ITEM_BY_GRID[grid]['parent'] = rel_grid
+GRID_DATA = dict()
+
+def init_gridding():
+	try:
+		with open('dynamic_resource/grid.pickle', 'rb') as rf:
+			GRID_DATA.update(pickle.load(rf))
+	except IOError as e:
+		GRID_DATA['countries'] = dict()
+		GRID_DATA['ref_items'] =  dict()
+		GRID_DATA['token_grids'] = defaultdict(set)
+		GRID_DATA['cities'] = set()
+		GRID_DATA['acronyms'] = Counter()
+		logging.info('Gridding : setup started...')
+		with open('resource/country_fr_en.csv') as countryFile:
+				country_reader =  csv.DictReader(countryFile, delimiter = '|')
+				for country_row in country_reader:
+					country_fr = country_row['Pays']
+					country_en = country_row['Country']
+					GRID_DATA['countries'][justCase(country_fr)] = country_en
+					GRID_DATA['countries'][justCase(country_en)] = country_en
+		with open('resource/grid.csv') as refFile:
+			ref_reader =  csv.DictReader(refFile, delimiter = ',', quotechar = '"')
+			for refRow in ref_reader:
+				label = refRow['Name']
+				tokens = validateTokens(label)
+				grid = refRow['ID']
+				country = refRow['Country']
+				city = refRow['City']
+				ref_item = dict( 
+						origin = REFERENCE, country = country, city = city, label = label, tokens = tokens, labels = dict(), categories = set(), 
+						grid = grid, variants = set([label]), acros = set(), aliases = set(), children = set() )
+				if len(country) > 0:
+					ref_item['variants'].add(' '.join([label, country]))
+					if len(city) > 0:
+						GRID_DATA['cities'].add(justCase(city))
+					if len(country) > 0:
+						ref_item['variants'].add(' '.join([label, city, country]))
+				state = refRow['State']
+				if len(city) > 0 and len(country) > 0 and len(state) > 0:
+					ref_item['variants'].add(' '.join([label, city, state, country]))
+				enrich_item_with_variants(ref_item)
+				GRID_DATA['ref_items'][grid] = ref_item
+				for token in tokens: 
+					GRID_DATA['token_grids'][token].add(grid)
+				if len(GRID_DATA['ref_items']) % 1000 == 0: logging.warning('Pre-processed {} reference entries'.format(len(GRID_DATA['ref_items'])))
+		with open('resource/grid_aliases.csv') as alias_file:
+			aliases_reader = csv.DictReader(alias_file, delimiter = ',', quotechar = '"')
+			for alias_row in aliases_reader:
+				grid = alias_row['grid_id']
+				if grid not in GRID_DATA['ref_items']: continue
+				GRID_DATA['ref_items'][grid]['aliases'].add(alias_row['alias'])
+		with open('resource/grid_labels.csv') as labels_file:
+			labels_reader = csv.DictReader(labels_file, delimiter = ',', quotechar = '"')
+			for label_row in labels_reader:
+				grid = label_row['grid_id']
+				if grid not in GRID_DATA['ref_items']: continue
+				GRID_DATA['ref_items'][grid]['labels'][label_row['iso639']] = label_row['label']
+		with open('resource/grid_acronyms.csv') as acronyms_file:
+			acronyms_reader = csv.DictReader(acronyms_file, delimiter = ',', quotechar = '"')
+			for acronym_row in acronyms_reader:
+				grid = acronym_row['grid_id']
+				if grid not in GRID_DATA['ref_items']: continue
+				GRID_DATA['ref_items'][grid]['acronym'] = acronym_row['acronym']
+				GRID_DATA['acronyms'][acronym_row['acronym']] += 1
+		with open('resource/grid_links.csv') as links_file:
+			links_reader = csv.DictReader(links_file, delimiter = ',', quotechar = '"')
+			for link_row in links_reader:
+				grid = link_row['grid_id']
+				if grid not in GRID_DATA['ref_items']: continue
+				GRID_DATA['ref_items'][grid]['url'] = link_row['link']
+		with open('resource/grid_relationships.csv') as rels_file:
+			rels_reader = csv.DictReader(rels_file, delimiter = ',', quotechar = '"')
+			for rel_row in rels_reader:
+				grid = rel_row['grid_id']
+				rel_grid = rel_row['related_grid_id']
+				if grid not in GRID_DATA['ref_items'] or rel_grid not in GRID_DATA['ref_items']: continue
+				if rel_row['relationship_type'] == 'Child':
+					GRID_DATA['ref_items'][grid]['children'].add(rel_grid)
+					GRID_DATA['ref_items'][rel_grid]['parent'] = grid
+				elif rel_row['relationship_type'] == 'Parent':
+					GRID_DATA['ref_items'][rel_grid]['children'].add(grid)
+					GRID_DATA['ref_items'][grid]['parent'] = rel_grid
+		with open('dynamic_resource/grid.pickle', 'wb') as wf:
+			pickle.dump(GRID_DATA, wf)
+		logging.info('Gridding : setup done...')
 
 def grid_label_set(labels):
 	src_items_by_label = dict()
 	token_count = Counter()
 	for doc_id, label in enumerate(labels):
 		tokens = validateTokens(label)
-		cities = set([justCase(t) for t in tokens]) | ALL_CITIES
+		cities = set([justCase(t) for t in tokens]) | GRID_DATA['cities']
 		countries = list()
 		country_variant = list()
 		for token in tokens:
 			token_count[token] += 1
-			if token in COUNTRY_SYNS: 
-				countries.append(COUNTRY_SYNS[token])
+			if token in GRID_DATA['countries']: 
+				countries.append(GRID_DATA['countries'][token])
 			else:
 				country_variant.append(token)
 		src_item = dict(doc_id = doc_id, origin = SOURCE, label = label, categories = set(), tokens = tokens, variants = set([label]), acros = set())
@@ -562,18 +588,18 @@ def grid_label_set(labels):
 	for (src_label, src_item) in src_items_by_label.items():
 		candidate_grids = set()
 		for token in sorted(src_item['tokens'], key = lambda t: token_count[t], reverse = True)[:8]:
-			newGrids = candidate_grids | GRIDS_BY_TOKEN[token]
+			newGrids = candidate_grids | GRID_DATA['token_grids'][token]
 			if len(newGrids) > 32: break
 			candidate_grids = newGrids
 		logging.debug('Source label "{}": found {} candidates'.format(item_to_str(src_item), len(candidate_grids)))
 		if len(candidate_grids) < 1: 
 			continue
-		candidate = sorted([(grid, score_items(src_item, REF_ITEM_BY_GRID[grid])) for grid in candidate_grids], key = lambda p: p[1][0], reverse = True)[0]
+		candidate = sorted([(grid, score_items(src_item, GRID_DATA['ref_items'][grid])) for grid in candidate_grids], key = lambda p: p[1][0], reverse = True)[0]
 		score = candidate[1][0]
 		if score > 0: 
 			grid = candidate[0]
 			reason = candidate[1][1]
-			ref_label = REF_ITEM_BY_GRID[grid]['label']
+			ref_label = GRID_DATA['ref_items'][grid]['label']
 			logging.info('Match found for src item "{}": "{}" ({}) <-- {}'.format(item_to_str(src_item), ref_label, score, reason))
 			src_item['grid'] = grid
 			src_item['grid_reason'] = reason
@@ -583,15 +609,15 @@ def grid_label_set(labels):
 	logging.warning('==> now {} gridded entities'.format(gridded_count(src_items_by_label)))
 	if FORBID_DUPE_ACRONYMS:
 		for src_item in src_items_by_label.values():
-			if 'acronym' in src_item and ACRONYM_COUNT[src_item['acronym']] > 1: del src_item['acronym']
-		for ref_item in REF_ITEM_BY_GRID.values():
-			if 'acronym' in ref_item and ACRONYM_COUNT[ref_item['acronym']] > 1: del ref_item['acronym']
+			if 'acronym' in src_item and GRID_DATA['acronyms'][src_item['acronym']] > 1: del src_item['acronym']
+		for ref_item in GRID_DATA['ref_items'].values():
+			if 'acronym' in ref_item and GRID_DATA['acronyms'][ref_item['acronym']] > 1: del ref_item['acronym']
 	logging.warning('Matching unmatched src labels...')
 	attached_parent_grid_count = 0
 	src_items_index = dict()
 	for (src_label, src_item) in src_items_by_label.items():
 		src_items_index[src_label] = src_item
-		if 'acronym' in src_item and (FORBID_DUPE_ACRONYMS or ACRONYM_COUNT[src_item['acronym']] < 2): src_items_index[src_item['acronym']] = src_item
+		if 'acronym' in src_item and (FORBID_DUPE_ACRONYMS or GRID_DATA['acronyms'][src_item['acronym']] < 2): src_items_index[src_item['acronym']] = src_item
 	for src_label in unmatched_src_labels:
 		src_item = src_items_by_label[src_label]
 		if 'parent_label' not in src_item: continue
@@ -610,16 +636,16 @@ def grid_label_set(labels):
 	added_parent_grid_count = 0
 	for (src_label, src_item) in src_items_by_label.items():
 		if 'grid' in src_item:
-			ref_item = REF_ITEM_BY_GRID[src_item['grid']]
+			ref_item = GRID_DATA['ref_items'][src_item['grid']]
 			if 'parent' in ref_item:
-				parent_item = REF_ITEM_BY_GRID[ref_item['parent']]
+				parent_item = GRID_DATA['ref_items'][ref_item['parent']]
 				logging.info('Adding "{}" parent grid of "{}"'.format(parent_item['label'], item_to_str(src_item)))
 				src_item['parent_grid'] = parent_item['grid']
 				added_parent_grid_count += 1
 	logging.warning('Added {} parent grids ==> now {} gridded entities'.format(added_parent_grid_count, gridded_count(src_items_by_label)))
 	logging.warning('Post-processing gridded entries...')
 	for (src_label, src_item) in src_items_by_label.items():
-		ref_item = REF_ITEM_BY_GRID[src_item['grid']] if 'grid' in src_item else REF_ITEM_BY_GRID[src_item['parent_grid']] if 'parent_grid' in src_item else None
+		ref_item = GRID_DATA['ref_items'][src_item['grid']] if 'grid' in src_item else GRID_DATA['ref_items'][src_item['parent_grid']] if 'parent_grid' in src_item else None
 		if ref_item is not None:
 			src_item['city'] = ref_item['city']
 			src_item['country'] = ref_item['country']
