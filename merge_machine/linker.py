@@ -237,30 +237,25 @@ class Linker(AbstractDataProject):
             params['NO_MEM_DATA'] = True
         return super().infer(module_name, params)
 
-    def linker(self, module_name, paths, params):
+    def linker(self, module_name, data_params, module_params):
         '''
-        # TODO: This is not optimal. Find way to change paths to smt else
+        /!\ data_params does not Follow standards 
+        
+        # TODO: This is not optimal. Find way to change data_params to smt else
         # TODO: at least take source in mem_data to make iterable
         '''
         
-        # Add module-specific paths
-        #        if module_name ==  'dedupe_linker':
-        #            assert 'train_path' not in paths
-        #            assert 'learned_settings_path' not in paths
-        #            
-        #            paths['train'] = self.path_to('link', module_name, 'training.json')
-        #            paths['learned_settings'] = self.path_to('link', module_name, 'learned_settings')
-        
         # Initiate log # TODO: move hardcode of file name
         self.mem_data_info['file_role'] = 'link' # Role of file being modified
-        self.mem_data_info['file_name'] = self.output_file_name(os.path.split(paths['source'])[-1]) # File being modified
+        self.mem_data_info['file_name'] = self.output_file_name(os.path.split(data_params['source'])[-1]) # File being modified
         
         log = self.init_active_log(module_name, 'link')
 
-        self.mem_data, run_info = self.MODULES['link'][module_name]['func'](paths, params)
+        self.mem_data, run_info = self.MODULES['link'][module_name]['func'](data_params, module_params)
         
-        # TODO: inconsistent with transform
-        self.mem_data = (x for x in [self.mem_data])
+        # TODO: inconsistent with transform (this is for dedupe_linker)
+        if isinstance(self.mem_data, pd.DataFrame):
+            self.mem_data = (x for x in [self.mem_data])
         
         self.mem_data_info['module_name'] = module_name
         
@@ -268,7 +263,6 @@ class Linker(AbstractDataProject):
         log = self.end_active_log(log, error=False)
                           
         # Update buffers
-        self.log_buffer.append(log)        
         self.run_info_buffer[(module_name, self.mem_data_info['file_name'])] = run_info
         return 
 
@@ -343,6 +337,8 @@ class Linker(AbstractDataProject):
 
     def _gen_dedupe_labeller(self):
         '''Return a Labeller object'''
+        
+        self.check_select()
         # TODO: Add extra config page
         col_matches = self.read_col_matches()
         paths = self._gen_paths_dedupe()
@@ -387,7 +383,7 @@ class Linker(AbstractDataProject):
         
         # Get path to training file for dedupe
         training_path = self.path_to('es_linker', 'training.json')
-        learned_settings_path = self.path_to('es_linker', 'learned_settings')
+        learned_settings_path = self.path_to('es_linker', 'learned_settings.json')
         
         # TODO: check that normalization projects are complete ?
         
@@ -405,7 +401,11 @@ class Linker(AbstractDataProject):
         return paths
 
     def _gen_es_labeller(self):
-        '''Return a es_labeller object'''
+        '''
+        Return a es_labeller object
+        '''
+        self.check_select()
+        
         chunksize = 100
         
         col_matches = self.read_col_matches()
@@ -425,8 +425,6 @@ class Linker(AbstractDataProject):
         # TODO: Add pre-load for 3 first queries
     
         return labeller
-
-
 
 
     #==========================================================================

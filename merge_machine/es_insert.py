@@ -111,31 +111,7 @@ if __name__ == '__main__':
         'PRODET': {}
     }
         
-    #==============================================================================
-    # Index in Elasticsearch 
-    #==============================================================================
-    testing = True
-    new_index = False
-    do_indexing = False
-    
-    
-    
-    ref_file_name = 'sirc-17804_9075_14209_201612_L_M_20170104_171522721.csv' # 'petit_sirene.csv'
-    # ref_file_name = 'petit_sirene.csv'
-    ref_sep = ';'
-    ref_encoding = 'windows-1252'
-    chunksize = 3000
-    file_len = 10*10**6
-    
-    ref_gen = pd.read_csv(os.path.join('local_test_data', 'sirene', ref_file_name), 
-                      sep=ref_sep, encoding=ref_encoding,
-                      usecols=columns_to_index.keys(),
-                      dtype=str, chunksize=chunksize, nrows=10**50) 
-    
-    if testing:
-        table_name = '123vivalalgerie'
-    else:
-        table_name = '123vivalalgerie3'
+
     #==============================================================================
     # Index in Elasticsearch 
     #==============================================================================

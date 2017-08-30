@@ -88,15 +88,22 @@ def _gen_suffix(columns_to_index, s_q_t_2):
     for analyzer in analyzers:
         yield '.' + analyzer
 
-def _gen_body(query_template, row, must_not={}, must={}, num_results=3):
+def _remove_words(string, words):
+    # TODO: fix this
+    string = my_unidecode(string).lower()
+    for word in words:
+        string = string.replace(word, '')
+    return string
+
+def _gen_body(query_template, row, must={}, must_not={}, num_results=3):
     '''
     Generate the string to pass to Elastic search for it to execute query
     
     INPUT:
         - query_template: ((source_col, ref_col, analyzer_suffix, boost), ...)
         - row: pandas.Series from the source object
-        - must_not: terms to exclude by field from search (OR: will exclude if ANY is found)
         - must: terms to filter by field (AND: will include ONLY IF ALL are in text)
+        - must_not: terms to exclude by field from search (OR: will exclude if ANY is found)
         - num_results: Max number of results for the query
     
     OUTPUT:
@@ -114,7 +121,7 @@ def _gen_body(query_template, row, must_not={}, must={}, num_results=3):
             'bool': dict({
                must_or_should: [
                           {'match': {
-                                  s_q_t[2] + s_q_t[3]: {'query': my_unidecode(row[s_q_t[1]].lower()).replace('lycee', ''),
+                                  s_q_t[2] + s_q_t[3]: {'query': _remove_words(row[s_q_t[1]], must.get(s_q_t[2], [])),
                                                         'boost': s_q_t[4]}}
                           } \
                           for s_q_t in query_template if (s_q_t[0] == must_or_should) \
@@ -133,9 +140,9 @@ def _gen_body(query_template, row, must_not={}, must={}, num_results=3):
                 for must_or_should in ['must', 'should']
                         },
                         **{
-                           'must_not': [{'match': {field: {'query': ' OR '.join(must_not)}}
+                           'must_not': [{'match': {field + '.french': {'query': ' OR '.join(values)}}
                                      } for field, values in must_not.items()],
-                           'filter': [{'match': {field: {'query': ' AND '.join(values)}}
+                           'filter': [{'match': {field + '.french': {'query': ' AND '.join(values)}} # TODO: french?
                                      } for field, values in must.items()],
                         })               
                   }
@@ -353,15 +360,26 @@ def perform_queries(table_name, all_query_templates, rows, must, must_not, num_r
             
     return og_search_templates, full_responses
 
-def match(table_name, source, query_template, threshold):
+def es_linker(source, params):
     '''
     Return concatenation of source and reference with the matches found
     
     INPUT:
         source: pandas.DataFrame containing all source items
-        query_template: 
-        threshold: minimum value of score for this query_template for a match
+        params:    
+            index_name: name of the Elasticsearch index to fetch from
+            query_template: 
+            threshold: minimum value of score for this query_template for a match
+            must: terms to filter by field (AND: will include ONLY IF ALL are in text)
+            must_not: terms to exclude by field from search (OR: will exclude if ANY is found)
     '''
+    
+    table_name = params['index_name']
+    query_template = params['query_template']
+    must = params.get('must', {})
+    must_not = params.get('must_not', {})
+    threshold = params['thresh']
+    
     rows = (x[1] for x in source.iterrows())
     all_search_templates, full_responses = perform_queries(table_name, [query_template], rows, must, must_not, num_results=1)
     full_responses = [full_responses[i] for i in range(len(full_responses))] # Don't use items to preserve order
@@ -405,6 +423,7 @@ class Labeller():
         self.num_rows_labelled = 0
         self.query_metrics = dict()
         
+        # TODO: Must currently not implemented
         self.must = must
         self.must_not = must_not
         
@@ -543,7 +562,10 @@ class Labeller():
         if message:
             dict_to_emit['_message'] = message
         return dict_to_emit
-            
+    
+    def best_query_template(self):
+        return sorted(self.full_responses.keys(), key=lambda x: \
+                      self.agg_query_metrics[x]['ratio'], reverse=True)[0]
 
     def cleanup_training(self):
         self.deduper.cleanupTraining()

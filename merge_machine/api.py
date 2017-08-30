@@ -60,6 +60,8 @@ TODO:
     - fix cancel job
     
     - DEPRECATE restriction with (done in elasticsearch)
+    
+    - delete index with project
 
 
 DEV GUIDELINES:
@@ -136,7 +138,7 @@ import api_queued_modules
 
 from admin import Admin
 from my_json_encoder import MyEncoder
-from normalizer import UserNormalizer, MINI_PREFIX
+from normalizer import ESReferential, UserNormalizer, MINI_PREFIX
 from linker import UserLinker
 
 #==============================================================================
@@ -687,7 +689,7 @@ def web_terminate_labeller_load(message_received):
     
 @socketio.on('load_labeller', namespace='/')
 def load_labeller(message_received):
-    '''Loads labeller. Necessary to have a separate call to preload page'''    
+    '''Loads labeller. Necessary to have a separate call to preload page'''
     message_received = json.loads(message_received)
     project_id = message_received['project_id']
     
@@ -704,7 +706,7 @@ def load_labeller(message_received):
     
     # Generate dedupe paths and create labeller
     flask._app_ctx_stack.labeller_mem[project_id]['paths'] = paths
-    flask._app_ctx_stack.labeller_mem[project_id]['labeller'] = proj._read_labeller()
+    flask._app_ctx_stack.labeller_mem[project_id]['labeller'] = proj._read_labeller('es_linker')
     
     flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
     emit('message', flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=''))
@@ -729,7 +731,12 @@ def web_dedupe(project_id):
     
     return render_template('dedupe_training.html',
                            **dummy_labeller.to_emit(''),
-                           create_labeller_api_url=url_for('schedule_job', job_name='create_labeller', project_id=project_id),
+                           create_es_index_api_url=url_for('schedule_job',
+                                                            job_name='create_es_index', 
+                                                            project_id=project_id),
+                           create_labeller_api_url=url_for('schedule_job',
+                                                            job_name='create_es_labeller', 
+                                                            project_id=project_id),
                            source_cat_api_url=source_cat_api_url,
                            ref_cat_api_url=ref_cat_api_url,
                            project_id=project_id)
@@ -1386,6 +1393,7 @@ def make_mini(project_id):
     # Write transformations and log
     proj.write_data()
 
+
 #==============================================================================
 # LINK API METHODS (see also SCHEDULER)
 #==============================================================================
@@ -1495,7 +1503,7 @@ SCHEDULED_JOBS = {
                     'recode_types': {'project_type': 'normalize'}, 
                     'concat_with_init': {'project_type': 'normalize'}, 
                     'run_all_transforms': {'project_type': 'normalize'}, 
-                    'create_labeller': {'project_type': 'link', 
+                    'create_es_labeller': {'project_type': 'link', 
                                         'priority': 'high'}, 
                     'infer_restriction': {'project_type': 'link', 
                                           'priority': 'high'}, 

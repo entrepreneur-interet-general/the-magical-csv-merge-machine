@@ -13,6 +13,7 @@ https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-fields.htm
 
 import pandas as pd
 
+from es_match import es_linker, Labeller
 
 
 dir_path = 'data/sirene'
@@ -20,7 +21,7 @@ chunksize = 3000
 file_len = 10*10**6
 
 
-test_num = 2
+test_num = 0
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
     match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},
@@ -56,7 +57,7 @@ source = source.where(source.notnull(), '')
 
 ref_table_name = '123vivalalgerie'
 
-from es_match import Labeller
+
 
 
 columns_to_index = {
@@ -98,6 +99,10 @@ columns_to_index = {
 
 labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
 
+if test_num == 0:
+    labeller.must = {'NOMEN_LONG': ['lycee']}
+    labeller.must_not = {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']}
+
 for _ in range(100):
     res = labeller.new_label()
     if not res:
@@ -114,7 +119,9 @@ for _ in range(100):
     is_match = labeller.parse_valid_answer(user_input)
     labeller.update(is_match, res['_id'])
 
-
+print('best_query:\n', labeller.best_query_template())
+print('must:\n', labeller.must)
+print('must_not:\n', labeller.must_not)
 
 assert False
 
@@ -130,8 +137,6 @@ max_num_levels = 3 # Number of match clauses
 bool_levels = {'.integers': ['must', 'should']}
 #len(query_metrics[list(query_metrics.keys())[0]])
 boost_levels = [1]
-
-
 
 all_query_templates = gen_all_query_templates(match_cols, columns_to_index, 
                                               bool_levels, boost_levels, max_num_levels)
@@ -214,7 +219,9 @@ if test_num == 0:
 else:
     best_query_template = sorted(full_responses.keys(), key=lambda x: agg_query_metrics[x]['ratio'], reverse=True)[0]
 
-new_source = match(source, best_query_template, 6)# agg_query_metrics[best_query_template]['thresh'])
+
+params = {'query': best_query_template, 'thresh': 6}
+new_source = es_linker(source, best_query_template, 6)# agg_query_metrics[best_query_template]['thresh'])
 new_source['has_match'] = new_source.__CONFIDENCE.notnull()
 
 if test_num == 2:
