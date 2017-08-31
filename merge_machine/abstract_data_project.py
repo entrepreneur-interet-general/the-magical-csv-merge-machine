@@ -149,11 +149,13 @@ class AbstractDataProject(AbstractProject):
     def end_active_log(self, log, error=False):
         '''
         Close a log mesage started with init_active_log (right after module call)
+        and append to log buffer
         '''
         log['end_timestamp'] = time.time()
         log['error'] = error
         if not error:
             log['completed'] = True
+        self.log_buffer.append(log)# TODO: change for dict
         return log    
 
     def init_active_log(self, module_name, module_type):
@@ -378,9 +380,6 @@ class AbstractDataProject(AbstractProject):
     
             # Complete log
             log = self.end_active_log(log, error=False) 
-                              
-            # Update buffers
-            self.log_buffer.append(log) # TODO: change for dict
             # TODO: Make sure that run_info_buffer should not be extended
             return log
         
@@ -514,7 +513,7 @@ class AbstractDataProject(AbstractProject):
         self.upload_config_data(infered_params, module_to_write_to, 'infered_config.json')
         
         # Update log buffer
-        self.log_buffer.append(log)     
+        self.end_active_log(log, error=False)  
         
         return infered_params
     
@@ -602,6 +601,4 @@ class AbstractDataProject(AbstractProject):
 #        run_info['start_timestamp'] = log['start_timestamp']
 #        run_info['end_timestamp'] = log['end_timestamp']
         
-        # Update buffers
-        self.log_buffer.append(log)
         return log, run_info
