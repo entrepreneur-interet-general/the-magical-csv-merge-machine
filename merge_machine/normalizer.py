@@ -506,7 +506,17 @@ class ESReferential(UserNormalizer):
     
     def index_is_complete(self):
         pass
-        # Check if thing is thinged
+        #TODO: Check if thing is thinged
+        
+    #    def add_columns_to_index(self, columns_to_index):
+    #        self.metadata[columns_to_index] = self.columns_to_index
+        
+    def gen_default_columns_to_index(self):
+        default_analyzers = {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'}
+        column_tracker = self.metadata['column_tracker']
+        columns_to_index = {col: default_analyzers if col in column_tracker['selected'] \
+                            else {} for col in column_tracker['original']}   
+        return columns_to_index
         
 #class InternalNormalizer(Normalizer):
 #    def path_to(self, module_name='', file_name=''):

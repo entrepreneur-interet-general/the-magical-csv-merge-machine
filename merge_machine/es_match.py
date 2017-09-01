@@ -79,11 +79,13 @@ def _gen_suffix(columns_to_index, s_q_t_2):
         
     NB: s_q_t_2: element two of the single_query_template
     
-    '''
+    '''    
     if isinstance(s_q_t_2, str):
         analyzers = columns_to_index[s_q_t_2]
     elif isinstance(s_q_t_2, tuple):
         analyzers = set.union(*[columns_to_index[col] for col in s_q_t_2])
+    else:
+        raise ValueError('s_q_t_2 should be str or tuple (not list)')
     yield '' # No suffix for standard analyzer
     for analyzer in analyzers:
         yield '.' + analyzer

@@ -232,12 +232,13 @@ def _create_dedupe_labeller(project_id, *argv):
     proj.write_labeller('dedupe_linker', labeller)
     return
 
+
 def _create_es_index(project_id, data_params, module_params):
     '''
-    Create sample version of selected file (call just after upload).
+    Create an Elasticsearch index for the selected file
     
     GET:
-        - project_id
+        - project_id: Link project_id
     POST:
         - data_params: 
                         {
@@ -250,20 +251,27 @@ def _create_es_index(project_id, data_params, module_params):
                         }
     '''
     
+
+    
     columns_to_index = module_params.get('columns_to_index')
     force = module_params.get('force', False)
     
-    proj = ESReferential(project_id=project_id)
+    proj = UserLinker(project_id)
+    proj.ref = ESReferential(proj.ref.project_id)
+
+    if data_params is None:
+        module_name = proj.metadata['current']['ref']['module_name']
+        file_name = proj.metadata['current']['ref']['file_name']
+    else:
+        module_name = data_params['module_name']
+        file_name = data_params['file_name']
     
     # Default columns_to_index
     if columns_to_index is None:
-        default_analyzers = {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'}
-        column_tracker = proj.ref.metadata['column_tracker']
-        columns_to_index = {col: default_analyzers if col in column_tracker['selected'] \
-                            else {} for col in column_tracker['original']}    
+        columns_to_index = proj.ref.gen_default_columns_to_index()
     
-    file_path = proj.ref.path_to(data_params['module_name'], data_params['file_name'])
-    proj.create_index(file_path, columns_to_index, force)
+    file_path = proj.ref.path_to(module_name, file_name)
+    proj.ref.create_index(file_path, columns_to_index, force)
     return
 
 

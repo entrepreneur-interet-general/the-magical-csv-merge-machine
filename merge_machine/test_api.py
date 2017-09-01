@@ -236,7 +236,7 @@ def normalize_pipeline(params):
     # --> Wait for job result
     #==============================================================================
     url_to_append = '/queue/result/{0}'.format(job_id)
-    infer_types_resp = wait_get_resp(url_to_append)
+    infer_types_resp = wait_get_resp(url_to_append, 100)
 
     #==============================================================================
     # Schedule recode types
@@ -310,26 +310,6 @@ def normalize_pipeline(params):
 
 
 def link_pipeline(params):
-    
-    # =============================================================================
-    # Index reference     
-    # =============================================================================
-    url_to_append = '/api/schedule/create_es_index/{0}/'.format(params['ref_project_id'])
-    body = {
-            'data_params': {'module_name': params['ref_module_name'],
-                            'file_name': params['ref_file_name']},
-            'module_params': {'columns_to_index_is_none': None,
-                              'force': False}
-            
-            }
-    resp = post_resp(url_to_append, body)
-    job_id = resp['job_id']
-
-    #==============================================================================
-    # --> Wait for job result
-    #==============================================================================
-    url_to_append = '/queue/result/{0}'.format(job_id)
-    resp = wait_get_resp(url_to_append, max_wait=10000)
 
     #==============================================================================
     # Create new link project
@@ -338,7 +318,7 @@ def link_pipeline(params):
     body = params['new_project']
     resp = post_resp(url_to_append, body)
     project_id = resp['project_id']
-    
+        
     
     #==============================================================================
     # Add projects to use as source and ref
@@ -351,7 +331,24 @@ def link_pipeline(params):
     body = {'file_role': 'ref',
             'project_id': params['ref_project_id']}
     resp = post_resp(url_to_append, body)
-    
+
+    # =============================================================================
+    # Index reference     
+    # =============================================================================
+    url_to_append = '/api/schedule/create_es_index/{0}/'.format(project_id)
+    body = {
+            'module_params': {'columns_to_index_is_none': None,
+                              'force': False}
+            }
+    resp = post_resp(url_to_append, body)
+    job_id = resp['job_id']
+
+    #==============================================================================
+    # --> Wait for job result
+    #==============================================================================
+    url_to_append = '/queue/result/{0}'.format(job_id)
+    resp = wait_get_resp(url_to_append, max_wait=10000)
+
     
     #==============================================================================
     # Add column matches
@@ -507,7 +504,7 @@ if __name__ == '__main__':
     if args.source is None:
         source_project_id = normalize_pipeline(source_params)
     else:
-        source_projetc_id = args.source
+        source_project_id = args.source
     
     #==============================================================================
     # RUN NORMALIZE PIPELINE ON REF
@@ -528,10 +525,9 @@ if __name__ == '__main__':
         link_params = json.load(f)                     
 
     link_params['source_project_id'] = source_project_id
-    link_params['source_file_name'] = source_params['file_name']
-    link_params['ref_module_name'] = ref_params['module_name']
-    link_params['ref_file_name'] = ref_params['file_name']
     link_params['ref_project_id'] = ref_project_id
+    
+    link_params['es_learned_settings_file_path'] = os.path.join(args.dir, link_params['es_learned_settings_file_path'])
     link_params['training_file_path'] = os.path.join(args.dir, link_params['training_file_name'])
                
     link_project_id = link_pipeline(link_params)

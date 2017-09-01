@@ -77,16 +77,16 @@ class Linker(AbstractDataProject):
         self.check_file_role(file_role)
         # TODO: Add safeguard somewhere
         # Add source
-        info = self.metadata['current'][file_role]
-        project_id = info['project_id']
+        
         try:
-            if info['internal']:
-                raise DeprecationWarning
-                self.__dict__[file_role] = InternalNormalizer(project_id)
-            else:
-                self.__dict__[file_role] = UserNormalizer(project_id)
+            self.source = UserNormalizer(self.metadata['current']['source']['project_id'])
         except:
-            self.__dict__[file_role] = None
+            self.source = None
+            
+        try:
+            self.ref = ESReferential(self.metadata['current']['ref']['project_id'])
+        except:
+            self.ref = None            
             #raise Exception('Normalizer project with id {0} could not be found'.format(project_id))
     
     @staticmethod
@@ -249,7 +249,8 @@ class Linker(AbstractDataProject):
             return self.dedupe_linker(data_params, module_params)
 
     def es_linker(self, module_params):
-    
+        module_params['index_name'] = ESReferential(self.ref.project_id).index_name
+        
         self.source.load_data(*self.source.get_last_written())
         self.mem_data = self.source.mem_data
         self.mem_data_info = self.source.mem_data_info
@@ -422,7 +423,7 @@ class Linker(AbstractDataProject):
                 }
         return paths
 
-    def _gen_es_labeller(self):
+    def _gen_es_labeller(self, columns_to_index=None):
         '''
         Return a es_labeller object
         '''
@@ -430,7 +431,11 @@ class Linker(AbstractDataProject):
         
         chunksize = 100
         
-        col_matches = self.read_col_matches()
+        col_matches_tmp = self.read_col_matches()
+        col_matches = []
+        for match in col_matches_tmp:
+            col_matches.append({'source': tuple(match['source']), 
+                                'ref': tuple(match['ref'])})
         # TODO: lists to tuple in col_matches
         
         paths = self._gen_paths_es()
@@ -440,13 +445,21 @@ class Linker(AbstractDataProject):
         source = source.where(source.notnull(), '')
         
         ref_table_name = self.ref.project_id
-        columns_to_index = self.ref.read_columns_to_index()
+        if columns_to_index is None:
+            columns_to_index = self.ref.gen_default_columns_to_index()
         
         labeller = ESLabeller(source, ref_table_name, col_matches, columns_to_index)
         
         # TODO: Add pre-load for 3 first queries
     
         return labeller
+
+    def create_es_index_ref(self, columns_to_index, force=False):
+        
+        self.ref = ESReferential(self.ref.project_id)
+        ref_path = self.ref.path_to(self.metadata['current']['ref']['module_name'],
+                                    self.metadata['current']['ref']['file_name'])
+        return self.ref.create_index(ref_path, columns_to_index, force)
 
 
     #==========================================================================
@@ -561,9 +574,6 @@ if __name__ == '__main__':
     proj.add_selected_project('ref', False, ref_proj_id)
     
     
-    
-    
-    
     linker_type = 'es_linker'
     
     if linker_type == 'es_linker':
@@ -598,7 +608,6 @@ if __name__ == '__main__':
                 'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
             }
         }
-        
         
         ref.create_index(ref_path, columns_to_index, force=False)
         

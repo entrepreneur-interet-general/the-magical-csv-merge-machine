@@ -1264,7 +1264,7 @@ def upload_config(project_type, project_id):
     file_name = data_params['file_name']
     
     # Check that the file_name is allowed:
-    assert file_name in ['training.json', 'config.json']
+    assert file_name in ['training.json', 'config.json', 'learned_settings.json']
     
     proj.upload_config_data(params, data_params['module_name'], file_name)
     return jsonify(error=False)
@@ -1503,6 +1503,7 @@ SCHEDULED_JOBS = {
                     'recode_types': {'project_type': 'normalize'}, 
                     'concat_with_init': {'project_type': 'normalize'}, 
                     'run_all_transforms': {'project_type': 'normalize'}, 
+                    'create_es_index': {'project_type': 'link'},
                     'create_es_labeller': {'project_type': 'link', 
                                         'priority': 'high'}, 
                     'infer_restriction': {'project_type': 'link', 
