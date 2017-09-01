@@ -393,10 +393,14 @@ def es_linker(source, params):
                             if bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold) \
                             else np.nan \
                             for f_r in full_responses])
-    
+
+    matches_in_ref.columns = [x + '__REF' for x in matches_in_ref.columns]
     new_source = pd.concat([source, matches_in_ref], 1)
     new_source['__CONFIDENCE'] = confidence
-    return new_source
+    
+    modified = new_source.copy() # TODO: is this good?
+    modified.loc[:, :] = True
+    return new_source, modified
 
 
 class Labeller():

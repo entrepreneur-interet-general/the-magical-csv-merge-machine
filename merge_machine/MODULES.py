@@ -44,12 +44,12 @@ NORMALIZE_MODULES = {
                                 'desc': replace_mvs.__doc__,
                                 'use_in_full_run': True
                             },
-                   'recode_types': {
+                    'recode_types': {
                                'func':  normalize_values,
                                'desc': normalize_values.__doc__,
                                'use_in_full_run': True
                            },
-                   'concat_with_init': {
+                    'concat_with_init': {
                                'desc': 'Merge intial and transformed files (cannot be called)',
                                'use_in_full_run': True
                            }
@@ -83,10 +83,11 @@ NORMALIZE_MODULES = {
        
 
 LINK_MODULES = {
-        'transform':{
+        'transform': {
                     'es_linker': {
-                                'func': es_linker,
-                                'desc': es_linker.__doc__
+                               'func': es_linker,
+                               'desc': es_linker.__doc__,
+                               'use_in_full_run': True
                             }
                     },
         'infer':{

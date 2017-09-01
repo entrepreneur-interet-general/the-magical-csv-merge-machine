@@ -17,7 +17,7 @@ from abstract_data_project import AbstractDataProject
 from dedupe_linker import format_for_dedupe, current_load_gazetteer
 from es_match import Labeller as ESLabeller
 from labeller import Labeller, DummyLabeller
-from normalizer import InternalNormalizer, UserNormalizer
+from normalizer import ESReferential, UserNormalizer
 from restrict_reference import perform_restriction
 
 from CONFIG import LINK_DATA_PATH
@@ -25,6 +25,7 @@ from MODULES import LINK_MODULES, LINK_MODULE_ORDER_log
 
 class Linker(AbstractDataProject):
     MODULES = LINK_MODULES
+    MODULE_ORDER_log = LINK_MODULE_ORDER_log
     
     def __init__(self, 
                  project_id=None, 
@@ -69,7 +70,7 @@ class Linker(AbstractDataProject):
 
     def default_log(self):
         '''Default log for a new file'''
-        return {module_name: self.default_module_log for module_name in LINK_MODULE_ORDER_log}
+        return {module_name: self.default_module_log for module_name in self.MODULE_ORDER_log}
     
     def load_project_to_merge(self, file_role):
         '''Uses the "current" field in metadata to load source or ref'''        
@@ -80,6 +81,7 @@ class Linker(AbstractDataProject):
         project_id = info['project_id']
         try:
             if info['internal']:
+                raise DeprecationWarning
                 self.__dict__[file_role] = InternalNormalizer(project_id)
             else:
                 self.__dict__[file_role] = UserNormalizer(project_id)
@@ -189,6 +191,7 @@ class Linker(AbstractDataProject):
         self.check_file_role(file_role)
         # Check that file exists
         if internal:
+            raise DeprecationWarning
             proj = InternalNormalizer(project_id)
         else:
             proj = UserNormalizer(project_id)
@@ -236,8 +239,26 @@ class Linker(AbstractDataProject):
         if module_name == 'infer_restriction':
             params['NO_MEM_DATA'] = True
         return super().infer(module_name, params)
-
+    
     def linker(self, module_name, data_params, module_params):
+        
+        if module_name == 'es_linker':
+            return self.es_linker(module_params)
+        elif module_name == 'dedupe_linker':
+            raise DeprecationWarning
+            return self.dedupe_linker(data_params, module_params)
+
+    def es_linker(self, module_params):
+    
+        self.source.load_data(*self.source.get_last_written())
+        self.mem_data = self.source.mem_data
+        self.mem_data_info = self.source.mem_data_info
+
+        log, run_info = self.transform('es_linker', module_params)        
+        
+        return log, run_info
+
+    def DEPRECATED_dedupe_linker(self, data_params, module_params):
         '''
         /!\ data_params does not Follow standards 
         
@@ -388,6 +409,7 @@ class Linker(AbstractDataProject):
         # TODO: check that normalization projects are complete ?
         
         # Get path to source
+        # TODO: fix this: use current
         file_name = self.metadata['current']['source']['file_name']
         source_path = self.source.path_to_last_written(module_name=None, 
                     file_name=file_name)
@@ -421,7 +443,7 @@ class Linker(AbstractDataProject):
         columns_to_index = self.ref.read_columns_to_index()
         
         labeller = ESLabeller(source, ref_table_name, col_matches, columns_to_index)
-    
+        
         # TODO: Add pre-load for 3 first queries
     
         return labeller
@@ -520,7 +542,7 @@ if __name__ == '__main__':
     
     # Upload files to normalize
     file_path = os.path.join('local_test_data', source_file_name)
-    with open(file_path) as f:
+    with open(file_path, 'rb') as f:
         proj.upload_init_data(f, source_file_name, source_user_given_name)
 
     # Create ref
@@ -529,7 +551,7 @@ if __name__ == '__main__':
     
     # Upload files to normalize
     file_path = os.path.join('local_test_data', ref_file_name)
-    with open(file_path) as f:
+    with open(file_path, 'rb') as f:
         proj.upload_init_data(f, ref_file_name, ref_file_name)
     
 
@@ -538,48 +560,107 @@ if __name__ == '__main__':
     proj.add_selected_project('source', False, source_proj_id)
     proj.add_selected_project('ref', False, ref_proj_id)
     
-    paths = dict()
     
-    paths = proj._gen_paths_dedupe()
     
-    ## Parameters
-    # Variables
-    my_variable_definition = [
-                            {'field': 
-                                    {'source': 'lycees_sources',
-                                    'ref': 'full_name'}, 
-                            'type': 'String', 
-                            'crf':True, 
-                            'missing_values':True},
-                            
-                            {'field': {'source': 'commune', 
-                                       'ref': 'localite_acheminement_uai'}, 
-                            'type': 'String', 
-                            'crf': True, 
-                            'missing_values':True}
-                            ]
+    
+    
+    linker_type = 'es_linker'
+    
+    if linker_type == 'es_linker':
 
-    # What columns in reference to include in output
-    selected_columns_from_ref = ['numero_uai', 'patronyme_uai', 
-                                 'localite_acheminement_uai']
+        # Index
+        proj.load_project_to_merge('ref')
+
+        ref = ESReferential(proj.ref.project_id)
+        
+        # ref_path, columns_to_index, force=False)
+        ref_path = ref.path_to_last_written()
+        
+        columns_to_index = {
+            'numero_uai': {},
+            'denomination_principale_uai': {
+                'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            },
+            'patronyme_uai': {
+                'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            },
+            'adresse_uai': {
+                'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            },
+            'localite_acheminement_uai': {
+                'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            },
+            'departement': {
+                'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            },
+            'code_postal_uai': {},
+            'full_name': {
+                'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            }
+        }
+        
+        
+        ref.create_index(ref_path, columns_to_index, force=False)
+        
+        # Link
+        index_name = proj.metadata['current']['ref']['project_id']
+        query_template = (('must', 'commune', 'localite_acheminement_uai', '.french', 1), ('must', 'lycees_sources', 'full_name', '.french', 1))
+        threshold = 3.5
+        must = {'full_name': ['lycee']}
+        must_not = {'full_name': ['ass', 'association', 'sportive', 'foyer']}
+
+        params=dict()
+        params['index_name'] = index_name
+        params['query_template'] = query_template
+        params['thresh'] = threshold
+        params['must'] = must
+        params['must_not'] = must_not
+        
+        proj.linker('es_linker', None, params)
+        
+    elif linker_type == 'dedupe_linker':
+        
+        paths = proj._gen_paths_dedupe()    
+            
+        ## Parameters
+        # Variables
+        my_variable_definition = [
+                                {'field': 
+                                        {'source': 'lycees_sources',
+                                        'ref': 'full_name'}, 
+                                'type': 'String', 
+                                'crf':True, 
+                                'missing_values':True},
+                                
+                                {'field': {'source': 'commune', 
+                                           'ref': 'localite_acheminement_uai'}, 
+                                'type': 'String', 
+                                'crf': True, 
+                                'missing_values':True}
+                                ]
     
-    # Add training data
-    with open('local_test_data/integration_1/training.json') as f:
-        training = json.load(f)
-    proj.upload_config_data(training, 'dedupe_linker', 'training.json')
-    
-    # Restrict reference
-    params = proj.infer('infer_restriction', {'training': training})
-    proj.perform_restriction(params)
-    
-    # proj.transform()
-    
-    # Perform linking
-    params = {'variable_definition': my_variable_definition,
-              'selected_columns_from_ref': selected_columns_from_ref}
-           
-    
-    proj.linker('dedupe_linker', paths, params)
+        # What columns in reference to include in output
+        selected_columns_from_ref = ['numero_uai', 'patronyme_uai', 
+                                     'localite_acheminement_uai']
+        
+        # Add training data
+        with open('local_test_data/integration_1/training.json') as f:
+            training = json.load(f)
+        proj.upload_config_data(training, 'dedupe_linker', 'training.json')
+        
+        # Restrict reference
+        params = proj.infer('infer_restriction', {'training': training})
+        proj.perform_restriction(params)
+        
+        # proj.transform()
+        
+        # Perform linking
+        params = {'variable_definition': my_variable_definition,
+                  'selected_columns_from_ref': selected_columns_from_ref}
+               
+        
+        proj.linker('dedupe_linker', paths, params)
+
     proj.write_data()   
 
     

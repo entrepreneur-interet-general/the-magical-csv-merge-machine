@@ -126,7 +126,9 @@ def _es_linker(project_id, data_params, module_params):
         project_id: ID for "normalize" project
 
     ARGUMENTS (POST):
-        - data_params: {
+        - data_params: 
+            none
+                {
                 "module_name": module to fetch from (source)
                 "file_name": file to fetch (source)
                 }
@@ -140,11 +142,11 @@ def _es_linker(project_id, data_params, module_params):
     '''
     # Problem: what project are we talking about? what ID? 
     
-    proj = UserLinker(project_id=project_id)
-
-    proj.load_data(data_params['module_name'], data_params['file_name'])
+    assert False
+    # proj = UserLinker(project_id=project_id)
+    # proj.load_data(data_params['module_name'], data_params['file_name'])
     
-    _, run_info = proj.transform('es_linker', module_params)
+    #_, run_info = proj.link('es_linker', data_params, module_params)
     
     # Write transformations and logs
     proj.write_data()
@@ -328,7 +330,7 @@ def _perform_restriction(project_id, _, module_params):
 
 
 # In test_linker
-def _linker(project_id, *argv):
+def _dedupe_linker(project_id, *argv):
     '''
     Runs deduper module. Contrary to other modules, linker modules, take
     paths as input (in addition to module parameters)

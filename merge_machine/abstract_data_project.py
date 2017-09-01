@@ -461,7 +461,7 @@ class AbstractDataProject(AbstractProject):
                                          quoting=csv.QUOTE_NONNUMERIC)
                     nrows += len(part_tab)
                     
-            except Exception as e:
+            except KeyboardInterrupt as e:
                 logging.error(e)
 
 
@@ -566,7 +566,6 @@ class AbstractDataProject(AbstractProject):
                 new_partial_data.loc[:, col] = old_modified.loc[:, col] | modified.loc[:, col]
             else:
                 new_partial_data[col] = modified[col]
-
         return new_partial_data
     
     def transform(self, module_name, params):
