@@ -142,13 +142,8 @@ def _es_linker(project_id, data_params, module_params):
     '''
     # Problem: what project are we talking about? what ID? 
     
-    assert False
-    # proj = UserLinker(project_id=project_id)
-    # proj.load_data(data_params['module_name'], data_params['file_name'])
-    
-    #_, run_info = proj.link('es_linker', data_params, module_params)
-    
-    # Write transformations and logs
+    proj = UserLinker(project_id)
+    _, run_info = proj.linker('es_linker', None, module_params)
     proj.write_data()
 
     return run_info

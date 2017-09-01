@@ -254,7 +254,10 @@ class Linker(AbstractDataProject):
         self.source.load_data(*self.source.get_last_written())
         self.mem_data = self.source.mem_data
         self.mem_data_info = self.source.mem_data_info
-
+        
+        # Change file_name to output file_name
+        self.mem_data_info['file_name'] = self.output_file_name(self.mem_data_info['file_name']) # File being modified
+    
         log, run_info = self.transform('es_linker', module_params)        
         
         return log, run_info

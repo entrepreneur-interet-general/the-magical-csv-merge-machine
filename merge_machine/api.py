@@ -1506,6 +1506,7 @@ SCHEDULED_JOBS = {
                     'create_es_index': {'project_type': 'link'},
                     'create_es_labeller': {'project_type': 'link', 
                                         'priority': 'high'}, 
+                    'es_linker': {'project_type': 'link'},
                     'infer_restriction': {'project_type': 'link', 
                                           'priority': 'high'}, 
                     'perform_restriction': {'project_type': 'link'},

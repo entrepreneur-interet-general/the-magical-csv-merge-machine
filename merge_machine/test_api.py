@@ -373,6 +373,8 @@ def link_pipeline(params):
     # WARNING: In interface, training data is generated during labelling
     #
     #==============================================================================
+    
+    # TODO: what is this ????
     url_to_append = '/api/upload_config/link/{0}/'.format(project_id)
     es_learned_settings_file_path = params['es_learned_settings_file_path']
     with open(es_learned_settings_file_path) as f:
@@ -418,22 +420,22 @@ def link_pipeline(params):
     #==============================================================================
     # Create labeller
     #==============================================================================
-    url_to_append = '/api/schedule/create_es_labeller/{0}/'.format(project_id)
-    body = {}
-    resp = post_resp(url_to_append, body)
-    job_id = resp['job_id']
-    
-    #==============================================================================
-    # --> Wait for job result
-    #==============================================================================
-    url_to_append = '/queue/result/{0}'.format(job_id)
-    resp = wait_get_resp(url_to_append, max_wait=20)
+    #    url_to_append = '/api/schedule/create_es_labeller/{0}/'.format(project_id)
+    #    body = {}
+    #    resp = post_resp(url_to_append, body)
+    #    job_id = resp['job_id']
+    #    
+    #    #==============================================================================
+    #    # --> Wait for job result
+    #    #==============================================================================
+    #    url_to_append = '/queue/result/{0}'.format(job_id)
+    #    resp = wait_get_resp(url_to_append, max_wait=20)
     
     #==============================================================================
     # Run linker
     #==============================================================================
     url_to_append = '/api/schedule/es_linker/{0}/'.format(project_id)
-    body = {}
+    body = {'module_params': es_learned_settings}
     resp = post_resp(url_to_append, body)
     job_id = resp['job_id']
 
@@ -458,7 +460,7 @@ def link_pipeline(params):
     #==============================================================================
     url_to_append = '/api/schedule/link_results_analyzer/{0}/'.format(project_id)
     body = {'data_params': {
-                            "module_name": 'dedupe_linker',
+                            "module_name": 'es_linker',
                             "file_name": params['source_file_name'].rsplit('.')[0] + '.csv'
                             }
             }    
@@ -526,6 +528,8 @@ if __name__ == '__main__':
 
     link_params['source_project_id'] = source_project_id
     link_params['ref_project_id'] = ref_project_id
+
+    link_params['source_file_name'] = source_params['file_name']
     
     link_params['es_learned_settings_file_path'] = os.path.join(args.dir, link_params['es_learned_settings_file_path'])
     link_params['training_file_path'] = os.path.join(args.dir, link_params['training_file_name'])
