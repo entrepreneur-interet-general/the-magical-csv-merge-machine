@@ -9,6 +9,10 @@ Make a previous function?
 
 Add extend sorted keys
 
+Add real matches as certain matches
+
+Add option to label full file
+
 """
 import itertools
 import json
@@ -454,22 +458,22 @@ class Labeller():
                 break    
         return min_precision
 
-    def _user_input(self, res, row, test_num=0):
-        print('\n***** {0} / {1} / ({2})'.format(res['_id'], res['_score'], self.num_rows_labelled))
+    def _user_input(self, source_item, ref_item, test_num=0):
+        print('\n***** {0} / {1} / ({2})'.format(ref_item['_id'], ref_item['_score'], self.num_rows_labelled))
         for match in self.match_cols:
             if isinstance(match['ref'], str):
                 cols = [match['ref']]
             else:
                 cols = match['ref']
             for col in cols:
-                print('\n{1}   -> [{0}][source]'.format(match['source'], row[match['source']]))
-                print('> {1}   -> [{0}]'.format(col, res['_source'][col]))
+                print('\n{1}   -> [{0}][source]'.format(match['source'], source_item['_source'][match['source']]))
+                print('> {1}   -> [{0}]'.format(col, ref_item['_source'][col]))
         
         if test_num == 2:
-            print(row['SIRET'][:-5], row['SIRET'][-5:], '[source]')
-            print(res['_source']['SIREN'], res['_source']['NIC'], '[ref]')
-            print('LIBAPET', res['_source']['LIBAPET'])
-            if row['SIRET'] == res['_source']['SIREN'] + res['_source']['NIC']:
+            print(source_item['_source']['SIRET'][:-5], source_item['_source']['SIRET'][-5:], '[source]')
+            print(ref_item['_source']['SIREN'], ref_item['_source']['NIC'], '[ref]')
+            print('LIBAPET', ref_item['_source']['LIBAPET'])
+            if source_item['_source']['SIRET'] == ref_item['_source']['SIREN'] + ref_item['_source']['NIC']:
                 return 'y'
             else:
                 return 'n'
@@ -520,7 +524,7 @@ class Labeller():
             self.sorted_keys = list(filter(lambda x: self.agg_query_metrics[x]['precision'] \
                                       >= self._min_precision(), self.sorted_keys))            
             
-    def new_label(self):
+    def _new_label(self):
         '''Return the next pair to label'''
         # If looking for a new row from source, initiate the generator
         if not self.sorted_keys:
@@ -547,7 +551,14 @@ class Labeller():
             return next(self.label_row_gen)
         except StopIteration:
             self.next_row = True
-            return self.new_label()
+            return self._new_label()
+        
+    def new_label(self):
+        '''Returns a pair to label'''
+        ref = self._new_label()
+        source = {'_id': self.idx, 
+                  '_source': self.source.loc[self.idx].to_dict()}
+        return source, ref
     
     def parse_valid_answer(self, user_input):
         is_match = user_input in ['y', '1']  
@@ -620,12 +631,15 @@ class Labeller():
     def update_musts(self, must, must_not):
         self.must = must
         self.must_not = must_not
-
+        
+    def best_query_template(self):
+        return sorted(self.full_responses.keys(), key=lambda x: \
+                      self.agg_query_metrics[x]['ratio'], reverse=True)[0]
+ 
     def to_emit(self, message):
-        '''Creates a dict to be sent to the template'''
+        '''Creates a dict to be sent to the template # TODO: fix this'''
         dict_to_emit = dict()
         dict_to_emit['formated_record_pair'] = self._format_record_pair()
-        dict_to_emit['formated_example'] = self._format_fields() # TODO: remove this
         dict_to_emit['n_match'] = str(self.n_match)
         dict_to_emit['n_distinct'] = str(self.n_distinct)
         dict_to_emit['has_previous'] = len(self.examples_buffer) >= 1
@@ -633,8 +647,5 @@ class Labeller():
             dict_to_emit['_message'] = message
         return dict_to_emit
     
-    def best_query_template(self):
-        return sorted(self.full_responses.keys(), key=lambda x: \
-                      self.agg_query_metrics[x]['ratio'], reverse=True)[0]
- 
+
         

@@ -104,20 +104,20 @@ labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
 #                      {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']})
 
 for i in range(100):
-    res = labeller.new_label()
-    if not res:
+    (source_item, ref_item) = labeller.new_label()
+    if not ref_item:
         print('No more examples to label')
         break
     
     for x in range(10):
-        user_input = labeller._user_input(res, labeller.source.loc[labeller.idx], test_num)
+        user_input = labeller._user_input(source_item, ref_item, test_num)
         if labeller.answer_is_valid(user_input):
             break
     else:
         raise ValueError('No valid answer after 10 iterations')
            
     is_match = labeller.parse_valid_answer(user_input)
-    labeller.update(is_match, res['_id'])
+    labeller.update(is_match, ref_item['_id'])
     
     if (test_num == 0) and i == 3:
         labeller.update_musts({'NOMEN_LONG': ['lycee']},
