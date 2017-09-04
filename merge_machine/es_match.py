@@ -436,7 +436,7 @@ class Labeller():
         for q_t in self.all_query_templates:
             self.query_metrics[q_t] = []
             
-        self.row_idxs = (idx for idx in random.sample(list(source.index), self.max_num_samples))
+        self.row_idxs = list(idx for idx in random.sample(list(source.index), self.max_num_samples))
         self.next_row = True
     
     def _min_precision(self):
@@ -572,11 +572,5 @@ class Labeller():
     def best_query_template(self):
         return sorted(self.full_responses.keys(), key=lambda x: \
                       self.agg_query_metrics[x]['ratio'], reverse=True)[0]
-
-    def cleanup_training(self):
-        self.deduper.cleanupTraining()
-
-    def write_training(self, file_path):
-        with open(file_path, 'w') as f:
-            self.deduper.writeTraining(f)
-
+ 
+        
