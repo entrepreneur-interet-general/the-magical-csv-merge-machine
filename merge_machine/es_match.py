@@ -4,6 +4,11 @@
 Created on Tue Aug 29 13:39:55 2017
 
 @author: m75380
+
+Make a previous function? 
+
+Add extend sorted keys
+
 """
 import itertools
 import json
@@ -116,6 +121,7 @@ def _gen_body(query_template, row, must={}, must_not={}, num_results=3):
         key = s_q_t[2] + s_q_t[3]
         boost = s_q_t[4]
     '''
+    DEFAULT_MUST_FIELD = '.french'
     
     body = {
           'size': num_results,
@@ -142,9 +148,9 @@ def _gen_body(query_template, row, must={}, must_not={}, num_results=3):
                 for must_or_should in ['must', 'should']
                         },
                         **{
-                           'must_not': [{'match': {field + '.french': {'query': ' OR '.join(values)}}
+                           'must_not': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' OR '.join(values)}}
                                      } for field, values in must_not.items()],
-                           'filter': [{'match': {field + '.french': {'query': ' AND '.join(values)}} # TODO: french?
+                           'filter': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' AND '.join(values)}} # TODO: french?
                                      } for field, values in must.items()],
                         })               
                   }
@@ -421,6 +427,7 @@ class Labeller():
                                                            self.bool_levels, 
                                                            self.boost_levels, 
                                                            self.max_num_levels)
+
         self.sorted_keys = self.all_query_templates
         self.source = source
         self.ref_table_name = ref_table_name
@@ -429,14 +436,15 @@ class Labeller():
         self.num_rows_labelled = 0
         self.query_metrics = dict()
         
+        for q_t in self.all_query_templates:
+            self.query_metrics[q_t] = []
+        
         # TODO: Must currently not implemented
         self.must = must
         self.must_not = must_not
-        
-        for q_t in self.all_query_templates:
-            self.query_metrics[q_t] = []
             
         self.row_idxs = list(idx for idx in random.sample(list(source.index), self.max_num_samples))
+        self.pairs = [] # List of (source_id, ref_es_id)
         self.next_row = True
     
     def _min_precision(self):
@@ -478,12 +486,11 @@ class Labeller():
         INPUT:
             - full_responses: result of "perform_queries" ; {query: response, ...}
             - sorted_keys: order in which to perform labelling
-            - row: pandas.Series corresponding to the row being searched for
-            - num_rows_labelled: For display only
+            - num_results: how many results to display per search template (1
+                        will display only most probable result for each template)
             
         OUTPUT:
-            - found: If a match was found
-            - res: result of the match if it was found
+            - res: result of potential match to label
         '''
         
         ids_done = []
@@ -495,33 +502,45 @@ class Labeller():
                     ids_done.append(res['_id'])
                     yield res
 
+    def sort_keys(self):
+        '''
+        Update sorted_keys, that determin the order in which samples are shown
+        to the user        
+        '''
+        # Sort keys by score or most promising
+        if self.num_rows_labelled <= 2:
+            sorted_keys_1 = random.sample(list(self.full_responses.keys()), len(self.full_responses.keys()))
+            sorted_keys_2 = sorted(self.full_responses.keys(), key=lambda x: self.full_responses[x]['hits'].get('max_score') or 0, reverse=True)
+            self.sorted_keys = list(itertools.chain(*zip(sorted_keys_1, sorted_keys_2)))
+        else:
+            # Sort by ratio but label by precision ?
+            self.sorted_keys = sorted(self.full_responses.keys(), key=lambda x: self.agg_query_metrics[x]['precision'], reverse=True)
+            
+            # Remove queries if precision is too low (thresh depends on number of labels)
+            self.sorted_keys = list(filter(lambda x: self.agg_query_metrics[x]['precision'] \
+                                      >= self._min_precision(), self.sorted_keys))            
+            
     def new_label(self):
-        # If looking for a new row, initiate the generator
+        '''Return the next pair to label'''
+        # If looking for a new row from source, initiate the generator
+        if not self.sorted_keys:
+            raise ValueError('No keys in self.sorted_keys')
+        
         if self.next_row: # If previous was found: try new row
             self.next_row = False
             try:
-                self.idx = next(self.row_idxs)
+                self.idx = self.row_idxs.pop()
             except StopIteration:
                 return False
-            self.row = self.source.loc[self.idx]
+            row = self.source.loc[self.idx]
             
             print('in new_label / in self.next_row / len sorted_keys: {0}'.format(len(self.sorted_keys)))
-            self.all_search_templates, self.full_responses = perform_queries(self.ref_table_name, self.sorted_keys, [self.row], self.must, self.must_not, self.num_results_labelling)
+            self.all_search_templates, self.full_responses = perform_queries(self.ref_table_name, self.sorted_keys, 
+                                                                             [row], self.must, self.must_not, self.num_results_labelling)
             self.full_responses = {self.all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
-
-            # Sort keys by score or most promising
-            if self.num_rows_labelled <= 2:
-                sorted_keys_1 = random.sample(list(self.full_responses.keys()), len(self.full_responses.keys()))
-                sorted_keys_2 = sorted(self.full_responses.keys(), key=lambda x: self.full_responses[x]['hits'].get('max_score') or 0, reverse=True)
-                self.sorted_keys = list(itertools.chain(*zip(sorted_keys_1, sorted_keys_2)))
-            else:
-                # Sort by ratio but label by precision ?
-                self.sorted_keys = sorted(self.full_responses.keys(), key=lambda x: self.agg_query_metrics[x]['precision'], reverse=True)
-                
-                # Remove queries if precision is too low (thresh depends on number of labels)
-                self.sorted_keys = list(filter(lambda x: self.agg_query_metrics[x]['precision'] \
-                                          >= self._min_precision(), self.sorted_keys))            
-                
+            print('LEN OF FULL_RESPONSES:', len(self.full_responses))
+            self.sort_keys()
+                            
             self.label_row_gen = self.new_label_row(self.full_responses, self.sorted_keys, self.num_results_labelling)
         
         try:
@@ -535,18 +554,58 @@ class Labeller():
         return is_match
 
     def update(self, is_match, res_id):
+        '''
+        Update query metrics and agg_query_metrics and other variables based 
+        on the user given label and the elasticsearch id of the reference item being labelled
+        
+        INPUT:
+            - is_match: whether the pair being labelled is a match
+            - res_id: Elasticsearch Id of the reference element being labelled
+        '''
         print('in update')
         if is_match:
-            print('in update / in is_match')
-            # Update individual and aggregated metrics
-            for key, response in self.full_responses.items():
-                self.query_metrics[key].append(compute_metrics(response['hits']['hits'], res_id))
-            self.agg_query_metrics = calc_agg_query_metrics(self.query_metrics)
-            
+            self.pairs.append((self.idx, res_id))
+
+            self.update_query_metrics_on_match(res_id)
             self.num_rows_labelled += 1
             self.next_row = True
 
+    def update_query_metrics_on_match(self, res_id):
+        '''
+        Assuming res_id is the Elasticsearch id of the matching refential,
+        update the metrics
+        '''
 
+        print('in update / in is_match')
+        # Update individual and aggregated metrics
+        for key, response in self.full_responses.items():
+            self.query_metrics[key].append(compute_metrics(response['hits']['hits'], res_id))
+        self.agg_query_metrics = calc_agg_query_metrics(self.query_metrics)
+        
+
+
+    def re_score_history(self):
+        '''Use this if updated must or must_not'''
+
+        # Re-initiate query_metrics 
+        self.query_metrics = dict()
+        for q_t in self.sorted_keys:
+            self.query_metrics[q_t] = []
+        
+        # TODO: temporary sol: put all in bulk
+        for pair in self.pairs:
+            self.all_search_templates, self.full_responses = perform_queries(
+                                                                  self.ref_table_name, 
+                                                                  self.sorted_keys, 
+                                                                  [self.source.loc[pair[0]]], 
+                                                                  self.must, self.must_not, 
+                                                                  self.num_results_labelling)
+            self.full_responses = {self.all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
+            self.update_query_metrics_on_match(pair[1])
+
+        if not self.sorted_keys:
+            raise ValueError('No keys in self.sorted_keys hore')
+        
     def answer_is_valid(self, user_input):
         '''Check if the user input is valid'''
         valid_responses = {'y', 'n', 'u', 'f', '0', '1'}
@@ -556,6 +615,11 @@ class Labeller():
         #            valid_responses = {'y', 'n', 'u', 'f'}
         return user_input in valid_responses
 
+
+
+    def update_musts(self, must, must_not):
+        self.must = must
+        self.must_not = must_not
 
     def to_emit(self, message):
         '''Creates a dict to be sent to the template'''
