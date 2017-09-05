@@ -12,7 +12,7 @@ import pandas as pd
 import numpy as np
 
 # Parsing/normalization packages
-#import gridding
+import gridding
 import custom_name_parsing
 import urllib.request, urllib.parse, json # For BAN address API on data.gouv.fr
 from dateparser import DateDataParser
@@ -497,16 +497,16 @@ class TypeMatcher(object):
 			logging.info('Positing value type {} by {}'.format(self.t, self))
 			for c in cells: c.posit_type(self.t)
 
-#class GridMatcher(TypeMatcher):
-#	def __init__(self):
-#		self.t = F_GRID_LABEL
-#		gridding.init_gridding()
-#	def match_all_field_values(self, f):
-#		src_items_by_label = gridding.grid_label_set([vc.value for vc in f.cells])
-#		for vc in f.cells:
-#			item = src_items_by_label[vc.value]
-#			if 'grid' in item:
-#				self.register_full_match(vc, self.t, 100, item['label'])
+class GridMatcher(TypeMatcher):
+	def __init__(self):
+		super(GridMatcher, self).__init__(F_GRID_LABEL)
+		gridding.init_gridding()
+	def match_all_field_values(self, f):
+		src_items_by_label = gridding.grid_label_set([vc.value for vc in f.cells])
+		for vc in f.cells:
+			item = src_items_by_label[vc.value]
+			if 'grid' in item:
+				self.register_full_match(vc, self.t, 100, item['label'])
 
 MATCH_MODE_EXACT = 0
 MATCH_MODE_CLOSE = 1
@@ -1428,9 +1428,10 @@ class CustomPersonNameMatcher(TypeMatcher):
 		super(CustomPersonNameMatcher, self).__init__(F_PERSON)
 	@timed
 	def match(self, c):
+		l = c.value
 		parsed_names = custom_name_parsing.extractPersonNames(l)
 		if len(parsed_names) < 1: return
-		normalized_parsed_names = list([joinPersonName(pn) for pn in parsed_names])
+		normalized_parsed_names = list([custom_name_parsing.joinPersonName(pn) for pn in parsed_names])
 		# if len(normalized_parsed_names) == 1:
 		# 	self.register_full_match(c, self.t, 100, parsedName[0], (parsedName[1], parsedName[2]))
 		# else:
@@ -1769,7 +1770,8 @@ def generate_value_matchers(lvl = 1):
 		yield RegexMatcher(F_DATE, PAT_UAI, ignoreCase = True, neg = True)
 
 	if lvl >= 2: 
-		yield LabelMatcher(F_RD_STRUCT, file_to_set('structure_recherche_short.col'), MATCH_MODE_EXACT)
+		# yield LabelMatcher(F_RD_STRUCT, file_to_set('structure_recherche_short.col'), MATCH_MODE_EXACT)
+		yield LabelMatcher(F_RD_STRUCT, file_to_set('org_rnsr.col'), MATCH_MODE_EXACT)
 	if lvl >= 2: 
 		yield TokenizedMatcher(F_RD_PARTNER, file_to_set('partenaire_recherche_ANR.col') | file_to_set('partenaire_recherche_FUI.col') |
 			file_to_set('institution_H2020.col'), maxTokens = 6)
@@ -1778,8 +1780,8 @@ def generate_value_matchers(lvl = 1):
 		maxTokens = 4)
 	yield SubtypeMatcher(F_RD, [F_RD_STRUCT, F_RD_PARTNER, F_CLINICALTRIAL_COLLAB])
 
-    #	if lvl >= 1:
-    #		yield GridMatcher()
+	if lvl >= 2:
+		yield GridMatcher()
 
 	## Enseignement et Enseignement Supérieur
 	academy_labels = file_to_set('academie') # file_to_set('academie') | file_to_set('region')
@@ -1980,8 +1982,7 @@ def normalize_values(tab, params):
 	fields.match_by_types(trusted_types)
 	for (originalField, newCol) in fields.normalize_values_in_place(trusted_types):
 		modified[originalField] = (tab[originalField] != newCol)
-		for i, v in enumerate(newCol):
-			tab.loc[i][originalField] = v		
+		tab.loc[:, originalField] = newCol
 	return tab, modified
 
 def sample_types_ilocs(tab, params, sample_params):
