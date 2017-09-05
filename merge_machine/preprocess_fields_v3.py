@@ -1460,16 +1460,16 @@ BAN_MAPPING = [
 	(F_ZIP, 'postcode'),
 	(F_CITY, 'city') ]
 
+
+
 class CustomAddressMatcher(TypeMatcher):
 	def __init__(self):
 		super(CustomAddressMatcher, self).__init__(F_ADDRESS)
-		from postal.parser import parse_address		
 	@timed
 	def match(self, c):
 		if c.value.isdigit():
 			logging.debug('Bailing out of %s for numeric value: %s', self, c)
 			return
-		from postal.parser import parse_address
 		parsed = parse_address(c.value)
 		if not parsed: return
 		ps = {key: value for (value, key) in parsed}
@@ -1810,8 +1810,13 @@ def generate_value_matchers(lvl = 1):
 	# Geo Domain
 	if lvl >= 2: 
 		yield FrenchAddressMatcher()
-	# if lvl >= 2: 
-	# 	yield CustomAddressMatcher()
+
+	if lvl >= 2: 
+		try:		
+			from postal.parser import parse_address
+			yield CustomAddressMatcher()
+		except ImportError as ie:
+			logging.warning('Could not import libpostal module required by CustomAddressMatcher')
 	if lvl >= 0: 
 		yield RegexMatcher(F_ZIP, "[0-9]{5}")
 
