@@ -1459,16 +1459,16 @@ BAN_MAPPING = [
 	(F_ZIP, 'postcode'),
 	(F_CITY, 'city') ]
 
+
+
 class CustomAddressMatcher(TypeMatcher):
 	def __init__(self):
 		super(CustomAddressMatcher, self).__init__(F_ADDRESS)
-		from postal.parser import parse_address		
 	@timed
 	def match(self, c):
 		if c.value.isdigit():
 			logging.debug('Bailing out of %s for numeric value: %s', self, c)
 			return
-		from postal.parser import parse_address
 		parsed = parse_address(c.value)
 		if not parsed: return
 		ps = {key: value for (value, key) in parsed}
@@ -1504,8 +1504,11 @@ class FrenchAddressMatcher(LabelMatcher):
 		response = urllib.request.urlopen("http://api-adresse.data.gouv.fr/search/?q=" + urllib.parse.quote_plus(c.value))
 		try:
 			data = json.loads(response.read())
-		except ValueError as e:
-			logging.warning('adresse.data.gouv.fr returned unexpected response: {}'.format(e))
+		except ValueError as ve:
+			logging.warning('adresse.data.gouv.fr returned unexpected response: {}'.format(ve))
+			return
+		except TypeError as te:
+			logging.warning('adresse.data.gouv.fr returned badly typed response: {}'.format(te))
 			return
 		if not data or 'features' not in data: return
 		logging.debug('Returned %d results from api-adresse.data.gouv.fr for %s', len(data['features']), c.value)
@@ -1668,7 +1671,7 @@ def value_matchers():
 			VALUE_MATCHERS.append(vm)
 	return VALUE_MATCHERS
 
-def generate_value_matchers(lvl = 2):
+def generate_value_matchers(lvl = 1):
 	''' Generates type matcher objects that can be applied to each value cell in a column in order to infer
 		whether that column's type is the matcher's type (or alternatively a parent type or a child type).
 
@@ -1805,8 +1808,13 @@ def generate_value_matchers(lvl = 2):
 	# Geo Domain
 	if lvl >= 2: 
 		yield FrenchAddressMatcher()
-	# if lvl >= 2: 
-	# 	yield CustomAddressMatcher()
+
+	if lvl >= 2: 
+		try:		
+			from postal.parser import parse_address
+			yield CustomAddressMatcher()
+		except ImportError as ie:
+			logging.warning('Could not import libpostal module required by CustomAddressMatcher')
 	if lvl >= 0: 
 		yield RegexMatcher(F_ZIP, "[0-9]{5}")
 
