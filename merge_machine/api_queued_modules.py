@@ -255,8 +255,8 @@ def _create_es_index(project_id, data_params, module_params):
     proj.ref = ESReferential(proj.ref.project_id)
 
     if data_params is None:
-        module_name = proj.metadata['current']['ref']['module_name']
-        file_name = proj.metadata['current']['ref']['file_name']
+        module_name = proj.metadata['files']['ref']['module_name']
+        file_name = proj.metadata['files']['ref']['file_name']
     else:
         module_name = data_params['module_name']
         file_name = data_params['file_name']
