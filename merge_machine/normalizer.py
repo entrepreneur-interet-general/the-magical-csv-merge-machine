@@ -484,18 +484,19 @@ class ESReferential(UserNormalizer):
                           dtype=str, chunksize=self.es_insert_chunksize)
         
        
-        if self.ic.exists(self.index_name) and force:
+        if self.has_index() and force:
             self.ic.delete(self.index_name)
             
+            
+        
         if not self.ic.exists(self.index_name):
+            log = self.init_active_log('INIT', 'transform')
+            
             index_settings = es_insert.gen_index_settings(columns_to_index)
             self.ic.create(self.index_name, body=json.dumps(index_settings))  
-    
-        log = self.init_active_log('INIT', 'transform')
-    
-        es_insert.index(ref_gen, self.index_name, testing)
+            es_insert.index(ref_gen, self.index_name, testing)
         
-        log = self.end_active_log(log, error=False)
+            log = self.end_active_log(log, error=False)
         self.write_log_buffer(written=False)
     
     def delete_index(self):
@@ -518,6 +519,14 @@ class ESReferential(UserNormalizer):
                             else {} for col in column_tracker['original']}   
         return columns_to_index
         
+    
+    def delete_project(self):
+        '''Deletes entire folder containing the project'''
+        if self.has_index():
+            self.delete_index()
+        super().delete_project()
+
+    
 #class InternalNormalizer(Normalizer):
 #    def path_to(self, module_name='', file_name=''):
 #        return self._path_to(NORMALIZE_DATA_PATH, module_name, file_name)

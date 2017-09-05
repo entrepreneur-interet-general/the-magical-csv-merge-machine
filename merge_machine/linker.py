@@ -9,7 +9,6 @@ import gc
 import logging
 import os
 import pickle
-import time
 
 import pandas as pd
 
@@ -274,21 +273,21 @@ class Linker(AbstractDataProject):
         self.mem_data_info['file_role'] = 'link' # Role of file being modified
         self.mem_data_info['file_name'] = self.output_file_name(os.path.split(data_params['source'])[-1]) # File being modified
         
-        log = self.init_active_log(module_name, 'link')
+        log = self.init_active_log('dedupe_linker', 'link')
 
-        self.mem_data, run_info = self.MODULES['link'][module_name]['func'](data_params, module_params)
+        self.mem_data, run_info = self.MODULES['link']['dedupe_linker']['func'](data_params, module_params)
         
         # TODO: inconsistent with transform (this is for dedupe_linker)
         if isinstance(self.mem_data, pd.DataFrame):
             self.mem_data = (x for x in [self.mem_data])
         
-        self.mem_data_info['module_name'] = module_name
+        self.mem_data_info['module_name'] = 'dedupe_linker'
         
         # Complete log
         log = self.end_active_log(log, error=False)
                           
         # Update buffers
-        self.run_info_buffer[(module_name, self.mem_data_info['file_name'])] = run_info
+        self.run_info_buffer[('dedupe_linker', self.mem_data_info['file_name'])] = run_info
         return 
 
     def write_labeller(self, module_name, labeller):

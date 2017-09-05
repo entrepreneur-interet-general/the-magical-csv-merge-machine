@@ -5,13 +5,11 @@ Created on Tue Aug 29 13:39:55 2017
 
 @author: m75380
 
-Make a previous function? 
+Make a previous function?
 
 Add extend sorted keys
 
-Add real matches as certain matches
-
-Add option to label full file
+Add option to label full file (no inference on unlabelled)
 
 Do not re-index !
 
