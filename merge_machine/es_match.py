@@ -13,6 +13,8 @@ Add real matches as certain matches
 
 Add option to label full file
 
+Do not re-index !
+
 """
 import itertools
 import json
@@ -384,6 +386,7 @@ def es_linker(source, params):
             threshold: minimum value of score for this query_template for a match
             must: terms to filter by field (AND: will include ONLY IF ALL are in text)
             must_not: terms to exclude by field from search (OR: will exclude if ANY is found)
+            exact_pairs: list of (source_id, ES_ref_id) which are certain matches
     '''
     
     table_name = params['index_name']
@@ -391,24 +394,45 @@ def es_linker(source, params):
     must = params.get('must', {})
     must_not = params.get('must_not', {})
     threshold = params['thresh']
+    exact_pairs = params.get('exact_pairs', [])
     
-    rows = (x[1] for x in source.iterrows())
-    all_search_templates, full_responses = perform_queries(table_name, [query_template], rows, must, must_not, num_results=1)
-    full_responses = [full_responses[i] for i in range(len(full_responses))] # Don't use items to preserve order
+    exact_source_indexes = [x[0] for x in exact_pairs]
+    source_indexes = (x[0] for x in source.iterrows() if x [0] not in exact_source_indexes)    
     
-    matches_in_ref = pd.DataFrame([f_r['hits']['hits'][0]['_source'] \
-                               if bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold) \
-                               else {} \
-                               for f_r in full_responses])
-                    
-    confidence = pd.Series([f_r['hits']['hits'][0]['_score'] \
-                            if bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold) \
-                            else np.nan \
-                            for f_r in full_responses])
-
-    matches_in_ref.columns = [x + '__REF' for x in matches_in_ref.columns]
-    new_source = pd.concat([source, matches_in_ref], 1)
-    new_source['__CONFIDENCE'] = confidence
+    # Perform matching on non-exact pairs (not labelled)
+    if source_indexes:
+        rows = (x[1] for x in source.iterrows() if x[0] not in exact_source_indexes)
+        all_search_templates, full_responses = perform_queries(table_name, [query_template], rows, must, must_not, num_results=1)
+        full_responses = [full_responses[i] for i in range(len(full_responses))] # Don't use items to preserve order
+        
+        matches_in_ref = pd.DataFrame([f_r['hits']['hits'][0]['_source'] \
+                                   if bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold) \
+                                   else {} \
+                                   for f_r in full_responses], index=source_indexes)
+                        
+        confidence = pd.Series([f_r['hits']['hits'][0]['_score'] \
+                                if bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold) \
+                                else np.nan \
+                                for f_r in full_responses])
+        matches_in_ref.columns = [x + '__REF' for x in matches_in_ref.columns]
+        matches_in_ref['__CONFIDENCE'] = confidence    
+    else:
+        matches_in_ref = pd.DataFrame()
+    
+    # Perform matching exact (labelled) pairs
+    if exact_source_indexes:
+        exact_ref_indexes = [x[1] for x in exact_pairs]
+        full_responses = [es.get(table_name, ref_idx) for ref_idx in exact_ref_indexes]
+        exact_matches_in_ref = pd.DataFrame([f_r['_source'] for f_r in full_responses], 
+                                            index=exact_source_indexes)
+        exact_matches_in_ref.columns = [x + '__REF' for x in exact_matches_in_ref.columns]
+        exact_matches_in_ref['__CONFIDENCE'] = 999
+    else:
+        exact_matches_in_ref = pd.DataFrame()
+        
+    #
+    assert len(exact_matches_in_ref) + len(matches_in_ref) == len(source)
+    new_source = pd.concat([source, pd.concat([matches_in_ref, exact_matches_in_ref])], 1)        
     
     modified = new_source.copy() # TODO: is this good?
     modified.loc[:, :] = True
@@ -538,7 +562,7 @@ class Labeller():
                 return False
             row = self.source.loc[self.idx]
             
-            print('in new_label / in self.next_row / len sorted_keys: {0}'.format(len(self.sorted_keys)))
+            print('in new_label / in self.next_row / len sorted_keys: {0} / row_idx: {1}'.format(len(self.sorted_keys), self.idx))
             self.all_search_templates, self.full_responses = perform_queries(self.ref_table_name, self.sorted_keys, 
                                                                              [row], self.must, self.must_not, self.num_results_labelling)
             self.full_responses = {self.all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
@@ -626,8 +650,18 @@ class Labeller():
         #            valid_responses = {'y', 'n', 'u', 'f'}
         return user_input in valid_responses
 
-
-
+    def export_best_params(self):
+        '''Returns a dictionnary with the best parameters (input for es_linker)'''
+        params = dict()
+        params['index_name'] = self.ref_table_name
+        params['query_templates'] = self.best_query_template()
+        params['must'] = self.must
+        params['must_not'] = self.must_not
+        params['thresh'] = self.threshold
+        params['exact_pairs'] = self.pairs
+        return params
+    
+    
     def update_musts(self, must, must_not):
         self.must = must
         self.must_not = must_not
