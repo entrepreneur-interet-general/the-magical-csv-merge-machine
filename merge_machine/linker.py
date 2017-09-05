@@ -100,7 +100,7 @@ class Linker(AbstractDataProject):
                 raise Exception('{0} is not defined for this linking project'.format(file_role))
     
     def create_metadata(self, description=None, display_name=None):
-        metadata = super().create_metadata()
+        metadata = super().create_metadata(description=description, display_name=display_name)
         metadata['files'] = {'source': None, 'ref': None} # {'source': {internal: False, project_id: "ABC123", file_name: "source.csv.csv"}, 'ref': None}
         return metadata   
 
