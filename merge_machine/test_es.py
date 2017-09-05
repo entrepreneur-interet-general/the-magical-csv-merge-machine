@@ -124,7 +124,7 @@ for i in range(100):
                               {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']})
         labeller.re_score_history()
 
-print('best_query:\n', labeller.best_query_template())
+print('best_query:\n', labeller._best_query_template())
 print('must:\n', labeller.must)
 print('must_not:\n', labeller.must_not)
 

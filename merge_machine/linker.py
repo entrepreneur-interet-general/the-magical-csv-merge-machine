@@ -67,10 +67,6 @@ class Linker(AbstractDataProject):
         '''Name of the file to output'''
         return source_file_name
 
-    def default_log(self):
-        '''Default log for a new file'''
-        return {module_name: self.default_module_log for module_name in self.MODULE_ORDER_log}
-    
     def load_project_to_merge(self, file_role):
         '''Uses the "current" field in metadata to load source or ref'''        
         self.check_file_role(file_role)

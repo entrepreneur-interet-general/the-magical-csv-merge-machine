@@ -11,7 +11,16 @@ Add extend sorted keys
 
 Add option to label full file (no inference on unlabelled)
 
+previous row and back to row init 
+
+multiple query
+
+security 
+
+join source columns if multiple match
+
 """
+from collections import defaultdict
 import itertools
 import json
 import random
@@ -208,7 +217,7 @@ def compute_threshold(metrics, t_p=0.95, t_r=0.3):
         return thresh, precision, recall, ratio
 
 
-def calc_agg_query_metrics(query_metrics):
+def calc_agg_query_metrics(query_metrics, t_p=0.95, t_r=0.3):
     '''
     Find optimal threshold for each query and compute the aggregated metrics.
     
@@ -221,7 +230,7 @@ def calc_agg_query_metrics(query_metrics):
     
     agg_query_metrics = dict()
     for key, metrics in query_metrics.items():
-        thresh, precision, recall, ratio = compute_threshold(metrics)
+        thresh, precision, recall, ratio = compute_threshold(metrics, t_p=0.95, t_r=0.3)
         agg_query_metrics[key] = dict()
         agg_query_metrics[key]['thresh'] = thresh
         agg_query_metrics[key]['precision'] = precision
@@ -444,6 +453,9 @@ class Labeller():
     bool_levels = {'.integers': ['must', 'should']}
     boost_levels = [1]
     
+    t_p = 0.95
+    t_r = 0.3
+    
 
     def __init__(self, source, ref_table_name, match_cols, columns_to_index, must={}, must_not={}):
         self.all_query_templates = gen_all_query_templates(match_cols, 
@@ -457,8 +469,11 @@ class Labeller():
         self.ref_table_name = ref_table_name
         
         self.match_cols = match_cols
+        self.num_rows_proposed_source = 0
+        self.num_rows_proposed_ref = defaultdict(int)
         self.num_rows_labelled = 0
         self.query_metrics = dict()
+        self.agg_query_metrics = dict()
         
         for q_t in self.all_query_templates:
             self.query_metrics[q_t] = []
@@ -470,6 +485,7 @@ class Labeller():
         self.row_idxs = list(idx for idx in random.sample(list(source.index), self.max_num_samples))
         self.pairs = [] # List of (source_id, ref_es_id)
         self.next_row = True
+
     
     def _min_precision(self):
         min_precision = 0
@@ -543,6 +559,33 @@ class Labeller():
             # Remove queries if precision is too low (thresh depends on number of labels)
             self.sorted_keys = list(filter(lambda x: self.agg_query_metrics[x]['precision'] \
                                       >= self._min_precision(), self.sorted_keys))            
+    
+#    def re_start_row(self):
+#        self.num_rows_proposed_ref[self.idx] = 0 
+#        self.num_rows_proposed_source -= 1       
+#        
+#        if self.pairs and self.pairs[-1][0] == self.idx:
+#            self.num_rows_labelled -= 1
+#            self.pairs.pop()
+#            
+#            for val in self.query_metrics.values():
+#                if val and (val[-1][0] == self.idx):
+#                    val.pop()
+#        
+#        self.next_row = True
+#        self.row_idxs.append(self.idx)          
+#        
+#        self.update_agg_query_metrics()
+#        
+#            
+#    def previous_row(self):
+#        '''Todo this deals with previous '''
+#        if not self.pairs:
+#            raise RuntimeError('No previous labels')
+#        
+#        self.num_rows_proposed_ref[self.idx] = 0
+#        self.num_rows_proposed_source
+                    
             
     def _new_label(self):
         '''Return the next pair to label'''
@@ -550,13 +593,17 @@ class Labeller():
         if not self.sorted_keys:
             raise ValueError('No keys in self.sorted_keys')
         
+        # If on a new row, create the generator for the entire row
         if self.next_row: # If previous was found: try new row
-            self.next_row = False
-            try:
+            if self.row_idxs:
                 self.idx = self.row_idxs.pop()
-            except StopIteration:
-                # TODO: log ?
-                return None
+            else:
+                self.next_row = True
+                return None            
+            
+            self.num_rows_proposed_source += 1
+            self.next_row = False
+            
             row = self.source.loc[self.idx]
             
             print('in new_label / in self.next_row / len sorted_keys: {0} / row_idx: {1}'.format(len(self.sorted_keys), self.idx))
@@ -568,7 +615,9 @@ class Labeller():
                             
             self.label_row_gen = self.new_label_row(self.full_responses, self.sorted_keys, self.num_results_labelling)
         
+        # Reteurn next option for row or try next row
         try:
+            self.num_rows_proposed_ref[self.idx] += 1
             return next(self.label_row_gen)
         except StopIteration:
             self.next_row = True
@@ -576,14 +625,17 @@ class Labeller():
         
     def new_label(self):
         '''Returns a pair to label'''
-        ref = self._new_label()
+        ref_item = self._new_label()
         
-        if ref is None:
+        if ref_item is None:
             return None, None
         
-        source = {'_id': self.idx, 
+        source_item = {'_id': self.idx, 
                   '_source': self.source.loc[self.idx].to_dict()}
-        return source, ref
+        
+        self.source_item = source_item
+        self.ref_item = ref_item
+        return source_item, ref_item
     
     def parse_valid_answer(self, user_input):
         is_match = user_input in ['y', '1']  
@@ -605,6 +657,11 @@ class Labeller():
             self.update_query_metrics_on_match(res_id)
             self.num_rows_labelled += 1
             self.next_row = True
+            
+        
+        
+    def update_agg_query_metrics(self):
+        self.agg_query_metrics = calc_agg_query_metrics([x[1] for x in self.query_metrics], t_p=self.t_p, t_r=self.t_r)
 
     def update_query_metrics_on_match(self, res_id):
         '''
@@ -615,8 +672,8 @@ class Labeller():
         print('in update / in is_match')
         # Update individual and aggregated metrics
         for key, response in self.full_responses.items():
-            self.query_metrics[key].append(compute_metrics(response['hits']['hits'], res_id))
-        self.agg_query_metrics = calc_agg_query_metrics(self.query_metrics)
+            self.query_metrics[key].append([self.idx, compute_metrics(response['hits']['hits'], res_id)])
+        self.update_agg_query_metrics()
         
 
 
@@ -655,7 +712,7 @@ class Labeller():
         '''Returns a dictionnary with the best parameters (input for es_linker)'''
         params = dict()
         params['index_name'] = self.ref_table_name
-        params['query_templates'] = self.best_query_template()
+        params['query_templates'] = self._best_query_template()
         params['must'] = self.must
         params['must_not'] = self.must_not
         params['thresh'] = self.threshold
@@ -667,16 +724,31 @@ class Labeller():
         self.must = must
         self.must_not = must_not
         
-    def best_query_template(self):
+    def _best_query_template(self):
+        """Return query template with the best score (ratio)"""
         return sorted(self.full_responses.keys(), key=lambda x: \
                       self.agg_query_metrics[x]['ratio'], reverse=True)[0]
  
     def to_emit(self, message):
-        '''Creates a dict to be sent to the template # TODO: fix this'''
+        '''Creates a dict to be sent to the template #TODO: fix this'''
         dict_to_emit = dict()
-        dict_to_emit['formated_record_pair'] = self._format_record_pair()
-        dict_to_emit['n_match'] = str(self.n_match)
-        dict_to_emit['n_distinct'] = str(self.n_distinct)
+        # Info on pair
+        dict_to_emit['source_item'] = self.source_item
+        dict_to_emit['ref_item'] = self.ref_item
+        
+        # Info on past labelling
+        dict_to_emit['num_proposed_source'] = str(self.num_rows_proposed_source)
+        dict_to_emit['num_proposed_ref'] = str(sum(self.num_rows_proposed_ref.items()))
+        dict_to_emit['num_labelled'] = str(self.num_rows_labelled)
+        dict_to_emit['t_p'] = self.t_p
+        dict_to_emit['t_r'] = self.t_r
+        
+        # Info on current performence
+        b_q_t = self._best_query_template()
+        dict_to_emit['estimated_precision'] = str(self.agg_query_metrics.get(b_q_t, {}).get('precision'))
+        dict_to_emit['estimated_recall'] = str(self.agg_query_metrics.get(b_q_t, {}).get('recall'))
+        dict_to_emit['best_query_template'] = str(b_q_t)
+        
         dict_to_emit['has_previous'] = len(self.examples_buffer) >= 1
         if message:
             dict_to_emit['_message'] = message

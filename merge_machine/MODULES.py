@@ -18,10 +18,11 @@ NORMALIZE_MODULE_ORDER_log = ['INIT', 'make_mini', 'add_selected_columns',
                               'infer_mvs', 'replace_mvs', 'infer_types',
                               'recode_types', 'concat_with_init']
 
-NORMALIZE_MODULE_ORDER = ['INIT', 'make_mini', 'replace_mvs', 'recode_types', 'concat_with_init']
+NORMALIZE_MODULE_ORDER = ['INIT', 'make_mini', 'replace_mvs', 'recode_types', 
+                          'concat_with_init']
 
-LINK_MODULE_ORDER_log = ['add_selected_columns', 'labelling', 'train', 
-                         'upload_train', 'es_linker', 'link_results_analyzer']
+LINK_MODULE_ORDER_log = ['add_selected_columns', 'es_train', 'upload_es_train', 
+                         'es_linker', 'link_results_analyzer']
 
 # Old order using dedupe
 #LINK_MODULE_ORDER_log = ['add_selected_columns', 'load_labeller', 'train', 

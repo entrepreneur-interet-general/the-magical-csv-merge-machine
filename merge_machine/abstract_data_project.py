@@ -68,10 +68,9 @@ class AbstractDataProject(AbstractProject):
 
     def default_log(self):
         '''Default log for a new file'''
-        return {module_name: copy.deepcopy(self.default_module_log) for module_name in self.MODULE_ORDER_log}
+        return {module_name: copy.deepcopy(self.default_module_log) 
+                for module_name in self.MODULE_ORDER_log}
     
-
-
     def get_last_written(self, module_name=None, file_name=None, 
                          before_module=None):
         '''
