@@ -35,8 +35,8 @@ class Linker(AbstractDataProject):
         super().__init__(project_id, create_new, display_name=display_name, description=description)
         
         # Add source and ref if the were selected
-        if (self.metadata['current']['source'] is not None) \
-            and (self.metadata['current']['ref'] is not None):
+        if (self.metadata['files']['source'] is not None) \
+            and (self.metadata['files']['ref'] is not None):
             self.load_project_to_merge('source')
             self.load_project_to_merge('ref')
 
@@ -78,12 +78,12 @@ class Linker(AbstractDataProject):
         # Add source
         
         try:
-            self.source = UserNormalizer(self.metadata['current']['source']['project_id'])
+            self.source = UserNormalizer(self.metadata['files']['source']['project_id'])
         except:
             self.source = None
             
         try:
-            self.ref = ESReferential(self.metadata['current']['ref']['project_id'])
+            self.ref = ESReferential(self.metadata['files']['ref']['project_id'])
         except:
             self.ref = None            
             #raise Exception('Normalizer project with id {0} could not be found'.format(project_id))
@@ -96,12 +96,12 @@ class Linker(AbstractDataProject):
     def check_select(self):
         '''Check that a source and referential were selected'''
         for file_role in ['source', 'ref']:
-            if self.metadata['current'][file_role] is None:
+            if self.metadata['files'][file_role] is None:
                 raise Exception('{0} is not defined for this linking project'.format(file_role))
     
     def create_metadata(self, description=None, display_name=None):
         metadata = super().create_metadata()
-        metadata['current'] = {'source': None, 'ref': None} # {'source': {internal: False, project_id: "ABC123", file_name: "source.csv.csv"}, 'ref': None}
+        metadata['files'] = {'source': None, 'ref': None} # {'source': {internal: False, project_id: "ABC123", file_name: "source.csv.csv"}, 'ref': None}
         return metadata   
 
     def add_col_matches(self, column_matches):
@@ -121,7 +121,6 @@ class Linker(AbstractDataProject):
 
         ref_cols = list(set(y for x in column_matches for y in x['ref']))
         self.ref.add_selected_columns(ref_cols) 
-        
         
         
         # TODO: this will cover add_certain_col_matches
@@ -169,7 +168,7 @@ class Linker(AbstractDataProject):
         '''
         # Check that both projects are finished
         for file_role in ['source', 'ref']:
-            file_name = self.metadata['current'][file_role]['file_name']
+            file_name = self.metadata['files'][file_role]['file_name']
             if not self.__dict__[file_role].metadata['complete'][file_name]:
                 raise Exception('Cannot select columns: complete {0} project \
                                 ({1}) before...'.format(file_role, self.__dict__[file_role].project_id))
@@ -224,7 +223,7 @@ class Linker(AbstractDataProject):
             proj = 'MINI__' + file_name.replace('MINI__', '')
 
         # Check that         
-        self.metadata['current'][file_role] = {'internal': internal, 
+        self.metadata['files'][file_role] = {'internal': internal, 
                                              'project_id': project_id,
                                              'module_name': module_name,
                                              'file_name': file_name,
@@ -238,9 +237,9 @@ class Linker(AbstractDataProject):
        
     def read_selected_files(self):
         '''
-        Returns self.metadata['current']
+        Returns self.metadata['files']
         '''
-        return self.metadata['current']
+        return self.metadata['files']
     
     def infer(self, module_name, params):
         '''Overwrite to allow restrict_reference'''
@@ -328,13 +327,13 @@ class Linker(AbstractDataProject):
         # TODO: check that normalization projects are complete ?
         
         # Get path to source
-        file_name = self.metadata['current']['source']['file_name']
+        file_name = self.metadata['files']['source']['file_name']
         source_path = self.source.path_to_last_written(module_name=None, 
                     file_name=file_name)
         
         # Get path to ref
-        file_name = self.metadata['current']['ref']['file_name']
-        if self.metadata['current']['ref']['restricted']:
+        file_name = self.metadata['files']['ref']['file_name']
+        if self.metadata['files']['ref']['restricted']:
             ref_path = self.path_to('restriction', file_name)
         else:
             ref_path = self.ref.path_to_last_written(module_name=None, 
@@ -422,7 +421,7 @@ class Linker(AbstractDataProject):
         
         # Get path to source
         # TODO: fix this: use current
-        file_name = self.metadata['current']['source']['file_name']
+        file_name = self.metadata['files']['source']['file_name']
         source_path = self.source.path_to_last_written(module_name=None, 
                     file_name=file_name)
         
@@ -468,8 +467,8 @@ class Linker(AbstractDataProject):
     def create_es_index_ref(self, columns_to_index, force=False):
         
         self.ref = ESReferential(self.ref.project_id)
-        ref_path = self.ref.path_to(self.metadata['current']['ref']['module_name'],
-                                    self.metadata['current']['ref']['file_name'])
+        ref_path = self.ref.path_to(self.metadata['files']['ref']['module_name'],
+                                    self.metadata['files']['ref']['file_name'])
         return self.ref.create_index(ref_path, columns_to_index, force)
 
 
@@ -497,8 +496,8 @@ class Linker(AbstractDataProject):
         
         # TODO: Move this
         self.load_project_to_merge('ref')
-        module_name = self.metadata['current']['ref']['module_name']
-        file_name = self.metadata['current']['ref']['file_name']
+        module_name = self.metadata['files']['ref']['module_name']
+        file_name = self.metadata['files']['ref']['file_name']
         
         self.ref.load_data(module_name, file_name, restrict_to_selected=False)   
         
@@ -515,7 +514,7 @@ class Linker(AbstractDataProject):
         #        self.run_info_buffer[(current_module_name, '__REF__')][current_module_name] = run_info # TODO: fishy
         
         # Add restricted to current for restricted
-        self.metadata['current']['ref']['restricted'] = True
+        self.metadata['files']['ref']['restricted'] = True
         
         # TODO: write new_ref to "restriction"
         self.write_data()
@@ -623,7 +622,7 @@ if __name__ == '__main__':
         ref.create_index(ref_path, columns_to_index, force=False)
         
         # Link
-        index_name = proj.metadata['current']['ref']['project_id']
+        index_name = proj.metadata['files']['ref']['project_id']
         query_template = (('must', 'commune', 'localite_acheminement_uai', '.french', 1), ('must', 'lycees_sources', 'full_name', '.french', 1))
         threshold = 3.5
         must = {'full_name': ['lycee']}

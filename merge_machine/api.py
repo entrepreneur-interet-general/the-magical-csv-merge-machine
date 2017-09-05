@@ -434,8 +434,8 @@ def web_infertypes_link(project_id, file_role):
     _check_file_role(file_role)
     
     proj = UserLinker(project_id)
-    normalize_project_id = proj.metadata['current'][file_role]['project_id']
-    normalize_file_name = proj.metadata['current'][file_role]['file_name']
+    normalize_project_id = proj.metadata['files'][file_role]['project_id']
+    normalize_file_name = proj.metadata['files'][file_role]['file_name']
     
     if file_role == 'source':
         next_url = url_for('_web_infertypes_link', project_id=project_id, file_role='ref')
@@ -512,8 +512,8 @@ def web_mvs_link(project_id, file_role):
     _check_file_role(file_role)
     
     proj = UserLinker(project_id)
-    normalize_project_id = proj.metadata['current'][file_role]['project_id']
-    normalize_file_name = proj.metadata['current'][file_role]['file_name']
+    normalize_project_id = proj.metadata['files'][file_role]['project_id']
+    normalize_file_name = proj.metadata['files'][file_role]['file_name']
     
     if file_role == 'source':
         next_url = url_for('web_mvs_link', project_id=project_id, file_role='ref')
@@ -718,8 +718,8 @@ def web_dedupe(project_id):
     '''Labelling / training and matching using dedupe'''
     proj = UserLinker(project_id)
     
-    source_id = proj.metadata['current']['source']['project_id']
-    ref_id = proj.metadata['current']['source']['project_id']
+    source_id = proj.metadata['files']['source']['project_id']
+    ref_id = proj.metadata['files']['source']['project_id']
     
     source_cat_api_url = url_for('schedule_job',
                                     job_name='concat_with_init', 
@@ -764,7 +764,7 @@ def web_select_return(project_type, project_id):
 
     for file_role in ['source', 'ref']:
         # Load sample
-        data = proj.metadata['current'][file_role]
+        data = proj.metadata['files'][file_role]
         
         proj.load_project_to_merge(file_role)       
         (module_name, file_name) = proj.__dict__[file_role].get_last_written(None, 
@@ -931,9 +931,9 @@ def web_view_results(project_type, project_id):
     else:
         match_error_samples = []
     
-    #    source_sample = proj.get_sample('INIT', proj.metadata['current']['source']['file_name'],
+    #    source_sample = proj.get_sample('INIT', proj.metadata['files']['source']['file_name'],
     #                                row_idxs=rows_to_display, columns=cols_to_display_source)
-    #ref_sample = proj.get_sample('ref', 'INIT', proj.metadata['current']['ref']['file_name'],
+    #ref_sample = proj.get_sample('ref', 'INIT', proj.metadata['files']['ref']['file_name'],
     #                            row_idxs=rows_to_display, columns=cols_to_display_ref)
 
     return render_template('last_page_old.html', 
