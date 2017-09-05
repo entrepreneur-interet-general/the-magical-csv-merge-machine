@@ -11,8 +11,6 @@ Add extend sorted keys
 
 Add option to label full file (no inference on unlabelled)
 
-Do not re-index !
-
 """
 import itertools
 import json
@@ -557,7 +555,8 @@ class Labeller():
             try:
                 self.idx = self.row_idxs.pop()
             except StopIteration:
-                return False
+                # TODO: log ?
+                return None
             row = self.source.loc[self.idx]
             
             print('in new_label / in self.next_row / len sorted_keys: {0} / row_idx: {1}'.format(len(self.sorted_keys), self.idx))
@@ -578,6 +577,10 @@ class Labeller():
     def new_label(self):
         '''Returns a pair to label'''
         ref = self._new_label()
+        
+        if ref is None:
+            return None, None
+        
         source = {'_id': self.idx, 
                   '_source': self.source.loc[self.idx].to_dict()}
         return source, ref
