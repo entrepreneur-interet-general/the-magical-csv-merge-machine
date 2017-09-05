@@ -122,6 +122,15 @@ class Linker(AbstractDataProject):
         ref_cols = list(set(y for x in column_matches for y in x['ref']))
         self.ref.add_selected_columns(ref_cols) 
         
+        
+        
+        # TODO: this will cover add_certain_col_matches
+        # Add to log
+        for file_name in self.metadata['log']:
+            self.metadata['log'][file_name]['add_selected_columns']['completed'] = True        
+        self.write_metadata()   
+
+        
     def read_col_matches(self, add_created=True):
         '''
         Read the column_matches config file and interprets the columns looking
