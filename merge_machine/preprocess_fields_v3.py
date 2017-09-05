@@ -12,7 +12,6 @@ import pandas as pd
 import numpy as np
 
 # Parsing/normalization packages
-import gridding
 import custom_name_parsing
 import urllib.request, urllib.parse, json # For BAN address API on data.gouv.fr
 from dateparser import DateDataParser
@@ -1781,7 +1780,11 @@ def generate_value_matchers(lvl = 1):
 	yield SubtypeMatcher(F_RD, [F_RD_STRUCT, F_RD_PARTNER, F_CLINICALTRIAL_COLLAB])
 
 	if lvl >= 2:
-		yield GridMatcher()
+		try:
+			import gridding
+			yield GridMatcher()
+		except ImportError as ie:
+			logging.warning('Could not import gridding module required by GridMatcher')
 
 	## Enseignement et Enseignement Supérieur
 	academy_labels = file_to_set('academie') # file_to_set('academie') | file_to_set('region')
@@ -1830,9 +1833,12 @@ def generate_value_matchers(lvl = 1):
 		yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT, stopWords = STOP_WORDS_CITY)
 		yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
 
-	if lvl >= 0:
+	if lvl >= 2:
 		yield TokenizedMatcher(F_DPT, file_to_set('departement'), distinctCount = 7)
 		yield TokenizedMatcher(F_REGION, file_to_set('region'), distinctCount = 3)
+	elif lvl >= 0:
+		yield LabelMatcher(F_DPT, file_to_set('departement'), MATCH_MODE_EXACT)
+		yield LabelMatcher(F_REGION, file_to_set('region'), MATCH_MODE_EXACT)
 	if lvl >= 1: 
 		yield TokenizedMatcher(F_STREET, file_to_set('voie.col'), maxTokens = 2)
 	yield CompositeMatcher(F_ADDRESS, [F_STREET, F_ZIP, F_CITY, F_COUNTRY])
@@ -2010,7 +2016,7 @@ if __name__ == '__main__':
 	separator = options.delimiter if options.delimiter else '|'
 	outputFormat = options.of if options.of else separator
 	fields = parse_fields_from_CSV(options.srcFileName, delimiter = separator)
-	inPlace = True # options.ip
+	inPlace = False # options.ip
 
 	# Single-pass method
 	# fields.process_values(outputFormat = outputFormat)
@@ -2033,7 +2039,7 @@ if __name__ == '__main__':
 		for i, v in enumerate(vs):
 			res[i][of] = v
 	# Output normalization results
-	ofs = sorted(uniq(hofs), key = outputFieldKey)
+	ofs = sorted(uniq(hofs))
 	if outputFormat == 'md':
 		print('|{}|'.format('|'.join(ofs)))
 		print('|{}|'.format('|'.join('-' * len(ofs))))
