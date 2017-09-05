@@ -1505,8 +1505,11 @@ class FrenchAddressMatcher(LabelMatcher):
 		response = urllib.request.urlopen("http://api-adresse.data.gouv.fr/search/?q=" + urllib.parse.quote_plus(c.value))
 		try:
 			data = json.loads(response.read())
-		except ValueError as e:
-			logging.warning('adresse.data.gouv.fr returned unexpected response: {}'.format(e))
+		except ValueError as ve:
+			logging.warning('adresse.data.gouv.fr returned unexpected response: {}'.format(ve))
+			return
+		except TypeError as te:
+			logging.warning('adresse.data.gouv.fr returned badly typed response: {}'.format(te))
 			return
 		if not data or 'features' not in data: return
 		logging.debug('Returned %d results from api-adresse.data.gouv.fr for %s', len(data['features']), c.value)
@@ -1669,7 +1672,7 @@ def value_matchers():
 			VALUE_MATCHERS.append(vm)
 	return VALUE_MATCHERS
 
-def generate_value_matchers(lvl = 2):
+def generate_value_matchers(lvl = 1):
 	''' Generates type matcher objects that can be applied to each value cell in a column in order to infer
 		whether that column's type is the matcher's type (or alternatively a parent type or a child type).
 
