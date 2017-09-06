@@ -110,14 +110,15 @@ for i in range(100):
         break
     
     for x in range(10):
-        user_input = labeller._user_input(source_item, ref_item, test_num)
+        user_input = labeller._console_input(source_item, ref_item, test_num)
         if labeller.answer_is_valid(user_input):
             break
+        else:
+            print('Invalid answer ("y"/"1", "n"/"0", "u" or "p")')
     else:
         raise ValueError('No valid answer after 10 iterations')
            
-    is_match = labeller.parse_valid_answer(user_input)
-    labeller.update(is_match, ref_item['_id'])
+    labeller.update(user_input, ref_item['_id'])
     
     if (test_num == 0) and i == 3:
         labeller.update_musts({'NOMEN_LONG': ['lycee']},

@@ -453,6 +453,7 @@ def es_linker(source, params):
     return new_source, modified
 
 
+
 class Labeller():
     max_num_samples = 100
     min_precision_tab = [(20, 0.7), (10, 0.5), (5, 0.3)]
@@ -568,13 +569,19 @@ class Labeller():
             # Remove queries if precision is too low (thresh depends on number of labels)
             self.sorted_keys = list(filter(lambda x: self.agg_query_metrics[x]['precision'] \
                                       >= self._min_precision(), self.sorted_keys))            
-    
+
     def previous(self):
-        if not self.next_row:
-            self.restart_row()
-        else:
-            self.previous_row()
+        print('self.first_propoal_for_source_idx:', self.first_propoal_for_source_idx)
+        print('self.next_row:', self.next_row)
+        print('self.num_rows_labelled:', self.num_rows_labelled)
+        print('self.num_rows_proposed_source:', self.num_rows_proposed_source)
+        print('self.num_rows_proposed_ref:', self.num_rows_proposed_ref)
         
+        
+        if self.first_propoal_for_source_idx:
+            self.previous_row()
+        else:
+            self.restart_row()        
     
     def restart_row(self):
         '''Re-initiates labelling for row self.idx'''       
@@ -608,24 +615,28 @@ class Labeller():
         if not self.pairs:
             raise RuntimeError('No previous labels')
         
-        self.re_start_row()
+        self.restart_row()
         
         previous_idx = self.pairs.pop()[0]
+        self.row_idxs.append(previous_idx)
         self.num_rows_labelled -= 1
 
         self.num_rows_proposed_ref[previous_idx] = 0
         self.num_rows_proposed_source -= 1
             
+        print('self.next_row:', self.next_row)
     def _new_label(self):
         '''Return the next pair to label'''
         # If looking for a new row from source, initiate the generator
         if not self.sorted_keys:
             raise ValueError('No keys in self.sorted_keys')
         
+        self.first_propoal_for_source_idx = False
         # If on a new row, create the generator for the entire row
         if self.next_row: # If previous was found: try new row
             if self.row_idxs:
                 self.idx = self.row_idxs.pop()
+                self.first_propoal_for_source_idx = True
             else:
                 return None            
             
@@ -739,10 +750,6 @@ class Labeller():
     def answer_is_valid(self, user_input):
         '''Check if the user input is valid'''
         valid_responses = {'y', 'n', 'u', '0', '1', 'p'}
-        #        if self.examples_buffer:
-        #            valid_responses = {'y', 'n', 'u', 'f', 'p'}
-        #        else: 
-        #            valid_responses = {'y', 'n', 'u', 'f'}
         return user_input in valid_responses
 
     def export_best_params(self):

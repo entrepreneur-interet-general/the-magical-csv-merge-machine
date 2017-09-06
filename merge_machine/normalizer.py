@@ -133,7 +133,6 @@ class Normalizer(AbstractDataProject):
         return resp
 
 
-
     def path_to_last_written(self, module_name=None, file_name=None, before_module=None):
         (module_name, file_name) = self.get_last_written(module_name,
                                                         file_name, before_module)
@@ -325,7 +324,7 @@ class Normalizer(AbstractDataProject):
         # Check that selected columns are in the original header
         for col in columns:
             if col not in self.metadata['column_tracker']['original']:
-                raise ValueError('Selected column {0} is not in uploaded header (can be different from the original file)\n --> uploaded header: ({1})'.format(\
+                raise ValueError('Selected column {0} is not in uploaded file (can be different from the original file)\n --> uploaded header: ({1})'.format(\
                                 col, self.metadata['column_tracker']['original']))
         
         # If a selected column was not previously selected, delete all 
@@ -432,6 +431,7 @@ class Normalizer(AbstractDataProject):
     def run_all_transforms(self):
         '''Runs all modules on data in memory. And config from module names
         # TODO: move to abstract_data_project ?
+        # TODO: check skipped
         '''
         self.check_mem_data()
         
