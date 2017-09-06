@@ -763,7 +763,7 @@ class Labeller():
         
     def _best_query_template(self):
         """Return query template with the best score (ratio)"""
-        return sorted(self.full_responses.keys(), key=lambda x: \
+        return sorted(self.agg_query_metrics.keys(), key=lambda x: \
                       self.agg_query_metrics[x]['ratio'], reverse=True)[0]
  
     def to_emit(self, message):
@@ -775,16 +775,16 @@ class Labeller():
         
         # Info on past labelling
         dict_to_emit['num_proposed_source'] = str(self.num_rows_proposed_source)
-        dict_to_emit['num_proposed_ref'] = 'temp_num_proposed_ref'#str(sum(self.num_rows_proposed_ref.items()))
+        dict_to_emit['num_proposed_ref'] = str(sum(self.num_rows_proposed_ref.values()))
         dict_to_emit['num_labelled'] = str(self.num_rows_labelled)
         dict_to_emit['t_p'] = self.t_p
         dict_to_emit['t_r'] = self.t_r
         
         # Info on current performence
-        #b_q_t = self._best_query_template()
-        dict_to_emit['estimated_precision'] = 'temp_precision' #str(self.agg_query_metrics.get(b_q_t, {}).get('precision'))
-        dict_to_emit['estimated_recall'] = 'temp_recall' #str(self.agg_query_metrics.get(b_q_t, {}).get('recall'))
-        dict_to_emit['best_query_template'] = 'temp_best_query'#str(b_q_t)
+        b_q_t = self._best_query_template()
+        dict_to_emit['estimated_precision'] = str(self.agg_query_metrics.get(b_q_t, {}).get('precision'))
+        dict_to_emit['estimated_recall'] = str(self.agg_query_metrics.get(b_q_t, {}).get('recall'))
+        dict_to_emit['best_query_template'] = str(b_q_t)
         
         dict_to_emit['has_previous'] = 'temp_has_previous'# len(self.examples_buffer) >= 1
         if message:
