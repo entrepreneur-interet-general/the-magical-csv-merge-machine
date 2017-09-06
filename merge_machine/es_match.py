@@ -506,6 +506,10 @@ class Labeller():
 
     def _console_input(self, source_item, ref_item, test_num=0):
         print('\n***** {0} / {1} / ({2})'.format(ref_item['_id'], ref_item['_score'], self.num_rows_labelled))
+        print('self.first_propoal_for_source_idx:', self.first_propoal_for_source_idx)
+        print('self.num_rows_labelled:', self.num_rows_labelled)
+        print('self.num_rows_proposed_source:', self.num_rows_proposed_source)
+        print('self.num_rows_proposed_ref:', self.num_rows_proposed_ref)
         for match in self.match_cols:
             if isinstance(match['ref'], str):
                 cols = [match['ref']]
@@ -571,13 +575,7 @@ class Labeller():
                                       >= self._min_precision(), self.sorted_keys))            
 
     def previous(self):
-        print('self.first_propoal_for_source_idx:', self.first_propoal_for_source_idx)
         print('self.next_row:', self.next_row)
-        print('self.num_rows_labelled:', self.num_rows_labelled)
-        print('self.num_rows_proposed_source:', self.num_rows_proposed_source)
-        print('self.num_rows_proposed_ref:', self.num_rows_proposed_ref)
-        
-        
         if self.first_propoal_for_source_idx:
             self.previous_row()
         else:
@@ -608,7 +606,7 @@ class Labeller():
         self.row_idxs.append(self.idx)
         
         # self.query_metrics = dict()
-        self.update_agg_query_metrics()       
+        
             
     def previous_row(self):
         '''Todo this deals with previous '''
@@ -623,7 +621,13 @@ class Labeller():
 
         self.num_rows_proposed_ref[previous_idx] = 0
         self.num_rows_proposed_source -= 1
-            
+        
+        # TODO: remove try, except
+        try:
+            self.update_agg_query_metrics()       
+        except:
+            print('Could not update agg_query_metrics')
+            pass        
         print('self.next_row:', self.next_row)
     def _new_label(self):
         '''Return the next pair to label'''
