@@ -42,7 +42,7 @@ def timed(original_func):
 		t = int((end - start) * MICROS_PER_SEC)
 		timingInfo[key] += t
 		countInfo[key] += 1
-		# snapshot_timing(end)
+		snapshot_timing(end)
 		return result
 	return wrapper
 
@@ -225,19 +225,26 @@ def normalize_and_validate_phrase(value,
 def validated_lexicon(lexicon, tokenize = False):
 	return set(filter(lambda v: v is not None, [normalize_or_not(s, tokenize) for s in lexicon]))
 
+def add_to_lexicon_map(lexical_map, s, tokenize, stopWords):
+	k = normalize_and_validate_phrase(s, stopWords = stopWords) if tokenize else case_phrase(s)
+	if k is None: return
+	lexical_map[k].append(s)
+
+def cased_multi_map(mm):
+	return dict([(case_phrase(k), set([case_phrase(v) for v in vs])) for k, vs in mm.items()])
+
 def validated_lexical_map(lexicon, tokenize = False, stopWords = None, synMap = None):
 	''' Returns a dictionary from normalized string to list of original strings. '''
-	def add_to_lexicon_map(lm, s, tokenize, stopWords):
-		k = normalize_and_validate_phrase(s, stopWords = stopWords) if tokenize else case_phrase(s, False)
-		if k is None: return
-		lm[k].append(s)
-	lm = defaultdict(list)
+	syn_map0 = None if synMap is None else cased_multi_map(synMap)
+	lexical_map = defaultdict(list)
 	for s in lexicon:
-		add_to_lexicon_map(lm, s, tokenize, stopWords)
-	if synMap is not None:
-		for (mainVariant, altVariants) in synMap.items():
-			add_to_lexicon_map(lm, mainVariant, tokenize, stopWords)
-	return lm
+		if syn_map0 is not None:
+			for (main_var, alt_vars) in synMap.items():
+				s = re.sub(r"\b(%s)\b" % '|'.join(alt_vars), main_var, s, re.I)
+				# for alt_var in alt_vars:
+				# 	s = re.sub(r"\b%s\b" % alt_var, main_var, s)
+		add_to_lexicon_map(lexical_map, s, tokenize, stopWords)
+	return lexical_map
 
 # Loading CSV and raw (one entry per line) text files
 
@@ -409,6 +416,11 @@ F_PHYTO = u'Phyto'
 F_AGRO = u'Entité agro'
 F_RAISON_SOCIALE = u'Raison sociale'
 
+# This mapping only covers supertype-subtype relationships
+SUBTYPING_RELS = defaultdict(set)
+# This mapping only covers composition relationships
+COMPOSITION_RELS = defaultdict(set)
+# This mapping covers both subtyping and composition relationships
 PARENT_CHILD_RELS = defaultdict(set)
 
 TYPE_TAGS = {
@@ -473,7 +485,8 @@ class TypeMatcher(object):
 		return 1
 	def __str__(self):
 		return '{}<{}>'.format(self.__class__.__name__, self.t)
-	def register_full_match(self, c, t, ms, hit = None):
+	def register_full_match(self, c, t, s, hit = None):
+		ms = cover_score(self.value, hit) if s is None else s
 		outputFieldPrefix = None if self.t == t else self.t 
 		c.register_full_match(t, outputFieldPrefix, ms, hit)
 		self.update_diversity(hit)
@@ -725,6 +738,7 @@ class SubtypeMatcher(TypeMatcher):
 		if len(subtypes) < 1: raise Error('Invalid subtype matcher setup')
 		logging.info('SET UP subtype matcher for <%s> with subtypes: %s', self.t, ', '.join(subtypes))
 		PARENT_CHILD_RELS[t] |= set(subtypes)
+		SUBTYPING_RELS[t] |= set(subtypes)
 	def match(self, c):
 		sts = list(self.subtypes & c.non_excluded_types())
 		if len(sts) < 1: return None
@@ -751,7 +765,8 @@ class CompositeMatcher(TypeMatcher):
 		self.compTypes = compTypes
 		if len(compTypes) < 1: raise RuntimeError('Invalid composite matcher setup')
 		logging.info('SET UP composite matcher for <%s> with %d types', self.t, len(compTypes))
-		#PARENT_CHILD_RELS[t] |= set(compTypes)
+		PARENT_CHILD_RELS[t] |= set(compTypes)
+		COMPOSITION_RELS[t] |= set(compTypes)
 	def match(self, c):
 		sts = list(set(self.compTypes) & c.non_excluded_types())
 		if len(sts) < 1: return None
@@ -814,11 +829,11 @@ class CompositeRegexMatcher(TypeMatcher):
 
 # Object model representing our inference process
 
-# Drop inferred types falling below this column-wide threshold:
+# Drop inferred types falling below this column-wide threshold (in percent):
 COLUMN_SCORE_THRESHOLD = 10
-# For both supertype and composite-type relationships, switch from parent to child type when:
+# For supertype relationships only (not composite-type!), switch from parent to child type when:
 #   parent's score < this ratio * child's score
-PARENT_CHILD_RATIO = 2
+SUBTYPING_RATIO = 2
 # SUPERTYPE_RATIO = 2 # Switch from parent to child type when: parent's score < this ratio * child's score
 # COMPTYPE_RATIO = 2 # Switch from composite to component type when: composite's score < this ratio * child's score
 
@@ -962,7 +977,7 @@ class Fields(object):
 			logging.info('Sorted types for {}: {}'. format(fieldName, '; '.join(['{} ({}) '.format(t, s) for (t, s) in ts])))
 			for (t, s) in ts:
 				betterField = any((p[1] > s and p[0] not in types) for p in t2f[t])
-				betterChild = t in PARENT_CHILD_RELS and any((p[1] * PARENT_CHILD_RATIO > s and p[0] in PARENT_CHILD_RELS[t]) for p in ts)
+				betterChild = t in SUBTYPING_RELS and any((p[1] * SUBTYPING_RATIO > s and p[0] in SUBTYPING_RELS[t]) for p in ts)
 				if not (betterField or betterChild):
 					logging.info('Likeliest type for %s values: %s', fieldName, t)
 					types[fieldName] = t
@@ -1095,6 +1110,9 @@ def checkSpan(hit, span):
 	if not span or span[0] < 0 or span[1] <= span[0]:
 		logging.warning('Invalid span for hit=%s: %s', hit, span)
 
+def cover_score(s1, s2):
+	return len(s1) * 100 < len(s2) if len(s1) < len(s2) else cover_score(s2, s1)
+
 CONVERT_NAN_TO_EMPTY = True
 
 class Cell(object):
@@ -1185,11 +1203,20 @@ class Cell(object):
 				s |= set([ucv for ucv in ucvs if ucv is not None and len(ucv) > 0])
 		return list(s) if len(s) > 0 else [self.value]
 	def type_to_normalize(self, t):
-		if t in self.tis and t not in self.nts: return t
-		if t in PARENT_CHILD_RELS:
-			for ct in PARENT_CHILD_RELS[t]:
+		if t in self.tis and t not in self.nts: 
+			whole_score = self.max_type_score(t)
+			if t in COMPOSITION_RELS:
+				for ct in COMPOSITION_RELS[t]:
+					if ct in self.tis and ct not in self.nts: 
+						part_score = self.max_type_score(ct)
+						if part_score > whole_score: return ct
+			return t
+		if t in SUBTYPING_RELS:
+			for ct in SUBTYPING_RELS[t]:
 				if ct in self.tis and ct not in self.nts: return ct
 		return None
+	def max_type_score(self, t):
+		return 0 if t not in self.tis else max([ti.ms for ti in self.tis[t]])
 
 def set_as_list_or_singleton(v):
 	s = set(v)
@@ -1435,11 +1462,6 @@ class CustomPersonNameMatcher(TypeMatcher):
 		parsed_names = custom_name_parsing.extractPersonNames(l)
 		if len(parsed_names) < 1: return
 		normalized_parsed_names = list([custom_name_parsing.joinPersonName(pn) for pn in parsed_names])
-		# if len(normalized_parsed_names) == 1:
-		# 	self.register_full_match(c, self.t, 100, parsedName[0], (parsedName[1], parsedName[2]))
-		# else:
-		# 	for npn in normalized_parsed_names:
-		# 		self.register_partial_match(c, self.t, 100, v, (parsedName[1], parsedName[2]))
 		self.register_full_match(c, self.t, 100, '; '.join(normalized_parsed_names))
 
 # Phone number normalization
@@ -1495,7 +1517,7 @@ class CustomAddressMatcher(TypeMatcher):
 					comp.append(value)
 			if len(comp) > 0: comps.append(' '.join(comp))
 		if len(comps) > 0:
-			self.register_full_match(c, self.t, 100, ' '.join(comps))
+			self.register_full_match(c, self.t, None, ' '.join(comps))
 
 COMMUNE_LEXICON = file_to_set('commune')
 
@@ -1508,13 +1530,13 @@ class FrenchAddressMatcher(LabelMatcher):
 			response = urllib.request.urlopen("http://api-adresse.data.gouv.fr/search/?q=" + urllib.parse.quote_plus(c.value))
 			data = json.loads(response.read())
 		except urllib.error.HTTPError as he:
-			logging.warning('adresse.data.gouv.fr rejected request: {}'.format(he))
+			logging.warning('adresse.data.gouv.fr rejected request for "{}": {}'.format(c.value, he))
 			return
 		except ValueError as ve:
-			logging.warning('adresse.data.gouv.fr returned unexpected response: {}'.format(ve))
+			logging.warning('adresse.data.gouv.fr returned unexpected response for "{}": {}'.format(c.value, ve))
 			return
 		except TypeError as te:
-			logging.warning('adresse.data.gouv.fr returned badly typed response: {}'.format(te))
+			logging.warning('adresse.data.gouv.fr returned badly typed response for "{}": {}'.format(c.value, te))
 			return
 		if not data or 'features' not in data: return
 		logging.debug('Returned %d results from api-adresse.data.gouv.fr for %s', len(data['features']), c.value)
@@ -1817,7 +1839,7 @@ def generate_value_matchers(lvl = 1):
 	yield SubtypeMatcher(F_MESR, [F_RD, F_APB_MENTION, F_RD_DOMAIN, F_ETAB, F_ACADEMIE])
 
 	# Geo Domain
-	if lvl >= 1: 
+	if lvl >= 2: 
 		yield FrenchAddressMatcher()
 
 	if lvl >= 2: 
@@ -1836,7 +1858,7 @@ def generate_value_matchers(lvl = 1):
 	if lvl >= 2: 
 		yield TokenizedMatcher(F_CITY, COMMUNE_LEXICON, maxTokens = 3, stopWords = STOP_WORDS_CITY)
 	elif lvl >= 0: 
-		yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT, stopWords = STOP_WORDS_CITY)
+		yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT, stopWords = STOP_WORDS_CITY, synMap = { 'st': 'saint' })
 		yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
 
 	if lvl >= 2:
