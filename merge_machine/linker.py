@@ -109,7 +109,7 @@ class Linker(AbstractDataProject):
         # TODO: add checks on file
         
         # Add matches
-        self.upload_config_data(column_matches, 'dedupe_linker', 'column_matches.json')
+        self.upload_config_data(column_matches, 'es_linker', 'column_matches.json')
         
         # Select these columns for normalization in source and ref
         source_cols = list(set(y for x in column_matches for y in x['source']))
@@ -131,7 +131,7 @@ class Linker(AbstractDataProject):
         Read the column_matches config file and interprets the columns looking
         for processed (normalized) columns
         '''
-        config = self.read_config_data('dedupe_linker', 'column_matches.json')
+        config = self.read_config_data('es_linker', 'column_matches.json')
         
         if not config:
             config = []
@@ -149,10 +149,10 @@ class Linker(AbstractDataProject):
     def add_col_certain_matches(self, column_matches):
         '''column_matches is a json file as list of dict of list'''
         # TODO: add checks on file
-        self.upload_config_data(column_matches, 'dedupe_linker', 'column_certain_matches.json')
+        self.upload_config_data(column_matches, 'es_linker', 'column_certain_matches.json')
 
     def read_col_certain_matches(self):
-        config = self.read_config_data('dedupe_linker', 'column_certain_matches.json')
+        config = self.read_config_data('es_linker', 'column_certain_matches.json')
         if not config:
             config = []
         return config    
@@ -171,11 +171,11 @@ class Linker(AbstractDataProject):
         
         # Write columns to return to config
         config_file_name = 'columns_to_return_{0}.json'.format(file_role)
-        self.upload_config_data(columns, 'dedupe_linker', config_file_name)
+        self.upload_config_data(columns, 'es_linker', config_file_name)
         
     def read_cols_to_return(self, file_role):
         config_file_name = 'columns_to_return_{0}.json'.format(file_role)
-        config = self.read_config_data('dedupe_linker', config_file_name)
+        config = self.read_config_data('es_linker', config_file_name)
         if not config:
             config = []
         return config
@@ -414,7 +414,7 @@ class Linker(AbstractDataProject):
     def _gen_paths_es(self):        
         self.check_select()
         
-        # Get path to training file for dedupe
+        # Get path to training file for ES linker
         training_path = self.path_to('es_linker', 'training.json')
         learned_settings_path = self.path_to('es_linker', 'learned_settings.json')
         
