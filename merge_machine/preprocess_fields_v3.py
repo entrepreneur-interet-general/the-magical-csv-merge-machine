@@ -751,7 +751,7 @@ class CompositeMatcher(TypeMatcher):
 		self.compTypes = compTypes
 		if len(compTypes) < 1: raise RuntimeError('Invalid composite matcher setup')
 		logging.info('SET UP composite matcher for <%s> with %d types', self.t, len(compTypes))
-		PARENT_CHILD_RELS[t] |= set(compTypes)
+		#PARENT_CHILD_RELS[t] |= set(compTypes)
 	def match(self, c):
 		sts = list(set(self.compTypes) & c.non_excluded_types())
 		if len(sts) < 1: return None
@@ -1120,7 +1120,6 @@ class Cell(object):
 		''' Does the opposite of negating this type: more precisely, it indicates that there is enough diversity
 			across the entire value set, so that *if* any matcher for the type has enough recall, the field-wide
 			match will be accepted. '''
-		logging.debug('Posited type {} for "{}"'.format(t, self.value))
 		self.pts.add(t)
 	def non_excluded_types(self):
 		return set(self.tis.keys()) & self.pts - self.nts
@@ -1161,8 +1160,9 @@ class Cell(object):
 		return sorted(scores.keys(), key = lambda t: scores[t], reverse = True)[0]
 	def normalized_values(self, t):
 		res = defaultdict(set)
-		if t in self.tis and t not in self.nts:
-			for ti in self.tis[t]:
+		nt = self.type_to_normalize(t)
+		if nt is not None:
+			for ti in self.tis[nt]:
 				if isinstance(ti.hit, list): res[ti.t] |= set(ti.hit)
 				else: res[ti.t].add(str(ti.hit))
 		nvs = dict()
@@ -1175,17 +1175,21 @@ class Cell(object):
 	def normalized_values_in_place(self, t):
 		res = defaultdict(set)
 		s = set()
-		if t in self.tis and t not in self.nts:
-			for ti in self.tis[t]:
+		nt = self.type_to_normalize(t)
+		if nt is not None:
+			for ti in self.tis[nt]:
 				if isinstance(ti.hit, list): res[ti.t] |= set(ti.hit)
 				else: res[ti.t].add(str(ti.hit))
 			for (k, v) in res.items():
 				ucvs = unique_cell_values(v)
 				s |= set([ucv for ucv in ucvs if ucv is not None and len(ucv) > 0])
-				# l = list([ucv for ucv in ucvs if ucv is not None and len(ucv) > 0])
-				# if len(l) < 1: s.add(v)
-				# else: s |= set(l)
 		return list(s) if len(s) > 0 else [self.value]
+	def type_to_normalize(self, t):
+		if t in self.tis and t not in self.nts: return t
+		if t in PARENT_CHILD_RELS:
+			for ct in PARENT_CHILD_RELS[t]:
+				if ct in self.tis and ct not in self.nts: return ct
+		return None
 
 def set_as_list_or_singleton(v):
 	s = set(v)
@@ -1460,7 +1464,6 @@ BAN_MAPPING = [
 	(F_CITY, 'city') ]
 
 
-
 class CustomAddressMatcher(TypeMatcher):
 	def __init__(self):
 		super(CustomAddressMatcher, self).__init__(F_ADDRESS)
@@ -1501,9 +1504,12 @@ class FrenchAddressMatcher(LabelMatcher):
 		super(FrenchAddressMatcher, self).__init__(F_ADDRESS, COMMUNE_LEXICON, MATCH_MODE_CLOSE)
 	@timed
 	def match(self, c):
-		response = urllib.request.urlopen("http://api-adresse.data.gouv.fr/search/?q=" + urllib.parse.quote_plus(c.value))
 		try:
+			response = urllib.request.urlopen("http://api-adresse.data.gouv.fr/search/?q=" + urllib.parse.quote_plus(c.value))
 			data = json.loads(response.read())
+		except urllib.error.HTTPError as he:
+			logging.warning('adresse.data.gouv.fr rejected request: {}'.format(he))
+			return
 		except ValueError as ve:
 			logging.warning('adresse.data.gouv.fr returned unexpected response: {}'.format(ve))
 			return
@@ -1811,7 +1817,7 @@ def generate_value_matchers(lvl = 1):
 	yield SubtypeMatcher(F_MESR, [F_RD, F_APB_MENTION, F_RD_DOMAIN, F_ETAB, F_ACADEMIE])
 
 	# Geo Domain
-	if lvl >= 2: 
+	if lvl >= 1: 
 		yield FrenchAddressMatcher()
 
 	if lvl >= 2: 
