@@ -6,18 +6,21 @@ Created on Tue Aug 29 13:39:55 2017
 @author: m75380
 
 Make a previous function?
+previous row and back to row init 
 
 Add extend sorted keys
 
 Add option to label full file (no inference on unlabelled)
 
-previous row and back to row init 
-
 multiple query
 
 security 
 
-join source columns if multiple match
+join source columns if multiple match*
+
+big problem with add_selected_columns and cleaning of previous file
+
+add skip api method
 
 """
 from collections import defaultdict
@@ -95,7 +98,8 @@ def _gen_suffix(columns_to_index, s_q_t_2):
         
     NB: s_q_t_2: element two of the single_query_template
     
-    '''    
+    '''
+    
     if isinstance(s_q_t_2, str):
         analyzers = columns_to_index[s_q_t_2]
     elif isinstance(s_q_t_2, tuple):
@@ -230,19 +234,24 @@ def calc_agg_query_metrics(query_metrics, t_p=0.95, t_r=0.3):
     
     agg_query_metrics = dict()
     for key, metrics in query_metrics.items():
-        thresh, precision, recall, ratio = compute_threshold(metrics, t_p=0.95, t_r=0.3)
+        thresh, precision, recall, ratio = compute_threshold([x[1] for x in metrics], t_p=0.95, t_r=0.3) #TODO: change name in compute_threshold
         agg_query_metrics[key] = dict()
         agg_query_metrics[key]['thresh'] = thresh
         agg_query_metrics[key]['precision'] = precision
         agg_query_metrics[key]['recall'] = recall
         agg_query_metrics[key]['ratio'] = ratio
+
     return agg_query_metrics
 
+def DETUPLIFY_TODO_DELETE(arg):
+    if isinstance(arg, tuple) and (len(arg) == 1):
+        return arg[0]
+    return arg
 
 def gen_all_query_templates(match_cols, columns_to_index, bool_levels, 
                             boost_levels, max_num_levels):
     ''' Generate query templates #TODO: more doc '''
-    single_queries = list(((bool_lvl, x['source'], x['ref'], suffix, boost) \
+    single_queries = list(((bool_lvl, DETUPLIFY_TODO_DELETE(x['source']), DETUPLIFY_TODO_DELETE(x['ref']), suffix, boost) \
                                        for x in match_cols \
                                        for suffix in _gen_suffix(columns_to_index, x['ref']) \
                                        for bool_lvl in bool_levels.get(suffix, ['must']) \
@@ -250,7 +259,7 @@ def gen_all_query_templates(match_cols, columns_to_index, bool_levels,
     all_query_templates = list(itertools.chain(*[list(itertools.combinations(single_queries, x)) \
                                         for x in range(2, max_num_levels+1)][::-1]))
     # Queries must contain all columns at least two distinct columns
-    if len(match_cols) >= 1:
+    if len(match_cols) > 1:
         all_query_templates = list(filter(lambda query: len(set((x[1], x[2]) for x in query)) >= 2, \
                                     all_query_templates))
     return all_query_templates    
@@ -494,7 +503,7 @@ class Labeller():
                 break    
         return min_precision
 
-    def _user_input(self, source_item, ref_item, test_num=0):
+    def _console_input(self, source_item, ref_item, test_num=0):
         print('\n***** {0} / {1} / ({2})'.format(ref_item['_id'], ref_item['_score'], self.num_rows_labelled))
         for match in self.match_cols:
             if isinstance(match['ref'], str):
@@ -560,32 +569,52 @@ class Labeller():
             self.sorted_keys = list(filter(lambda x: self.agg_query_metrics[x]['precision'] \
                                       >= self._min_precision(), self.sorted_keys))            
     
-#    def re_start_row(self):
-#        self.num_rows_proposed_ref[self.idx] = 0 
-#        self.num_rows_proposed_source -= 1       
-#        
-#        if self.pairs and self.pairs[-1][0] == self.idx:
-#            self.num_rows_labelled -= 1
-#            self.pairs.pop()
-#            
-#            for val in self.query_metrics.values():
-#                if val and (val[-1][0] == self.idx):
-#                    val.pop()
-#        
-#        self.next_row = True
-#        self.row_idxs.append(self.idx)          
-#        
-#        self.update_agg_query_metrics()
-#        
-#            
-#    def previous_row(self):
-#        '''Todo this deals with previous '''
-#        if not self.pairs:
-#            raise RuntimeError('No previous labels')
-#        
-#        self.num_rows_proposed_ref[self.idx] = 0
-#        self.num_rows_proposed_source
+    def previous(self):
+        if not self.next_row:
+            self.restart_row()
+        else:
+            self.previous_row()
+        
+    
+    def restart_row(self):
+        '''Re-initiates labelling for row self.idx'''       
+        if not hasattr(self, 'idx'):
+            raise RuntimeError('No row to restart')
+        if self.next_row:
+            raise RuntimeError('Already at start of row')
+        
+        self.num_rows_proposed_ref[self.idx] = 0 
+          
+        
+        # after update
+        if self.pairs and self.pairs[-1][0] == self.idx:
+            self.num_rows_labelled -= 1
+            self.pairs.pop()
+            
+            for val in self.query_metrics.values():
+                if val and (val[-1][0] == self.idx):
+                    val.pop()
                     
+        self.num_rows_proposed_source -= 1     
+        self.next_row = True
+        
+        self.row_idxs.append(self.idx)
+        
+        # self.query_metrics = dict()
+        self.update_agg_query_metrics()       
+            
+    def previous_row(self):
+        '''Todo this deals with previous '''
+        if not self.pairs:
+            raise RuntimeError('No previous labels')
+        
+        self.re_start_row()
+        
+        previous_idx = self.pairs.pop()[0]
+        self.num_rows_labelled -= 1
+
+        self.num_rows_proposed_ref[previous_idx] = 0
+        self.num_rows_proposed_source -= 1
             
     def _new_label(self):
         '''Return the next pair to label'''
@@ -598,7 +627,6 @@ class Labeller():
             if self.row_idxs:
                 self.idx = self.row_idxs.pop()
             else:
-                self.next_row = True
                 return None            
             
             self.num_rows_proposed_source += 1
@@ -637,33 +665,42 @@ class Labeller():
         self.ref_item = ref_item
         return source_item, ref_item
     
-    def parse_valid_answer(self, user_input):
-        is_match = user_input in ['y', '1']  
-        return is_match
+    #    def parse_valid_answer(self, user_input):
+    #        is_match = user_input in ['y', '1']  
+    #        return is_match
 
-    def update(self, is_match, res_id):
+    def update(self, user_input, ref_id):
         '''
         Update query metrics and agg_query_metrics and other variables based 
         on the user given label and the elasticsearch id of the reference item being labelled
         
         INPUT:
-            - is_match: whether the pair being labelled is a match
+            - user_input: 
+                + "y" or "1" : res_id is a match with self.idx
+                + "n" or "0" : res_id is not a match with self.idx
+                + "u" : uncertain #TODO: is this no ?
+                + "p" : back to previous state
             - res_id: Elasticsearch Id of the reference element being labelled
         '''
-        print('in update')
-        if is_match:
-            self.pairs.append((self.idx, res_id))
-
-            self.update_query_metrics_on_match(res_id)
-            self.num_rows_labelled += 1
-            self.next_row = True
-            
+        use_previous = user_input == 'p'
         
+        if use_previous:
+            self.previous()
+        else:
+            is_match = user_input in ['y', '1']
+            print('in update')
+            if is_match:
+                self.pairs.append((self.idx, ref_id))
+    
+                self.update_query_metrics_on_match(ref_id)
+                self.num_rows_labelled += 1
+                self.next_row = True
+    
         
     def update_agg_query_metrics(self):
-        self.agg_query_metrics = calc_agg_query_metrics([x[1] for x in self.query_metrics], t_p=self.t_p, t_r=self.t_r)
+        self.agg_query_metrics = calc_agg_query_metrics(self.query_metrics, t_p=self.t_p, t_r=self.t_r)
 
-    def update_query_metrics_on_match(self, res_id):
+    def update_query_metrics_on_match(self, ref_id):
         '''
         Assuming res_id is the Elasticsearch id of the matching refential,
         update the metrics
@@ -672,7 +709,7 @@ class Labeller():
         print('in update / in is_match')
         # Update individual and aggregated metrics
         for key, response in self.full_responses.items():
-            self.query_metrics[key].append([self.idx, compute_metrics(response['hits']['hits'], res_id)])
+            self.query_metrics[key].append([self.idx, compute_metrics(response['hits']['hits'], ref_id)])
         self.update_agg_query_metrics()
         
 
@@ -701,7 +738,7 @@ class Labeller():
         
     def answer_is_valid(self, user_input):
         '''Check if the user input is valid'''
-        valid_responses = {'y', 'n', 'u', 'f', '0', '1'}
+        valid_responses = {'y', 'n', 'u', '0', '1', 'p'}
         #        if self.examples_buffer:
         #            valid_responses = {'y', 'n', 'u', 'f', 'p'}
         #        else: 
