@@ -709,7 +709,9 @@ def load_labeller(message_received):
     flask._app_ctx_stack.labeller_mem[project_id]['labeller'] = proj._read_labeller('es_linker')
     
     flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
-    emit('message', flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=''))
+    
+    encoder = MyEncoder()
+    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message='')))
 
 
 @app.route('/web/link/dedupe_linker/<project_id>/', methods=['GET'])
