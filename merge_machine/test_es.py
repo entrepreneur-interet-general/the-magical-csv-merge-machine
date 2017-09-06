@@ -13,6 +13,7 @@ https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-fields.htm
 
 import pandas as pd
 
+from es_match import es_linker, Labeller
 
 
 dir_path = 'data/sirene'
@@ -20,7 +21,7 @@ chunksize = 3000
 file_len = 10*10**6
 
 
-test_num = 2
+test_num = 0
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
     match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},
@@ -56,7 +57,7 @@ source = source.where(source.notnull(), '')
 
 ref_table_name = '123vivalalgerie'
 
-from es_match import Labeller
+
 
 
 columns_to_index = {
@@ -98,23 +99,34 @@ columns_to_index = {
 
 labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
 
-for _ in range(100):
-    res = labeller.new_label()
-    if not res:
+
+#labeller.update_musts({'NOMEN_LONG': ['lycee']},
+#                      {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']})
+
+for i in range(100):
+    (source_item, ref_item) = labeller.new_label()
+    if not ref_item:
         print('No more examples to label')
         break
     
     for x in range(10):
-        user_input = labeller._user_input(res, labeller.row, test_num)
+        user_input = labeller._user_input(source_item, ref_item, test_num)
         if labeller.answer_is_valid(user_input):
             break
     else:
         raise ValueError('No valid answer after 10 iterations')
            
     is_match = labeller.parse_valid_answer(user_input)
-    labeller.update(is_match, res['_id'])
+    labeller.update(is_match, ref_item['_id'])
+    
+    if (test_num == 0) and i == 3:
+        labeller.update_musts({'NOMEN_LONG': ['lycee']},
+                              {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']})
+        labeller.re_score_history()
 
-
+print('best_query:\n', labeller._best_query_template())
+print('must:\n', labeller.must)
+print('must_not:\n', labeller.must_not)
 
 assert False
 
@@ -130,8 +142,6 @@ max_num_levels = 3 # Number of match clauses
 bool_levels = {'.integers': ['must', 'should']}
 #len(query_metrics[list(query_metrics.keys())[0]])
 boost_levels = [1]
-
-
 
 all_query_templates = gen_all_query_templates(match_cols, columns_to_index, 
                                               bool_levels, boost_levels, max_num_levels)
@@ -214,7 +224,9 @@ if test_num == 0:
 else:
     best_query_template = sorted(full_responses.keys(), key=lambda x: agg_query_metrics[x]['ratio'], reverse=True)[0]
 
-new_source = match(source, best_query_template, 6)# agg_query_metrics[best_query_template]['thresh'])
+
+params = {'query': best_query_template, 'thresh': 6}
+new_source = es_linker(source, best_query_template, 6)# agg_query_metrics[best_query_template]['thresh'])
 new_source['has_match'] = new_source.__CONFIDENCE.notnull()
 
 if test_num == 2:

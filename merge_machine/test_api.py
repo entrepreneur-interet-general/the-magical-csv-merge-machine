@@ -236,7 +236,7 @@ def normalize_pipeline(params):
     # --> Wait for job result
     #==============================================================================
     url_to_append = '/queue/result/{0}'.format(job_id)
-    infer_types_resp = wait_get_resp(url_to_append)
+    infer_types_resp = wait_get_resp(url_to_append, 100)
 
     #==============================================================================
     # Schedule recode types
@@ -262,7 +262,7 @@ def normalize_pipeline(params):
     #==============================================================================
     url_to_append = '/api/schedule/concat_with_init/{0}/'.format(project_id)
     body = {
-            'data_params': {'module_name': 'recode_types', 'file_name': file_name}
+            'data_params': {'module_name': 'replace_mvs', 'file_name': file_name}
             }
     resp = post_resp(url_to_append, body)
     job_id = resp['job_id']
@@ -310,6 +310,7 @@ def normalize_pipeline(params):
 
 
 def link_pipeline(params):
+
     #==============================================================================
     # Create new link project
     #==============================================================================
@@ -317,7 +318,7 @@ def link_pipeline(params):
     body = params['new_project']
     resp = post_resp(url_to_append, body)
     project_id = resp['project_id']
-    
+        
     
     #==============================================================================
     # Add projects to use as source and ref
@@ -330,7 +331,24 @@ def link_pipeline(params):
     body = {'file_role': 'ref',
             'project_id': params['ref_project_id']}
     resp = post_resp(url_to_append, body)
-    
+
+    # =============================================================================
+    # Index reference     
+    # =============================================================================
+    url_to_append = '/api/schedule/create_es_index/{0}/'.format(project_id)
+    body = {
+            'module_params': {'columns_to_index_is_none': None,
+                              'force': False}
+            }
+    resp = post_resp(url_to_append, body)
+    job_id = resp['job_id']
+
+    #==============================================================================
+    # --> Wait for job result
+    #==============================================================================
+    url_to_append = '/queue/result/{0}'.format(job_id)
+    resp = wait_get_resp(url_to_append, max_wait=10000)
+
     
     #==============================================================================
     # Add column matches
@@ -355,52 +373,54 @@ def link_pipeline(params):
     # WARNING: In interface, training data is generated during labelling
     #
     #==============================================================================
+    
+    # TODO: what is this ????
     url_to_append = '/api/upload_config/link/{0}/'.format(project_id)
-    training_file_path = params['training_file_path']
-    with open(training_file_path) as f:
-        training_params = json.load(f)
+    es_learned_settings_file_path = params['es_learned_settings_file_path']
+    with open(es_learned_settings_file_path) as f:
+        es_learned_settings = json.load(f)
     body = {'data_params': {
-                            "module_name": 'dedupe_linker',
-                            "file_name": 'training.json'
+                            "module_name": 'es_linker',
+                            "file_name": 'learned_settings.json'
                             },
-            'module_params': training_params}
+            'module_params': es_learned_settings}
     resp = post_resp(url_to_append, body)
     
     
-    #==============================================================================
-    # Infer restriction parameters
-    #==============================================================================
-    url_to_append = '/api/schedule/infer_restriction/{0}/'.format(project_id)
-    body = {}
-    resp = post_resp(url_to_append, body)
-    job_id = resp['job_id']
+    #    #==============================================================================
+    #    # Infer restriction parameters
+    #    #==============================================================================
+    #    url_to_append = '/api/schedule/infer_restriction/{0}/'.format(project_id)
+    #    body = {}
+    #    resp = post_resp(url_to_append, body)
+    #    job_id = resp['job_id']
+    #    
+    #    #==============================================================================
+    #    # --> Wait for job result
+    #    #==============================================================================
+    #    url_to_append = '/queue/result/{0}'.format(job_id)
+    #    infer_restriction_resp = wait_get_resp(url_to_append, max_wait=20)
     
-    #==============================================================================
-    # --> Wait for job result
-    #==============================================================================
-    url_to_append = '/queue/result/{0}'.format(job_id)
-    infer_restriction_resp = wait_get_resp(url_to_append, max_wait=20)
-    
-    #==============================================================================
-    # Perform restriction
-    #==============================================================================
-    url_to_append = '/api/schedule/perform_restriction/{0}/'.format(project_id)
-    body = {
-            'module_params': infer_restriction_resp['result']
-            }
-    resp = post_resp(url_to_append, body)
-    job_id = resp['job_id']
-
-    #==============================================================================
-    # --> Wait for job result
-    #==============================================================================
-    url_to_append = '/queue/result/{0}'.format(job_id)
-    resp = wait_get_resp(url_to_append)    
+    #    #==============================================================================
+    #    # Perform restriction
+    #    #==============================================================================
+    #    url_to_append = '/api/schedule/perform_restriction/{0}/'.format(project_id)
+    #    body = {
+    #            'module_params': infer_restriction_resp['result']
+    #            }
+    #    resp = post_resp(url_to_append, body)
+    #    job_id = resp['job_id']
+    #
+    #    #==============================================================================
+    #    # --> Wait for job result
+    #    #==============================================================================
+    #    url_to_append = '/queue/result/{0}'.format(job_id)
+    #    resp = wait_get_resp(url_to_append)    
     
     #==============================================================================
     # Create labeller
     #==============================================================================
-    url_to_append = '/api/schedule/create_labeller/{0}/'.format(project_id)
+    url_to_append = '/api/schedule/create_es_labeller/{0}/'.format(project_id)
     body = {}
     resp = post_resp(url_to_append, body)
     job_id = resp['job_id']
@@ -414,17 +434,17 @@ def link_pipeline(params):
     #==============================================================================
     # Run linker
     #==============================================================================
-    url_to_append = '/api/schedule/linker/{0}/'.format(project_id)
-    body = {}
+    url_to_append = '/api/schedule/es_linker/{0}/'.format(project_id)
+    body = {'module_params': es_learned_settings}
     resp = post_resp(url_to_append, body)
     job_id = resp['job_id']
 
-    resp = post_resp(url_to_append, body)
-    job_id_useless = resp['job_id']
+    #    resp = post_resp(url_to_append, body)
+    #    job_id_useless = resp['job_id']
     
     # Cancel job   
-    url_to_append = '/queue/cancel/{0}'.format(job_id_useless)
-    resp = get_resp(url_to_append)
+    #    url_to_append = '/queue/cancel/{0}'.format(job_id_useless)
+    #    resp = get_resp(url_to_append)
     
     # Check that job was cancelled
 
@@ -440,8 +460,8 @@ def link_pipeline(params):
     #==============================================================================
     url_to_append = '/api/schedule/link_results_analyzer/{0}/'.format(project_id)
     body = {'data_params': {
-                            "module_name": 'dedupe_linker',
-                            "file_name": link_params['source_file_name'].rsplit('.')[0] + '.csv'
+                            "module_name": 'es_linker',
+                            "file_name": params['source_file_name'].rsplit('.')[0] + '.csv'
                             }
             }    
     resp = post_resp(url_to_append, body)
@@ -467,7 +487,9 @@ if __name__ == '__main__':
                         help='Path to directory containing test data')
     parser.add_argument('--keep', 
                         action='store_true',
-                        help='Use this flag to NOT delete projects after testing')    
+                        help='Use this flag to NOT delete projects after testing')   
+    parser.add_argument('--source', default=None, help='ID of source to skip pipeline')
+    parser.add_argument('--ref', default=None, help='ID of ref to skip pipeline')
     args = parser.parse_args()
     
     # Parameters
@@ -481,7 +503,10 @@ if __name__ == '__main__':
     with open(source_params_path) as f:
         source_params = json.load(f)
     source_params['file_path'] = os.path.join(args.dir, source_params['file_name'])
-    source_project_id = normalize_pipeline(source_params)
+    if args.source is None:
+        source_project_id = normalize_pipeline(source_params)
+    else:
+        source_project_id = args.source
     
     #==============================================================================
     # RUN NORMALIZE PIPELINE ON REF
@@ -489,8 +514,12 @@ if __name__ == '__main__':
     with open(ref_params_path) as f:
         ref_params = json.load(f)
     ref_params['file_path'] = os.path.join(args.dir, ref_params['file_name'])
-    ref_project_id = normalize_pipeline(ref_params)
     
+    if args.ref is None:
+        ref_project_id = normalize_pipeline(ref_params)
+    else:
+        ref_project_id = args.ref
+        
     #==============================================================================
     # RUN LINK PIPELINE
     #==============================================================================
@@ -498,8 +527,11 @@ if __name__ == '__main__':
         link_params = json.load(f)                     
 
     link_params['source_project_id'] = source_project_id
-    link_params['source_file_name'] = source_params['file_name']
     link_params['ref_project_id'] = ref_project_id
+
+    link_params['source_file_name'] = source_params['file_name']
+    
+    link_params['es_learned_settings_file_path'] = os.path.join(args.dir, link_params['es_learned_settings_file_path'])
     link_params['training_file_path'] = os.path.join(args.dir, link_params['training_file_name'])
                
     link_project_id = link_pipeline(link_params)

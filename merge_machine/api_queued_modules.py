@@ -13,7 +13,7 @@ import os
 curdir = os.path.dirname(os.path.realpath(__file__))
 os.chdir(curdir)
 
-from normalizer import UserNormalizer
+from normalizer import UserNormalizer, ESReferential
 from linker import UserLinker
     
     
@@ -118,6 +118,36 @@ def _recode_types(project_id, data_params, module_params):
 
     return run_info
 
+def _es_linker(project_id, data_params, module_params):
+    '''
+    Runs the recoding module
+    
+    ARGUMENTS (GET):
+        project_id: ID for "normalize" project
+
+    ARGUMENTS (POST):
+        - data_params: 
+            none
+                {
+                "module_name": module to fetch from (source)
+                "file_name": file to fetch (source)
+                }
+        - module_params: {
+                "index_name": name of the Elasticsearch index to fetch from
+                "query_template": 
+                "threshold": minimum value of score for this query_template for a match
+                "must": terms to filter by field (AND: will include ONLY IF ALL are in text)
+                "must_not": terms to exclude by field from search (OR: will exclude if ANY is found)
+                }
+    '''
+    # Problem: what project are we talking about? what ID? 
+    
+    proj = UserLinker(project_id)
+    _, run_info = proj.linker('es_linker', None, module_params)
+    proj.write_data()
+
+    return run_info
+
 
 def _concat_with_init(project_id, data_params, *argv):
     '''
@@ -179,8 +209,7 @@ def _run_all_transforms(project_id, data_params, *argv):
     proj.write_data()
     return all_run_infos
 
-
-def _create_labeller(project_id, *argv):
+def _create_dedupe_labeller(project_id, *argv):
     '''
     Create a "dedupe" labeller and pickle to project
     
@@ -195,7 +224,66 @@ def _create_labeller(project_id, *argv):
     # TODO: data input in gen_dedupe_labeller ?
     proj = UserLinker(project_id=project_id)
     labeller = proj._gen_dedupe_labeller()
-    proj.write_labeller(labeller)
+    proj.write_labeller('dedupe_linker', labeller)
+    return
+
+
+def _create_es_index(project_id, data_params, module_params):
+    '''
+    Create an Elasticsearch index for the selected file
+    
+    GET:
+        - project_id: Link project_id
+    POST:
+        - data_params: 
+                        {
+                        module_name:
+                        file_name: 
+                        }
+        - module_params: {
+                            columns_to_index: 
+                            force: force recreation of index even if existant
+                        }
+    '''
+    
+
+    
+    columns_to_index = module_params.get('columns_to_index')
+    force = module_params.get('force', False)
+    
+    proj = UserLinker(project_id)
+    proj.ref = ESReferential(proj.ref.project_id)
+
+    if data_params is None:
+        module_name = proj.metadata['files']['ref']['module_name']
+        file_name = proj.metadata['files']['ref']['file_name']
+    else:
+        module_name = data_params['module_name']
+        file_name = data_params['file_name']
+    
+    # Default columns_to_index
+    if columns_to_index is None:
+        columns_to_index = proj.ref.gen_default_columns_to_index()
+    
+    file_path = proj.ref.path_to(module_name, file_name)
+    proj.ref.create_index(file_path, columns_to_index, force)
+    return
+
+
+def _create_es_labeller(project_id, *argv):
+    '''
+    Create an "es" labeller and pickle to project
+    
+    ARGUMENTS (GET):
+        - project_id
+    
+    ARGUMENTS (POST):
+        - data_params: none
+        - module_params: none
+    '''
+    proj = UserLinker(project_id=project_id)
+    labeller = proj._gen_es_labeller()
+    proj.write_labeller('es_linker', labeller)
     return
 
 def _infer_restriction(project_id, _, module_params):
@@ -245,7 +333,7 @@ def _perform_restriction(project_id, _, module_params):
 
 
 # In test_linker
-def _linker(project_id, *argv):
+def _dedupe_linker(project_id, *argv):
     '''
     Runs deduper module. Contrary to other modules, linker modules, take
     paths as input (in addition to module parameters)
@@ -256,6 +344,8 @@ def _linker(project_id, *argv):
     ARGUMENTS (POST):
         - data_params: none
         - module_params: none
+        
+    # Todo: deprecate
     '''  
     
     proj = UserLinker(project_id=project_id) # Ref and source are loaded by default

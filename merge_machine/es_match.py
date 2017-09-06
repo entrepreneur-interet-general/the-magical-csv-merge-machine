@@ -4,7 +4,23 @@
 Created on Tue Aug 29 13:39:55 2017
 
 @author: m75380
+
+Make a previous function?
+
+Add extend sorted keys
+
+Add option to label full file (no inference on unlabelled)
+
+previous row and back to row init 
+
+multiple query
+
+security 
+
+join source columns if multiple match
+
 """
+from collections import defaultdict
 import itertools
 import json
 import random
@@ -79,24 +95,33 @@ def _gen_suffix(columns_to_index, s_q_t_2):
         
     NB: s_q_t_2: element two of the single_query_template
     
-    '''
+    '''    
     if isinstance(s_q_t_2, str):
         analyzers = columns_to_index[s_q_t_2]
     elif isinstance(s_q_t_2, tuple):
         analyzers = set.union(*[columns_to_index[col] for col in s_q_t_2])
+    else:
+        raise ValueError('s_q_t_2 should be str or tuple (not list)')
     yield '' # No suffix for standard analyzer
     for analyzer in analyzers:
         yield '.' + analyzer
 
-def _gen_body(query_template, row, must_not={}, must={}, num_results=3):
+def _remove_words(string, words):
+    # TODO: fix this
+    string = my_unidecode(string).lower()
+    for word in words:
+        string = string.replace(word, '')
+    return string
+
+def _gen_body(query_template, row, must={}, must_not={}, num_results=3):
     '''
     Generate the string to pass to Elastic search for it to execute query
     
     INPUT:
         - query_template: ((source_col, ref_col, analyzer_suffix, boost), ...)
         - row: pandas.Series from the source object
-        - must_not: terms to exclude by field from search (OR: will exclude if ANY is found)
         - must: terms to filter by field (AND: will include ONLY IF ALL are in text)
+        - must_not: terms to exclude by field from search (OR: will exclude if ANY is found)
         - num_results: Max number of results for the query
     
     OUTPUT:
@@ -107,6 +132,7 @@ def _gen_body(query_template, row, must_not={}, must={}, num_results=3):
         key = s_q_t[2] + s_q_t[3]
         boost = s_q_t[4]
     '''
+    DEFAULT_MUST_FIELD = '.french'
     
     body = {
           'size': num_results,
@@ -114,7 +140,7 @@ def _gen_body(query_template, row, must_not={}, must={}, num_results=3):
             'bool': dict({
                must_or_should: [
                           {'match': {
-                                  s_q_t[2] + s_q_t[3]: {'query': my_unidecode(row[s_q_t[1]].lower()).replace('lycee', ''),
+                                  s_q_t[2] + s_q_t[3]: {'query': _remove_words(row[s_q_t[1]], must.get(s_q_t[2], [])),
                                                         'boost': s_q_t[4]}}
                           } \
                           for s_q_t in query_template if (s_q_t[0] == must_or_should) \
@@ -133,9 +159,9 @@ def _gen_body(query_template, row, must_not={}, must={}, num_results=3):
                 for must_or_should in ['must', 'should']
                         },
                         **{
-                           'must_not': [{'match': {field: {'query': ' OR '.join(must_not)}}
+                           'must_not': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' OR '.join(values)}}
                                      } for field, values in must_not.items()],
-                           'filter': [{'match': {field: {'query': ' AND '.join(values)}}
+                           'filter': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' AND '.join(values)}} # TODO: french?
                                      } for field, values in must.items()],
                         })               
                   }
@@ -191,7 +217,7 @@ def compute_threshold(metrics, t_p=0.95, t_r=0.3):
         return thresh, precision, recall, ratio
 
 
-def calc_agg_query_metrics(query_metrics):
+def calc_agg_query_metrics(query_metrics, t_p=0.95, t_r=0.3):
     '''
     Find optimal threshold for each query and compute the aggregated metrics.
     
@@ -204,7 +230,7 @@ def calc_agg_query_metrics(query_metrics):
     
     agg_query_metrics = dict()
     for key, metrics in query_metrics.items():
-        thresh, precision, recall, ratio = compute_threshold(metrics)
+        thresh, precision, recall, ratio = compute_threshold(metrics, t_p=0.95, t_r=0.3)
         agg_query_metrics[key] = dict()
         agg_query_metrics[key]['thresh'] = thresh
         agg_query_metrics[key]['precision'] = precision
@@ -353,32 +379,69 @@ def perform_queries(table_name, all_query_templates, rows, must, must_not, num_r
             
     return og_search_templates, full_responses
 
-def match(table_name, source, query_template, threshold):
+def es_linker(source, params):
     '''
     Return concatenation of source and reference with the matches found
     
     INPUT:
         source: pandas.DataFrame containing all source items
-        query_template: 
-        threshold: minimum value of score for this query_template for a match
+        params:    
+            index_name: name of the Elasticsearch index to fetch from
+            query_template: 
+            threshold: minimum value of score for this query_template for a match
+            must: terms to filter by field (AND: will include ONLY IF ALL are in text)
+            must_not: terms to exclude by field from search (OR: will exclude if ANY is found)
+            exact_pairs: list of (source_id, ES_ref_id) which are certain matches
     '''
-    rows = (x[1] for x in source.iterrows())
-    all_search_templates, full_responses = perform_queries(table_name, [query_template], rows, must, must_not, num_results=1)
-    full_responses = [full_responses[i] for i in range(len(full_responses))] # Don't use items to preserve order
     
-    matches_in_ref = pd.DataFrame([f_r['hits']['hits'][0]['_source'] \
-                               if bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold) \
-                               else {} \
-                               for f_r in full_responses])
-                    
-    confidence = pd.Series([f_r['hits']['hits'][0]['_score'] \
-                            if bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold) \
-                            else np.nan \
-                            for f_r in full_responses])
+    table_name = params['index_name']
+    query_template = params['query_template']
+    must = params.get('must', {})
+    must_not = params.get('must_not', {})
+    threshold = params['thresh']
+    exact_pairs = params.get('exact_pairs', [])
     
-    new_source = pd.concat([source, matches_in_ref], 1)
-    new_source['__CONFIDENCE'] = confidence
-    return new_source
+    exact_source_indexes = [x[0] for x in exact_pairs]
+    source_indexes = (x[0] for x in source.iterrows() if x [0] not in exact_source_indexes)    
+    
+    # Perform matching on non-exact pairs (not labelled)
+    if source_indexes:
+        rows = (x[1] for x in source.iterrows() if x[0] not in exact_source_indexes)
+        all_search_templates, full_responses = perform_queries(table_name, [query_template], rows, must, must_not, num_results=1)
+        full_responses = [full_responses[i] for i in range(len(full_responses))] # Don't use items to preserve order
+        
+        matches_in_ref = pd.DataFrame([f_r['hits']['hits'][0]['_source'] \
+                                   if bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold) \
+                                   else {} \
+                                   for f_r in full_responses], index=source_indexes)
+                        
+        confidence = pd.Series([f_r['hits']['hits'][0]['_score'] \
+                                if bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold) \
+                                else np.nan \
+                                for f_r in full_responses])
+        matches_in_ref.columns = [x + '__REF' for x in matches_in_ref.columns]
+        matches_in_ref['__CONFIDENCE'] = confidence    
+    else:
+        matches_in_ref = pd.DataFrame()
+    
+    # Perform matching exact (labelled) pairs
+    if exact_source_indexes:
+        exact_ref_indexes = [x[1] for x in exact_pairs]
+        full_responses = [es.get(table_name, ref_idx) for ref_idx in exact_ref_indexes]
+        exact_matches_in_ref = pd.DataFrame([f_r['_source'] for f_r in full_responses], 
+                                            index=exact_source_indexes)
+        exact_matches_in_ref.columns = [x + '__REF' for x in exact_matches_in_ref.columns]
+        exact_matches_in_ref['__CONFIDENCE'] = 999
+    else:
+        exact_matches_in_ref = pd.DataFrame()
+        
+    #
+    assert len(exact_matches_in_ref) + len(matches_in_ref) == len(source)
+    new_source = pd.concat([source, pd.concat([matches_in_ref, exact_matches_in_ref])], 1)        
+    
+    modified = new_source.copy() # TODO: is this good?
+    modified.loc[:, :] = True
+    return new_source, modified
 
 
 class Labeller():
@@ -390,6 +453,9 @@ class Labeller():
     bool_levels = {'.integers': ['must', 'should']}
     boost_levels = [1]
     
+    t_p = 0.95
+    t_r = 0.3
+    
 
     def __init__(self, source, ref_table_name, match_cols, columns_to_index, must={}, must_not={}):
         self.all_query_templates = gen_all_query_templates(match_cols, 
@@ -397,22 +463,29 @@ class Labeller():
                                                            self.bool_levels, 
                                                            self.boost_levels, 
                                                            self.max_num_levels)
+
         self.sorted_keys = self.all_query_templates
         self.source = source
         self.ref_table_name = ref_table_name
         
         self.match_cols = match_cols
+        self.num_rows_proposed_source = 0
+        self.num_rows_proposed_ref = defaultdict(int)
         self.num_rows_labelled = 0
         self.query_metrics = dict()
-        
-        self.must = must
-        self.must_not = must_not
+        self.agg_query_metrics = dict()
         
         for q_t in self.all_query_templates:
             self.query_metrics[q_t] = []
+        
+        # TODO: Must currently not implemented
+        self.must = must
+        self.must_not = must_not
             
-        self.row_idxs = (idx for idx in random.sample(list(source.index), self.max_num_samples))
+        self.row_idxs = list(idx for idx in random.sample(list(source.index), self.max_num_samples))
+        self.pairs = [] # List of (source_id, ref_es_id)
         self.next_row = True
+
     
     def _min_precision(self):
         min_precision = 0
@@ -421,22 +494,22 @@ class Labeller():
                 break    
         return min_precision
 
-    def _user_input(self, res, row, test_num=0):
-        print('\n***** {0} / {1} / ({2})'.format(res['_id'], res['_score'], self.num_rows_labelled))
+    def _user_input(self, source_item, ref_item, test_num=0):
+        print('\n***** {0} / {1} / ({2})'.format(ref_item['_id'], ref_item['_score'], self.num_rows_labelled))
         for match in self.match_cols:
             if isinstance(match['ref'], str):
                 cols = [match['ref']]
             else:
                 cols = match['ref']
             for col in cols:
-                print('\n{1}   -> [{0}][source]'.format(match['source'], row[match['source']]))
-                print('> {1}   -> [{0}]'.format(col, res['_source'][col]))
+                print('\n{1}   -> [{0}][source]'.format(match['source'], source_item['_source'][match['source']]))
+                print('> {1}   -> [{0}]'.format(col, ref_item['_source'][col]))
         
         if test_num == 2:
-            print(row['SIRET'][:-5], row['SIRET'][-5:], '[source]')
-            print(res['_source']['SIREN'], res['_source']['NIC'], '[ref]')
-            print('LIBAPET', res['_source']['LIBAPET'])
-            if row['SIRET'] == res['_source']['SIREN'] + res['_source']['NIC']:
+            print(source_item['_source']['SIRET'][:-5], source_item['_source']['SIRET'][-5:], '[source]')
+            print(ref_item['_source']['SIREN'], ref_item['_source']['NIC'], '[ref]')
+            print('LIBAPET', ref_item['_source']['LIBAPET'])
+            if source_item['_source']['SIRET'] == ref_item['_source']['SIREN'] + ref_item['_source']['NIC']:
                 return 'y'
             else:
                 return 'n'
@@ -453,12 +526,11 @@ class Labeller():
         INPUT:
             - full_responses: result of "perform_queries" ; {query: response, ...}
             - sorted_keys: order in which to perform labelling
-            - row: pandas.Series corresponding to the row being searched for
-            - num_rows_labelled: For display only
+            - num_results: how many results to display per search template (1
+                        will display only most probable result for each template)
             
         OUTPUT:
-            - found: If a match was found
-            - res: result of the match if it was found
+            - res: result of potential match to label
         '''
         
         ids_done = []
@@ -470,58 +542,163 @@ class Labeller():
                     ids_done.append(res['_id'])
                     yield res
 
-    def new_label(self):
-        # If looking for a new row, initiate the generator
-        if self.next_row: # If previous was found: try new row
-            self.next_row = False
-            try:
-                self.idx = next(self.row_idxs)
-            except StopIteration:
-                return False
-            self.row = self.source.loc[self.idx]
+    def sort_keys(self):
+        '''
+        Update sorted_keys, that determin the order in which samples are shown
+        to the user        
+        '''
+        # Sort keys by score or most promising
+        if self.num_rows_labelled <= 2:
+            sorted_keys_1 = random.sample(list(self.full_responses.keys()), len(self.full_responses.keys()))
+            sorted_keys_2 = sorted(self.full_responses.keys(), key=lambda x: self.full_responses[x]['hits'].get('max_score') or 0, reverse=True)
+            self.sorted_keys = list(itertools.chain(*zip(sorted_keys_1, sorted_keys_2)))
+        else:
+            # Sort by ratio but label by precision ?
+            self.sorted_keys = sorted(self.full_responses.keys(), key=lambda x: self.agg_query_metrics[x]['precision'], reverse=True)
             
-            print('in new_label / in self.next_row / len sorted_keys: {0}'.format(len(self.sorted_keys)))
-            self.all_search_templates, self.full_responses = perform_queries(self.ref_table_name, self.sorted_keys, [self.row], self.must, self.must_not, self.num_results_labelling)
-            self.full_responses = {self.all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
-
-            # Sort keys by score or most promising
-            if self.num_rows_labelled <= 2:
-                sorted_keys_1 = random.sample(list(self.full_responses.keys()), len(self.full_responses.keys()))
-                sorted_keys_2 = sorted(self.full_responses.keys(), key=lambda x: self.full_responses[x]['hits'].get('max_score') or 0, reverse=True)
-                self.sorted_keys = list(itertools.chain(*zip(sorted_keys_1, sorted_keys_2)))
+            # Remove queries if precision is too low (thresh depends on number of labels)
+            self.sorted_keys = list(filter(lambda x: self.agg_query_metrics[x]['precision'] \
+                                      >= self._min_precision(), self.sorted_keys))            
+    
+#    def re_start_row(self):
+#        self.num_rows_proposed_ref[self.idx] = 0 
+#        self.num_rows_proposed_source -= 1       
+#        
+#        if self.pairs and self.pairs[-1][0] == self.idx:
+#            self.num_rows_labelled -= 1
+#            self.pairs.pop()
+#            
+#            for val in self.query_metrics.values():
+#                if val and (val[-1][0] == self.idx):
+#                    val.pop()
+#        
+#        self.next_row = True
+#        self.row_idxs.append(self.idx)          
+#        
+#        self.update_agg_query_metrics()
+#        
+#            
+#    def previous_row(self):
+#        '''Todo this deals with previous '''
+#        if not self.pairs:
+#            raise RuntimeError('No previous labels')
+#        
+#        self.num_rows_proposed_ref[self.idx] = 0
+#        self.num_rows_proposed_source
+                    
+            
+    def _new_label(self):
+        '''Return the next pair to label'''
+        # If looking for a new row from source, initiate the generator
+        if not self.sorted_keys:
+            raise ValueError('No keys in self.sorted_keys')
+        
+        # If on a new row, create the generator for the entire row
+        if self.next_row: # If previous was found: try new row
+            if self.row_idxs:
+                self.idx = self.row_idxs.pop()
             else:
-                # Sort by ratio but label by precision ?
-                self.sorted_keys = sorted(self.full_responses.keys(), key=lambda x: self.agg_query_metrics[x]['precision'], reverse=True)
-                
-                # Remove queries if precision is too low (thresh depends on number of labels)
-                self.sorted_keys = list(filter(lambda x: self.agg_query_metrics[x]['precision'] \
-                                          >= self._min_precision(), self.sorted_keys))            
-                
+                self.next_row = True
+                return None            
+            
+            self.num_rows_proposed_source += 1
+            self.next_row = False
+            
+            row = self.source.loc[self.idx]
+            
+            print('in new_label / in self.next_row / len sorted_keys: {0} / row_idx: {1}'.format(len(self.sorted_keys), self.idx))
+            self.all_search_templates, self.full_responses = perform_queries(self.ref_table_name, self.sorted_keys, 
+                                                                             [row], self.must, self.must_not, self.num_results_labelling)
+            self.full_responses = {self.all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
+            print('LEN OF FULL_RESPONSES:', len(self.full_responses))
+            self.sort_keys()
+                            
             self.label_row_gen = self.new_label_row(self.full_responses, self.sorted_keys, self.num_results_labelling)
         
+        # Reteurn next option for row or try next row
         try:
+            self.num_rows_proposed_ref[self.idx] += 1
             return next(self.label_row_gen)
         except StopIteration:
             self.next_row = True
-            return self.new_label()
+            return self._new_label()
+        
+    def new_label(self):
+        '''Returns a pair to label'''
+        ref_item = self._new_label()
+        
+        if ref_item is None:
+            return None, None
+        
+        source_item = {'_id': self.idx, 
+                  '_source': self.source.loc[self.idx].to_dict()}
+        
+        self.source_item = source_item
+        self.ref_item = ref_item
+        return source_item, ref_item
     
     def parse_valid_answer(self, user_input):
         is_match = user_input in ['y', '1']  
         return is_match
 
     def update(self, is_match, res_id):
+        '''
+        Update query metrics and agg_query_metrics and other variables based 
+        on the user given label and the elasticsearch id of the reference item being labelled
+        
+        INPUT:
+            - is_match: whether the pair being labelled is a match
+            - res_id: Elasticsearch Id of the reference element being labelled
+        '''
         print('in update')
         if is_match:
-            print('in update / in is_match')
-            # Update individual and aggregated metrics
-            for key, response in self.full_responses.items():
-                self.query_metrics[key].append(compute_metrics(response['hits']['hits'], res_id))
-            self.agg_query_metrics = calc_agg_query_metrics(self.query_metrics)
-            
+            self.pairs.append((self.idx, res_id))
+
+            self.update_query_metrics_on_match(res_id)
             self.num_rows_labelled += 1
             self.next_row = True
+            
+        
+        
+    def update_agg_query_metrics(self):
+        self.agg_query_metrics = calc_agg_query_metrics([x[1] for x in self.query_metrics], t_p=self.t_p, t_r=self.t_r)
+
+    def update_query_metrics_on_match(self, res_id):
+        '''
+        Assuming res_id is the Elasticsearch id of the matching refential,
+        update the metrics
+        '''
+
+        print('in update / in is_match')
+        # Update individual and aggregated metrics
+        for key, response in self.full_responses.items():
+            self.query_metrics[key].append([self.idx, compute_metrics(response['hits']['hits'], res_id)])
+        self.update_agg_query_metrics()
+        
 
 
+    def re_score_history(self):
+        '''Use this if updated must or must_not'''
+
+        # Re-initiate query_metrics 
+        self.query_metrics = dict()
+        for q_t in self.sorted_keys:
+            self.query_metrics[q_t] = []
+        
+        # TODO: temporary sol: put all in bulk
+        for pair in self.pairs:
+            self.all_search_templates, self.full_responses = perform_queries(
+                                                                  self.ref_table_name, 
+                                                                  self.sorted_keys, 
+                                                                  [self.source.loc[pair[0]]], 
+                                                                  self.must, self.must_not, 
+                                                                  self.num_results_labelling)
+            self.full_responses = {self.all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
+            self.update_query_metrics_on_match(pair[1])
+
+        if not self.sorted_keys:
+            raise ValueError('No keys in self.sorted_keys hore')
+        
     def answer_is_valid(self, user_input):
         '''Check if the user input is valid'''
         valid_responses = {'y', 'n', 'u', 'f', '0', '1'}
@@ -531,24 +708,51 @@ class Labeller():
         #            valid_responses = {'y', 'n', 'u', 'f'}
         return user_input in valid_responses
 
-
+    def export_best_params(self):
+        '''Returns a dictionnary with the best parameters (input for es_linker)'''
+        params = dict()
+        params['index_name'] = self.ref_table_name
+        params['query_templates'] = self._best_query_template()
+        params['must'] = self.must
+        params['must_not'] = self.must_not
+        params['thresh'] = self.threshold
+        params['exact_pairs'] = self.pairs
+        return params
+    
+    
+    def update_musts(self, must, must_not):
+        self.must = must
+        self.must_not = must_not
+        
+    def _best_query_template(self):
+        """Return query template with the best score (ratio)"""
+        return sorted(self.full_responses.keys(), key=lambda x: \
+                      self.agg_query_metrics[x]['ratio'], reverse=True)[0]
+ 
     def to_emit(self, message):
-        '''Creates a dict to be sent to the template'''
+        '''Creates a dict to be sent to the template #TODO: fix this'''
         dict_to_emit = dict()
-        dict_to_emit['formated_record_pair'] = self._format_record_pair()
-        dict_to_emit['formated_example'] = self._format_fields() # TODO: remove this
-        dict_to_emit['n_match'] = str(self.n_match)
-        dict_to_emit['n_distinct'] = str(self.n_distinct)
+        # Info on pair
+        dict_to_emit['source_item'] = self.source_item
+        dict_to_emit['ref_item'] = self.ref_item
+        
+        # Info on past labelling
+        dict_to_emit['num_proposed_source'] = str(self.num_rows_proposed_source)
+        dict_to_emit['num_proposed_ref'] = str(sum(self.num_rows_proposed_ref.items()))
+        dict_to_emit['num_labelled'] = str(self.num_rows_labelled)
+        dict_to_emit['t_p'] = self.t_p
+        dict_to_emit['t_r'] = self.t_r
+        
+        # Info on current performence
+        b_q_t = self._best_query_template()
+        dict_to_emit['estimated_precision'] = str(self.agg_query_metrics.get(b_q_t, {}).get('precision'))
+        dict_to_emit['estimated_recall'] = str(self.agg_query_metrics.get(b_q_t, {}).get('recall'))
+        dict_to_emit['best_query_template'] = str(b_q_t)
+        
         dict_to_emit['has_previous'] = len(self.examples_buffer) >= 1
         if message:
             dict_to_emit['_message'] = message
         return dict_to_emit
-            
+    
 
-    def cleanup_training(self):
-        self.deduper.cleanupTraining()
-
-    def write_training(self, file_path):
-        with open(file_path, 'w') as f:
-            self.deduper.writeTraining(f)
-
+        

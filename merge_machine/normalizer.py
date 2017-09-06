@@ -4,19 +4,23 @@
 Created on Fri Apr 21 19:39:45 2017
 
 @author: leo
+
+#TODO: all logging as decorators
+
 """
 import io
-import copy
 import itertools
+import json
 import os
 import time
 
+from elasticsearch import Elasticsearch, client
 import pandas as pd
-import unidecode
 from werkzeug.utils import secure_filename
 
 from abstract_data_project import AbstractDataProject, MINI_PREFIX
 from CONFIG import NORMALIZE_DATA_PATH
+import es_insert
 from MODULES import NORMALIZE_MODULES, NORMALIZE_MODULE_ORDER, NORMALIZE_MODULE_ORDER_log # TODO: think about these...
 
 class Normalizer(AbstractDataProject):
@@ -365,8 +369,6 @@ class Normalizer(AbstractDataProject):
         
         TODO: merge with transform
         '''
-        chars_to_replace = self.CHARS_TO_REPLACE
-        
         self.check_mem_data()
         
         # Initiate log
@@ -454,20 +456,84 @@ class Normalizer(AbstractDataProject):
                         print('WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
                         # TODO: warning here
                     all_run_infos[module_name] = run_info
-        return all_run_infos
 
 
 
 class UserNormalizer(Normalizer):
     def path_to(self, module_name='', file_name=''):
         return self._path_to(NORMALIZE_DATA_PATH, module_name, file_name)
+
+
+class ESReferential(UserNormalizer):
+    es_insert_chunksize = 100
+    es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
+    ic = client.IndicesClient(es)
+
+    def __init__(self, *argv, **kwargs):
+        super().__init__(*argv, **kwargs)
+        self.index_name = self.project_id
     
-class InternalNormalizer(Normalizer):
-    def path_to(self, module_name='', file_name=''):
-        return self._path_to(NORMALIZE_DATA_PATH, module_name, file_name)
+    def create_index(self, ref_path, columns_to_index, force=False):
+        '''
+        # TODO: write doc
+        '''
+        testing = True      
+        
+        ref_gen = pd.read_csv(ref_path, 
+                          usecols=columns_to_index.keys(),
+                          dtype=str, chunksize=self.es_insert_chunksize)
+        
+       
+        if self.has_index() and force:
+            self.ic.delete(self.index_name)
+            
+            
+        
+        if not self.ic.exists(self.index_name):
+            log = self.init_active_log('INIT', 'transform')
+            
+            index_settings = es_insert.gen_index_settings(columns_to_index)
+            self.ic.create(self.index_name, body=json.dumps(index_settings))  
+            es_insert.index(ref_gen, self.index_name, testing)
+        
+            log = self.end_active_log(log, error=False)
+        self.write_log_buffer(written=False)
+    
+    def delete_index(self):
+        return self.ic.delete(self.index_name)
+        
+    def has_index(self):
+        return self.ic.exists(self.index_name)     
+    
+    def index_is_complete(self):
+        pass
+        #TODO: Check if thing is thinged
+        
+    #    def add_columns_to_index(self, columns_to_index):
+    #        self.metadata[columns_to_index] = self.columns_to_index
+        
+    def gen_default_columns_to_index(self):
+        default_analyzers = {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'}
+        column_tracker = self.metadata['column_tracker']
+        columns_to_index = {col: default_analyzers if col in column_tracker['selected'] \
+                            else {} for col in column_tracker['original']}   
+        return columns_to_index
+        
+    
+    def delete_project(self):
+        '''Deletes entire folder containing the project'''
+        if self.has_index():
+            self.delete_index()
+        super().delete_project()
+
+    
+#class InternalNormalizer(Normalizer):
+#    def path_to(self, module_name='', file_name=''):
+#        return self._path_to(NORMALIZE_DATA_PATH, module_name, file_name)
     
     
     
+
 if __name__ == '__main__':
     import logging
 

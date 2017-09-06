@@ -60,6 +60,8 @@ TODO:
     - fix cancel job
     
     - DEPRECATE restriction with (done in elasticsearch)
+    
+    - delete index with project
 
 
 DEV GUIDELINES:
@@ -136,7 +138,7 @@ import api_queued_modules
 
 from admin import Admin
 from my_json_encoder import MyEncoder
-from normalizer import UserNormalizer, MINI_PREFIX
+from normalizer import ESReferential, UserNormalizer, MINI_PREFIX
 from linker import UserLinker
 
 #==============================================================================
@@ -432,8 +434,8 @@ def web_infertypes_link(project_id, file_role):
     _check_file_role(file_role)
     
     proj = UserLinker(project_id)
-    normalize_project_id = proj.metadata['current'][file_role]['project_id']
-    normalize_file_name = proj.metadata['current'][file_role]['file_name']
+    normalize_project_id = proj.metadata['files'][file_role]['project_id']
+    normalize_file_name = proj.metadata['files'][file_role]['file_name']
     
     if file_role == 'source':
         next_url = url_for('_web_infertypes_link', project_id=project_id, file_role='ref')
@@ -510,8 +512,8 @@ def web_mvs_link(project_id, file_role):
     _check_file_role(file_role)
     
     proj = UserLinker(project_id)
-    normalize_project_id = proj.metadata['current'][file_role]['project_id']
-    normalize_file_name = proj.metadata['current'][file_role]['file_name']
+    normalize_project_id = proj.metadata['files'][file_role]['project_id']
+    normalize_file_name = proj.metadata['files'][file_role]['file_name']
     
     if file_role == 'source':
         next_url = url_for('web_mvs_link', project_id=project_id, file_role='ref')
@@ -687,14 +689,14 @@ def web_terminate_labeller_load(message_received):
     
 @socketio.on('load_labeller', namespace='/')
 def load_labeller(message_received):
-    '''Loads labeller. Necessary to have a separate call to preload page'''    
+    '''Loads labeller. Necessary to have a separate call to preload page'''
     message_received = json.loads(message_received)
     project_id = message_received['project_id']
     
     # TODO: put variables in memory
     # TODO: remove from memory at the end
     proj = UserLinker(project_id=project_id)
-    paths = proj._gen_paths_dedupe() 
+    paths = proj._gen_paths_es() 
     
     # Create flask labeller memory if necessary and add current labeller
     try:
@@ -704,7 +706,7 @@ def load_labeller(message_received):
     
     # Generate dedupe paths and create labeller
     flask._app_ctx_stack.labeller_mem[project_id]['paths'] = paths
-    flask._app_ctx_stack.labeller_mem[project_id]['labeller'] = proj._read_labeller()
+    flask._app_ctx_stack.labeller_mem[project_id]['labeller'] = proj._read_labeller('es_linker')
     
     flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
     emit('message', flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=''))
@@ -716,8 +718,8 @@ def web_dedupe(project_id):
     '''Labelling / training and matching using dedupe'''
     proj = UserLinker(project_id)
     
-    source_id = proj.metadata['current']['source']['project_id']
-    ref_id = proj.metadata['current']['source']['project_id']
+    source_id = proj.metadata['files']['source']['project_id']
+    ref_id = proj.metadata['files']['source']['project_id']
     
     source_cat_api_url = url_for('schedule_job',
                                     job_name='concat_with_init', 
@@ -729,7 +731,12 @@ def web_dedupe(project_id):
     
     return render_template('dedupe_training.html',
                            **dummy_labeller.to_emit(''),
-                           create_labeller_api_url=url_for('schedule_job', job_name='create_labeller', project_id=project_id),
+                           create_es_index_api_url=url_for('schedule_job',
+                                                            job_name='create_es_index', 
+                                                            project_id=project_id),
+                           create_labeller_api_url=url_for('schedule_job',
+                                                            job_name='create_es_labeller', 
+                                                            project_id=project_id),
                            source_cat_api_url=source_cat_api_url,
                            ref_cat_api_url=ref_cat_api_url,
                            project_id=project_id)
@@ -757,7 +764,7 @@ def web_select_return(project_type, project_id):
 
     for file_role in ['source', 'ref']:
         # Load sample
-        data = proj.metadata['current'][file_role]
+        data = proj.metadata['files'][file_role]
         
         proj.load_project_to_merge(file_role)       
         (module_name, file_name) = proj.__dict__[file_role].get_last_written(None, 
@@ -924,9 +931,9 @@ def web_view_results(project_type, project_id):
     else:
         match_error_samples = []
     
-    #    source_sample = proj.get_sample('INIT', proj.metadata['current']['source']['file_name'],
+    #    source_sample = proj.get_sample('INIT', proj.metadata['files']['source']['file_name'],
     #                                row_idxs=rows_to_display, columns=cols_to_display_source)
-    #ref_sample = proj.get_sample('ref', 'INIT', proj.metadata['current']['ref']['file_name'],
+    #ref_sample = proj.get_sample('ref', 'INIT', proj.metadata['files']['ref']['file_name'],
     #                            row_idxs=rows_to_display, columns=cols_to_display_ref)
 
     return render_template('last_page_old.html', 
@@ -1257,7 +1264,7 @@ def upload_config(project_type, project_id):
     file_name = data_params['file_name']
     
     # Check that the file_name is allowed:
-    assert file_name in ['training.json', 'config.json']
+    assert file_name in ['training.json', 'config.json', 'learned_settings.json']
     
     proj.upload_config_data(params, data_params['module_name'], file_name)
     return jsonify(error=False)
@@ -1386,6 +1393,7 @@ def make_mini(project_id):
     # Write transformations and log
     proj.write_data()
 
+
 #==============================================================================
 # LINK API METHODS (see also SCHEDULER)
 #==============================================================================
@@ -1495,8 +1503,10 @@ SCHEDULED_JOBS = {
                     'recode_types': {'project_type': 'normalize'}, 
                     'concat_with_init': {'project_type': 'normalize'}, 
                     'run_all_transforms': {'project_type': 'normalize'}, 
-                    'create_labeller': {'project_type': 'link', 
+                    'create_es_index': {'project_type': 'link'},
+                    'create_es_labeller': {'project_type': 'link', 
                                         'priority': 'high'}, 
+                    'es_linker': {'project_type': 'link'},
                     'infer_restriction': {'project_type': 'link', 
                                           'priority': 'high'}, 
                     'perform_restriction': {'project_type': 'link'},
