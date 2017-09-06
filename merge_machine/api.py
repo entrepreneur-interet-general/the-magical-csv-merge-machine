@@ -696,7 +696,7 @@ def load_labeller(message_received):
     # TODO: put variables in memory
     # TODO: remove from memory at the end
     proj = UserLinker(project_id=project_id)
-    paths = proj._gen_paths_dedupe() 
+    paths = proj._gen_paths_es() 
     
     # Create flask labeller memory if necessary and add current labeller
     try:

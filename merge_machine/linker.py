@@ -225,9 +225,14 @@ class Linker(AbstractDataProject):
                                              'file_name': file_name,
                                              'restricted': False}
         
+        # Create log for source
         if file_role == 'source':
             self.metadata['log'][self.output_file_name(file_name)] = self.default_log()
         
+        # Add project selection 
+        if (self.metadata['files']['source'] is not None) and (self.metadata['files']['ref'] is not None):
+            for file_name in self.metadata['log']:
+                self.metadata['log'][file_name]['INIT']['completed'] = True
         self.write_metadata()
         self.load_project_to_merge(file_role)
        
@@ -576,6 +581,7 @@ if __name__ == '__main__':
 
     # Try deduping
     proj = UserLinker(create_new=True)
+    
     proj.add_selected_project('source', False, source_proj_id)
     proj.add_selected_project('ref', False, ref_proj_id)
     
