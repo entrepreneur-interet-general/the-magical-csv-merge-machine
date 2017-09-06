@@ -775,7 +775,7 @@ class Labeller():
         
         # Info on past labelling
         dict_to_emit['num_proposed_source'] = str(self.num_rows_proposed_source)
-        dict_to_emit['num_proposed_ref'] = str(sum(self.num_rows_proposed_ref.items()))
+        dict_to_emit['num_proposed_ref'] = 'temp_val_error'#str(sum(self.num_rows_proposed_ref.items()))
         dict_to_emit['num_labelled'] = str(self.num_rows_labelled)
         dict_to_emit['t_p'] = self.t_p
         dict_to_emit['t_r'] = self.t_r
