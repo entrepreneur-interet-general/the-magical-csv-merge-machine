@@ -775,7 +775,7 @@ class Labeller():
         
         # Info on past labelling
         dict_to_emit['num_proposed_source'] = str(self.num_rows_proposed_source)
-        dict_to_emit['num_proposed_ref'] = 'temp_val_error'#str(sum(self.num_rows_proposed_ref.items()))
+        dict_to_emit['num_proposed_ref'] = 'temp_num_proposed_ref'#str(sum(self.num_rows_proposed_ref.items()))
         dict_to_emit['num_labelled'] = str(self.num_rows_labelled)
         dict_to_emit['t_p'] = self.t_p
         dict_to_emit['t_r'] = self.t_r
@@ -786,7 +786,7 @@ class Labeller():
         dict_to_emit['estimated_recall'] = 'temp_recall' #str(self.agg_query_metrics.get(b_q_t, {}).get('recall'))
         dict_to_emit['best_query_template'] = 'temp_best_query'#str(b_q_t)
         
-        dict_to_emit['has_previous'] = len(self.examples_buffer) >= 1
+        dict_to_emit['has_previous'] = 'temp_has_previous'# len(self.examples_buffer) >= 1
         if message:
             dict_to_emit['_message'] = message
         return dict_to_emit
