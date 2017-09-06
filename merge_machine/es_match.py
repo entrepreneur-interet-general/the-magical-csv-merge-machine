@@ -781,10 +781,10 @@ class Labeller():
         dict_to_emit['t_r'] = self.t_r
         
         # Info on current performence
-        b_q_t = self._best_query_template()
-        dict_to_emit['estimated_precision'] = str(self.agg_query_metrics.get(b_q_t, {}).get('precision'))
-        dict_to_emit['estimated_recall'] = str(self.agg_query_metrics.get(b_q_t, {}).get('recall'))
-        dict_to_emit['best_query_template'] = str(b_q_t)
+        #b_q_t = self._best_query_template()
+        dict_to_emit['estimated_precision'] = 'temp_precision' #str(self.agg_query_metrics.get(b_q_t, {}).get('precision'))
+        dict_to_emit['estimated_recall'] = 'temp_recall' #str(self.agg_query_metrics.get(b_q_t, {}).get('recall'))
+        dict_to_emit['best_query_template'] = 'temp_best_query'#str(b_q_t)
         
         dict_to_emit['has_previous'] = len(self.examples_buffer) >= 1
         if message:
