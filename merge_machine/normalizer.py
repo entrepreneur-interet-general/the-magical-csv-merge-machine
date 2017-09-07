@@ -133,7 +133,6 @@ class Normalizer(AbstractDataProject):
         return resp
 
 
-
     def path_to_last_written(self, module_name=None, file_name=None, before_module=None):
         (module_name, file_name) = self.get_last_written(module_name,
                                                         file_name, before_module)
@@ -325,7 +324,7 @@ class Normalizer(AbstractDataProject):
         # Check that selected columns are in the original header
         for col in columns:
             if col not in self.metadata['column_tracker']['original']:
-                raise ValueError('Selected column {0} is not in uploaded header (can be different from the original file)\n --> uploaded header: ({1})'.format(\
+                raise ValueError('Selected column {0} is not in uploaded file (can be different from the original file)\n --> uploaded header: ({1})'.format(\
                                 col, self.metadata['column_tracker']['original']))
         
         # If a selected column was not previously selected, delete all 
@@ -432,6 +431,7 @@ class Normalizer(AbstractDataProject):
     def run_all_transforms(self):
         '''Runs all modules on data in memory. And config from module names
         # TODO: move to abstract_data_project ?
+        # TODO: check skipped
         '''
         self.check_mem_data()
         
@@ -484,18 +484,19 @@ class ESReferential(UserNormalizer):
                           dtype=str, chunksize=self.es_insert_chunksize)
         
        
-        if self.ic.exists(self.index_name) and force:
+        if self.has_index() and force:
             self.ic.delete(self.index_name)
             
+            
+        
         if not self.ic.exists(self.index_name):
+            log = self.init_active_log('INIT', 'transform')
+            
             index_settings = es_insert.gen_index_settings(columns_to_index)
             self.ic.create(self.index_name, body=json.dumps(index_settings))  
-    
-        log = self.init_active_log('INIT', 'transform')
-    
-        es_insert.index(ref_gen, self.index_name, testing)
+            es_insert.index(ref_gen, self.index_name, testing)
         
-        log = self.end_active_log(log, error=False)
+            log = self.end_active_log(log, error=False)
         self.write_log_buffer(written=False)
     
     def delete_index(self):
@@ -506,8 +507,26 @@ class ESReferential(UserNormalizer):
     
     def index_is_complete(self):
         pass
-        # Check if thing is thinged
+        #TODO: Check if thing is thinged
         
+    #    def add_columns_to_index(self, columns_to_index):
+    #        self.metadata[columns_to_index] = self.columns_to_index
+        
+    def gen_default_columns_to_index(self):
+        default_analyzers = {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'}
+        column_tracker = self.metadata['column_tracker']
+        columns_to_index = {col: default_analyzers if col in column_tracker['selected'] \
+                            else {} for col in column_tracker['original']}   
+        return columns_to_index
+        
+    
+    def delete_project(self):
+        '''Deletes entire folder containing the project'''
+        if self.has_index():
+            self.delete_index()
+        super().delete_project()
+
+    
 #class InternalNormalizer(Normalizer):
 #    def path_to(self, module_name='', file_name=''):
 #        return self._path_to(NORMALIZE_DATA_PATH, module_name, file_name)

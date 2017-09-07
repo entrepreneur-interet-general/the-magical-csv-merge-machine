@@ -99,27 +99,33 @@ columns_to_index = {
 
 labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
 
-if test_num == 0:
-    labeller.must = {'NOMEN_LONG': ['lycee']}
-    labeller.must_not = {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']}
 
-for _ in range(100):
-    res = labeller.new_label()
-    if not res:
+#labeller.update_musts({'NOMEN_LONG': ['lycee']},
+#                      {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']})
+
+for i in range(100):
+    (source_item, ref_item) = labeller.new_label()
+    if not ref_item:
         print('No more examples to label')
         break
     
     for x in range(10):
-        user_input = labeller._user_input(res, labeller.row, test_num)
+        user_input = labeller._console_input(source_item, ref_item, test_num)
         if labeller.answer_is_valid(user_input):
             break
+        else:
+            print('Invalid answer ("y"/"1", "n"/"0", "u" or "p")')
     else:
         raise ValueError('No valid answer after 10 iterations')
            
-    is_match = labeller.parse_valid_answer(user_input)
-    labeller.update(is_match, res['_id'])
+    labeller.update(user_input, ref_item['_id'])
+    
+    if (test_num == 0) and i == 3:
+        labeller.update_musts({'NOMEN_LONG': ['lycee']},
+                              {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']})
+        labeller.re_score_history()
 
-print('best_query:\n', labeller.best_query_template())
+print('best_query:\n', labeller._best_query_template())
 print('must:\n', labeller.must)
 print('must_not:\n', labeller.must_not)
 

@@ -17,6 +17,8 @@ import pandas as pd
 
 from es_config import gen_index_settings
 
+es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
+
 def pre_process_tab(tab):
     ''' Clean tab before insertion '''
     for x in tab.columns:

@@ -63,6 +63,8 @@ index_settings_template = {
 
 def _gen_index_settings(index_settings_template, columns_to_index):
     '''
+    Creates the dict to pass to index creation based on the columns_to_index
+    
     NB: the default analyzer is keyword
     '''
     index_settings = copy.deepcopy(index_settings_template)
@@ -96,4 +98,4 @@ def _gen_index_settings(index_settings_template, columns_to_index):
     
     return index_settings
 
-gen_index_settings = lambda x: _gen_index_settings(index_settings_template, x)
+gen_index_settings = lambda columns_to_index: _gen_index_settings(index_settings_template, columns_to_index)

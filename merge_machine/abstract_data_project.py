@@ -29,6 +29,7 @@ import gc
 import logging
 from itertools import tee
 import os
+import shutil
 import time
 
 import numpy as np
@@ -67,9 +68,9 @@ class AbstractDataProject(AbstractProject):
 
     def default_log(self):
         '''Default log for a new file'''
-        return {module_name: copy.deepcopy(self.default_module_log) for module_name in self.MODULE_ORDER_log}
-        
-
+        return {module_name: copy.deepcopy(self.default_module_log) 
+                for module_name in self.MODULE_ORDER_log}
+    
     def get_last_written(self, module_name=None, file_name=None, 
                          before_module=None):
         '''
@@ -176,6 +177,11 @@ class AbstractDataProject(AbstractProject):
                'end_timestamp': None, 'error':None, 'error_msg':None, 'written': False
                }
         return log
+    
+    def set_skip(self, module_name, file_name, skip_value):
+        '''Sets the "skiped value to True in log"'''
+        self.metadata['log'][file_name]['module_name']['skiped'] = skip_value
+        self.write_metadata() #TODO: Do we write meta"data?
 
     def check_mem_data(self):
         '''Check that there is data loaded in memory'''
@@ -461,7 +467,7 @@ class AbstractDataProject(AbstractProject):
                                          quoting=csv.QUOTE_NONNUMERIC)
                     nrows += len(part_tab)
                     
-            except Exception as e:
+            except KeyboardInterrupt as e:
                 logging.error(e)
 
 
@@ -566,7 +572,6 @@ class AbstractDataProject(AbstractProject):
                 new_partial_data.loc[:, col] = old_modified.loc[:, col] | modified.loc[:, col]
             else:
                 new_partial_data[col] = modified[col]
-
         return new_partial_data
     
     def transform(self, module_name, params):

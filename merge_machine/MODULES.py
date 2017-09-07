@@ -18,10 +18,12 @@ NORMALIZE_MODULE_ORDER_log = ['INIT', 'make_mini', 'add_selected_columns',
                               'infer_mvs', 'replace_mvs', 'infer_types',
                               'recode_types', 'concat_with_init']
 
-NORMALIZE_MODULE_ORDER = ['INIT', 'make_mini', 'replace_mvs', 'recode_types', 'concat_with_init']
+NORMALIZE_MODULE_ORDER = ['INIT', 'make_mini', 'replace_mvs', 'recode_types', 
+                          'concat_with_init']
 
-LINK_MODULE_ORDER_log = ['add_selected_columns', 'load_labeller', 'train', 
-                         'upload_train', 'es_linker', 'link_results_analyzer']
+LINK_MODULE_ORDER_log = ['INIT', 'add_selected_columns', 'es_train', 'upload_es_train', 
+                         'es_linker', 'link_results_analyzer']
+# NB: INIT in link is add_projects
 
 # Old order using dedupe
 #LINK_MODULE_ORDER_log = ['add_selected_columns', 'load_labeller', 'train', 
@@ -44,12 +46,12 @@ NORMALIZE_MODULES = {
                                 'desc': replace_mvs.__doc__,
                                 'use_in_full_run': True
                             },
-                   'recode_types': {
+                    'recode_types': {
                                'func':  normalize_values,
                                'desc': normalize_values.__doc__,
                                'use_in_full_run': True
                            },
-                   'concat_with_init': {
+                    'concat_with_init': {
                                'desc': 'Merge intial and transformed files (cannot be called)',
                                'use_in_full_run': True
                            }
@@ -83,10 +85,11 @@ NORMALIZE_MODULES = {
        
 
 LINK_MODULES = {
-        'transform':{
+        'transform': {
                     'es_linker': {
-                                'func': es_linker,
-                                'desc': es_linker.__doc__
+                               'func': es_linker,
+                               'desc': es_linker.__doc__,
+                               'use_in_full_run': True
                             }
                     },
         'infer':{

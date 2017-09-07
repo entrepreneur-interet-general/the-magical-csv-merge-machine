@@ -434,8 +434,8 @@ def web_infertypes_link(project_id, file_role):
     _check_file_role(file_role)
     
     proj = UserLinker(project_id)
-    normalize_project_id = proj.metadata['current'][file_role]['project_id']
-    normalize_file_name = proj.metadata['current'][file_role]['file_name']
+    normalize_project_id = proj.metadata['files'][file_role]['project_id']
+    normalize_file_name = proj.metadata['files'][file_role]['file_name']
     
     if file_role == 'source':
         next_url = url_for('_web_infertypes_link', project_id=project_id, file_role='ref')
@@ -512,8 +512,8 @@ def web_mvs_link(project_id, file_role):
     _check_file_role(file_role)
     
     proj = UserLinker(project_id)
-    normalize_project_id = proj.metadata['current'][file_role]['project_id']
-    normalize_file_name = proj.metadata['current'][file_role]['file_name']
+    normalize_project_id = proj.metadata['files'][file_role]['project_id']
+    normalize_file_name = proj.metadata['files'][file_role]['file_name']
     
     if file_role == 'source':
         next_url = url_for('web_mvs_link', project_id=project_id, file_role='ref')
@@ -696,7 +696,7 @@ def load_labeller(message_received):
     # TODO: put variables in memory
     # TODO: remove from memory at the end
     proj = UserLinker(project_id=project_id)
-    paths = proj._gen_paths_dedupe() 
+    paths = proj._gen_paths_es() 
     
     # Create flask labeller memory if necessary and add current labeller
     try:
@@ -709,7 +709,9 @@ def load_labeller(message_received):
     flask._app_ctx_stack.labeller_mem[project_id]['labeller'] = proj._read_labeller('es_linker')
     
     flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
-    emit('message', flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=''))
+    
+    encoder = MyEncoder()
+    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message='')))
 
 
 @app.route('/web/link/dedupe_linker/<project_id>/', methods=['GET'])
@@ -718,8 +720,8 @@ def web_dedupe(project_id):
     '''Labelling / training and matching using dedupe'''
     proj = UserLinker(project_id)
     
-    source_id = proj.metadata['current']['source']['project_id']
-    ref_id = proj.metadata['current']['source']['project_id']
+    source_id = proj.metadata['files']['source']['project_id']
+    ref_id = proj.metadata['files']['source']['project_id']
     
     source_cat_api_url = url_for('schedule_job',
                                     job_name='concat_with_init', 
@@ -764,7 +766,7 @@ def web_select_return(project_type, project_id):
 
     for file_role in ['source', 'ref']:
         # Load sample
-        data = proj.metadata['current'][file_role]
+        data = proj.metadata['files'][file_role]
         
         proj.load_project_to_merge(file_role)       
         (module_name, file_name) = proj.__dict__[file_role].get_last_written(None, 
@@ -931,9 +933,9 @@ def web_view_results(project_type, project_id):
     else:
         match_error_samples = []
     
-    #    source_sample = proj.get_sample('INIT', proj.metadata['current']['source']['file_name'],
+    #    source_sample = proj.get_sample('INIT', proj.metadata['files']['source']['file_name'],
     #                                row_idxs=rows_to_display, columns=cols_to_display_source)
-    #ref_sample = proj.get_sample('ref', 'INIT', proj.metadata['current']['ref']['file_name'],
+    #ref_sample = proj.get_sample('ref', 'INIT', proj.metadata['files']['ref']['file_name'],
     #                            row_idxs=rows_to_display, columns=cols_to_display_ref)
 
     return render_template('last_page_old.html', 
@@ -1032,6 +1034,28 @@ def metadata(project_type, project_id):
                    metadata=proj.metadata, 
                    project_id=proj.project_id)
     return resp
+
+
+def set_skipped(project_type, project_id):
+    """
+    Set skip value for selected module
+    
+    GET:
+        - project_type: "link" or "normalize"
+        - project_type
+        
+    POST:
+        data_params:
+            - file_name
+        module_params:
+            - module_name
+            - skip_value: (true)
+    """
+    data_params, module_params = _parse_request()
+    
+    proj = _init_project(project_type, project_id)
+    proj.set_skip(module_params['module_name'], data_params['file_name'], 
+                  module_params.get('skip_value', True))
 
 
 @app.route('/api/last_written/<project_type>/<project_id>', methods=['GET', 'POST'])
@@ -1264,7 +1288,7 @@ def upload_config(project_type, project_id):
     file_name = data_params['file_name']
     
     # Check that the file_name is allowed:
-    assert file_name in ['training.json', 'config.json']
+    assert file_name in ['training.json', 'config.json', 'learned_settings.json']
     
     proj.upload_config_data(params, data_params['module_name'], file_name)
     return jsonify(error=False)
@@ -1503,8 +1527,10 @@ SCHEDULED_JOBS = {
                     'recode_types': {'project_type': 'normalize'}, 
                     'concat_with_init': {'project_type': 'normalize'}, 
                     'run_all_transforms': {'project_type': 'normalize'}, 
+                    'create_es_index': {'project_type': 'link'},
                     'create_es_labeller': {'project_type': 'link', 
                                         'priority': 'high'}, 
+                    'es_linker': {'project_type': 'link'},
                     'infer_restriction': {'project_type': 'link', 
                                           'priority': 'high'}, 
                     'perform_restriction': {'project_type': 'link'},

@@ -187,5 +187,6 @@ class AbstractProject():
         '''Deletes entire folder containing the project'''
         path_to_proj = self.path_to()
         shutil.rmtree(path_to_proj)
+    
 
 
