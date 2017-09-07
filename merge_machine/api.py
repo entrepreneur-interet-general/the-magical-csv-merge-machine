@@ -40,10 +40,8 @@ TODO:
     - ABSOLUTELY:  handle memory issues
     - Allocate memory by user/ by IP?
     
-    - look why I can get 90% or 30% match on same file
     - Study impact of training set size on match rate
-    - POSTGRES all this ish
-    
+
     - Choose btw add/select/upload and read/load/get
     
     - Catch exceptions. Never redirect if server error
@@ -63,6 +61,7 @@ TODO:
     
     - delete index with project
 
+    - https://blog.miguelgrinberg.com/post/restful-authentication-with-flask
 
 DEV GUIDELINES:
     - By default the API will use the file with the same name in the last 
@@ -1256,7 +1255,8 @@ def read_config(project_type, project_id):
     file_name = data_params['file_name']
     
     # Check that the file_name is allowed:
-    assert (file_name in ['training.json', 'infered_config.json', 'config.json']) \
+    assert (file_name in ['training.json', 'infered_config.json', 'config.json',
+                          'column_matches.json']) \
             or '__run_info.json' in file_name
     
     result = proj.read_config_data(data_params['module_name'], file_name)
@@ -1626,6 +1626,8 @@ def get_job_result(job_id):
 def cancel_job(job_id):
     '''
     Remove job from queue
+    
+    
     
     # TODO: make this work
     
