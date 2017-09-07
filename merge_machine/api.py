@@ -23,8 +23,6 @@ TODO:
       use is specified on api call and not read from metadata (unless using last used)
     
     - Protect admin functions
-    -
-    - ADD LICENSE
 
     - Do not go to next page if an error occured
     - General error handling

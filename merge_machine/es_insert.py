@@ -119,7 +119,8 @@ if __name__ == '__main__':
     #==============================================================================
     testing = True
     new_index = False
-    do_indexing = False
+    do_indexing = True
+    chunksize = 2000
     
     ref_file_name = 'sirc-17804_9075_14209_201612_L_M_20170104_171522721.csv' # 'petit_sirene.csv'
     # ref_file_name = 'petit_sirene.csv'

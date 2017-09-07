@@ -9,6 +9,8 @@ Created on Fri Aug 18 16:42:41 2017
 # Put all fields to learn blocking by exact match on other fields
 
 https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-fields.html
+
+$ ./bin/elasticsearch
 """
 
 import pandas as pd
@@ -97,7 +99,12 @@ columns_to_index = {
     'PRODET': {}
 }
 
-labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
+
+if test_num == 2:
+    columns_certain_match = {'source': ['SIRET'], 'ref': ['SIREN', 'NIC']}
+    labeller = Labeller(source, ref_table_name, match_cols, columns_to_index, columns_certain_match)
+else:
+    labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
 
 
 #labeller.update_musts({'NOMEN_LONG': ['lycee']},

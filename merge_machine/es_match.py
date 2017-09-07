@@ -384,7 +384,7 @@ def perform_queries(table_name, all_query_templates, rows, must, must_not, num_r
         i += 1
         
         if i >= 10:
-            raise Exception('Problem with elasticsearch')
+            raise Exception('Problem with elasticsearch: could not perform all queries in 10 trials')
             
     return og_search_templates, full_responses
 
@@ -466,8 +466,8 @@ class Labeller():
     t_p = 0.95
     t_r = 0.3
     
-
-    def __init__(self, source, ref_table_name, match_cols, columns_to_index, must={}, must_not={}):
+    def __init__(self, source, ref_table_name, match_cols, columns_to_index, 
+                 certain_column_matches=None, must={}, must_not={}):
         self.all_query_templates = gen_all_query_templates(match_cols, 
                                                            columns_to_index, 
                                                            self.bool_levels, 
@@ -479,6 +479,7 @@ class Labeller():
         self.ref_table_name = ref_table_name
         
         self.match_cols = match_cols
+        self.certain_column_matches = certain_column_matches
         self.num_rows_proposed_source = 0
         self.num_rows_proposed_ref = defaultdict(int)
         self.num_rows_labelled = 0
@@ -494,10 +495,18 @@ class Labeller():
             
         self.row_idxs = list(idx for idx in random.sample(list(source.index), self.max_num_samples))
         self.pairs = [] # List of (source_id, ref_es_id)
+        self.pairs_not_match = defaultdict(list)
         self.next_row = True
+        
+        if certain_column_matches is not None:
+            self.auto_label()
 
     
     def _min_precision(self):
+        '''
+        Return the minimum precision to keep a query template, according to 
+        the number of rows currently labelled
+        '''
         min_precision = 0
         for min_idx, min_precision in self.min_precision_tab:
             if self.num_rows_labelled >= min_idx:
@@ -505,6 +514,7 @@ class Labeller():
         return min_precision
 
     def _console_input(self, source_item, ref_item, test_num=0):
+        '''Console input displaying the source_item, ref_item pair'''
         print('\n***** {0} / {1} / ({2})'.format(ref_item['_id'], ref_item['_score'], self.num_rows_labelled))
         print('self.first_propoal_for_source_idx:', self.first_propoal_for_source_idx)
         print('self.num_rows_labelled:', self.num_rows_labelled)
@@ -535,7 +545,7 @@ class Labeller():
         User labelling going through potential results (order given by sorted_keys) 
         looking for a match. This goes through all keys and all results (up to
         num_results) and asks the user to label the data. Labelling ends once the 
-        user finds a match or there is no more potential matches.
+        user finds a match for the current row or there is no more potential matches.
         
         INPUT:
             - full_responses: result of "perform_queries" ; {query: response, ...}
@@ -552,7 +562,9 @@ class Labeller():
             print('\nkey: ', key)
             results = full_responses[key]['hits']['hits']
             for res in results[:num_results]:
-                if res['_id'] not in ids_done and ((res['_score']>=0.001)):
+                if res['_id'] not in ids_done \
+                        and ((res['_score']>=0.001)) \
+                        and res['_ids'] not in self.pairs_not_match[self.idx]: #  TODO: not neat
                     ids_done.append(res['_id'])
                     yield res
 
@@ -575,6 +587,7 @@ class Labeller():
                                       >= self._min_precision(), self.sorted_keys))            
 
     def previous(self):
+        '''Return to pseudo-previous state.'''
         print('self.next_row:', self.next_row)
         if self.first_propoal_for_source_idx:
             self.previous_row()
@@ -629,6 +642,7 @@ class Labeller():
             print('Could not update agg_query_metrics')
             pass        
         print('self.next_row:', self.next_row)
+    
     def _new_label(self):
         '''Return the next pair to label'''
         # If looking for a new row from source, initiate the generator
@@ -640,6 +654,10 @@ class Labeller():
         if self.next_row: # If previous was found: try new row
             if self.row_idxs:
                 self.idx = self.row_idxs.pop()
+                # Check if row was already done # TODO: will be problem with count
+                if self.idx in (x[0] for x in self.pairs):
+                    return next(self.label_row_gen)
+                
                 self.first_propoal_for_source_idx = True
             else:
                 return None            
@@ -680,6 +698,42 @@ class Labeller():
         self.ref_item = ref_item
         return source_item, ref_item
     
+    def _auto_label_pair(self, source_item, ref_item):
+        '''
+        Try to automatically generate the label for the pair source_item, ref_item
+        '''
+        # TODO: check format of exact match cols
+        source_cols = [self.certain_column_matches['source']]
+        ref_cols = [self.certain_column_matches['ref']]
+        
+        # If no values are None, check if concatenation is an exact match
+        if all(source_item[col] is not None for col in source_cols) \
+                and all(ref_item[col] is not None for col in ref_cols):
+                    
+            is_match = ''.join(source_item[col] for col in source_cols) \
+                        == ''.join(ref_item[col] for col in ref_cols)
+                        
+            if is_match:
+                return 'y'
+            else:
+                return 'n'
+        else:
+            return None
+        
+    def auto_label(self):
+        for i in range(len(self.source)):
+            (source_item, ref_item) = self.new_label()
+            if ref_item is None:
+                break
+            
+            label = self._auto_label_pair(source_item, ref_item)
+            if label is not None:
+                self.update(label, ref_item['_id'])    
+        
+        self.row_idxs = list(idx for idx in random.sample(list(self.source.index), 
+                                                          self.max_num_samples))
+        self.next_row = True
+        
     #    def parse_valid_answer(self, user_input):
     #        is_match = user_input in ['y', '1']  
     #        return is_match
@@ -703,6 +757,7 @@ class Labeller():
             self.previous()
         else:
             is_match = user_input in ['y', '1']
+            is_not_match = user_input in ['n', '0']
             print('in update')
             if is_match:
                 self.pairs.append((self.idx, ref_id))
@@ -710,6 +765,8 @@ class Labeller():
                 self.update_query_metrics_on_match(ref_id)
                 self.num_rows_labelled += 1
                 self.next_row = True
+            if is_not_match:
+                self.pairs_not_match[self.idx].append(ref_id)
     
         
     def update_agg_query_metrics(self):
@@ -774,8 +831,11 @@ class Labeller():
         
     def _best_query_template(self):
         """Return query template with the best score (ratio)"""
-        return sorted(self.agg_query_metrics.keys(), key=lambda x: \
-                      self.agg_query_metrics[x]['ratio'], reverse=True)[0]
+        if self.agg_query_metrics:
+            return sorted(self.agg_query_metrics.keys(), key=lambda x: \
+                          self.agg_query_metrics[x]['ratio'], reverse=True)[0]
+        else:
+            return None
  
     def to_emit(self, message):
         '''Creates a dict to be sent to the template #TODO: fix this'''
@@ -793,10 +853,15 @@ class Labeller():
         
         # Info on current performence
         b_q_t = self._best_query_template()
-        dict_to_emit['estimated_precision'] = str(self.agg_query_metrics.get(b_q_t, {}).get('precision'))
-        dict_to_emit['estimated_recall'] = str(self.agg_query_metrics.get(b_q_t, {}).get('recall'))
-        dict_to_emit['best_query_template'] = str(b_q_t)
-        
+        if b_q_t is not None:
+            dict_to_emit['estimated_precision'] = str(self.agg_query_metrics.get(b_q_t, {}).get('precision'))
+            dict_to_emit['estimated_recall'] = str(self.agg_query_metrics.get(b_q_t, {}).get('recall'))
+            dict_to_emit['best_query_template'] = str(b_q_t)
+        else:
+            dict_to_emit['estimated_precision'] = None
+            dict_to_emit['estimated_recall'] = None
+            dict_to_emit['best_query_template'] = None
+            
         dict_to_emit['has_previous'] = 'temp_has_previous'# len(self.examples_buffer) >= 1
         if message:
             dict_to_emit['_message'] = message

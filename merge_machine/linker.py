@@ -434,7 +434,7 @@ class Linker(AbstractDataProject):
                 }
         return paths
 
-    def _gen_es_labeller(self, columns_to_index=None):
+    def _gen_es_labeller(self, columns_to_index=None, certain_column_matches=None):
         '''
         Return a es_labeller object
         '''
@@ -459,7 +459,9 @@ class Linker(AbstractDataProject):
         if columns_to_index is None:
             columns_to_index = self.ref.gen_default_columns_to_index()
         
-        labeller = ESLabeller(source, ref_table_name, col_matches, columns_to_index)
+        labeller = ESLabeller(source, ref_table_name, col_matches, columns_to_index, certain_column_matches)
+        
+        # TODO: Auto label certain pairs 
         
         # TODO: Add pre-load for 3 first queries
     
