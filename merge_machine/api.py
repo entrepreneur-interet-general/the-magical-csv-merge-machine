@@ -911,7 +911,6 @@ def complete_training(message_received):
     except:
         logging.warning('Could not delete paths for project: {0}'.format(project_id))    
         
-    message_to_display = 
     emit('wrote_labeller', {'error': False})
     
 @socketio.on('terminate', namespace='/')
