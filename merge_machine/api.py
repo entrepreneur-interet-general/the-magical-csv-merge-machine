@@ -885,7 +885,9 @@ def web_get_answer(message_received):
             flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
     else:
         message_to_display = 'Sent an invalid answer'
-    emit('message', flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=message_to_display))
+        
+    encoder = MyEncoder()
+    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=message_to_display)))
     
 
 @socketio.on('terminate', namespace='/')
