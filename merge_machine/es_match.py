@@ -843,6 +843,10 @@ class Labeller():
         params['exact_pairs'] = self.pairs
         return params
     
+    def write_training(self, file_path):
+        with open(file_path, 'w') as w:
+            params = self.export_best_params()
+            json.dump(params, w)
     
     def update_musts(self, must, must_not):
         self.must = must

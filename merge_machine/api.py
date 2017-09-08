@@ -891,15 +891,16 @@ def update_musts(message_received):
     emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=message_to_display)))
     
     
-@socketio.on('write_labeller', namespace='/')
-def write_labeller(message_received):
+@socketio.on('complete_training', namespace='/')
+def complete_training(message_received):
+    '''Writes the data in the labeller and deletes the labeller'''
     message_received = json.loads(message_received)
     logging.info(message_received)
     project_id = message_received['project_id']
 
     logging.info('Writing train')
-    flask._app_ctx_stack.labeller_mem[project_id]['labeller'].write_training(\
-                                     flask._app_ctx_stack.labeller_mem[project_id]['paths']['train'])
+    training_path = UserLinker(project_id).path_to('es_linker', 'training.json')
+    flask._app_ctx_stack.labeller_mem[project_id]['labeller'].write_training(training_path)
     logging.info('Wrote train')
     
     try:
