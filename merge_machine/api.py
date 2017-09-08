@@ -24,16 +24,8 @@ TODO:
     
     - Protect admin functions
 
-    - Do not go to next page if an error occured
     - General error handling
     
-    - transform_and_download button
-    - Download config
-    
-    - DOWNLOAD full config
-    
-    - User account
-    - Auto train 
     
     - ABSOLUTELY:  handle memory issues
     - Allocate memory by user/ by IP?
@@ -42,7 +34,7 @@ TODO:
 
     - Choose btw add/select/upload and read/load/get
     
-    - Catch exceptions. Never redirect if server error
+    - Catch exceptions. 
     
     - Re-Run inference if selecting more columns
 
@@ -270,684 +262,6 @@ def method_not_allowed(error):
     app.logger.error('Method not allowed (POST or GET): %s', (error))
     return jsonify(error=True, message=error.description), 404
 
-#@app.errorhandler(Exception)
-#def internal_server_error(error):
-#    app.logger.error('Server Error: %s', (error))
-#    return jsonify(error=True, message=error.__str__()), 500
-
-
-#==============================================================================
-# WEB
-#==============================================================================
-
-@app.route('/')
-@app.route('/web/', methods=['GET'])
-@cross_origin()
-def web_index():
-    #  /!\ Partial URL. Full URL will depend on user form
-    next_url_link = url_for('web_select_link_project') 
-    next_url_normalize = url_for('web_normalize_select_file')
-    
-    return render_template('index.html',
-                       next_url_link=next_url_link, 
-                       next_url_normalize=next_url_normalize)
-
-@app.route('/web/link/select_project/', methods=['GET'])
-@cross_origin()
-def web_select_link_project():
-    next_url_partial = url_for('web_link_select_files', project_id='')
-    new_link_project_api_url = url_for('new_project', project_type='link')
-    delete_project_api_url_partial=url_for('delete_project', project_type='link', project_id='')
-    exists_url_partial=url_for('project_exists', project_type='link', project_id='')
-    
-    admin = Admin()
-    list_of_projects = admin.list_project_ids('link')
-    
-    return render_template('select_link_project.html',
-                           list_of_projects = list_of_projects,
-                           
-                           next_url_partial=next_url_partial,
-                           new_link_project_api_url=new_link_project_api_url, 
-                           delete_project_api_url_partial=delete_project_api_url_partial,
-                           exists_url_partial=exists_url_partial)
-    
-    
-@app.route('/web/normalize/select_file/', methods=['GET']) # (Actually select_project)
-@cross_origin()
-def web_normalize_select_file():
-    MAX_FILE_SIZE = 1048576
-    
-    next_url_partial = '/web/select_columns/normalize/' #url_for('web_mvs_normalize', file_name='') # Missing project_id and file_name    
-    
-    new_normalize_project_api_url = url_for('new_project', project_type='normalize')
-    delete_normalize_project_api_url_partial=url_for('delete_project', 
-                                                     project_type='normalize', 
-                                                     project_id='')
-    
-    admin = Admin()
-    all_user_projects = admin.list_projects('normalize') 
-    return render_template('select_file_normalize.html', 
-                           all_user_projects=all_user_projects,
-                           new_normalize_project_api_url=new_normalize_project_api_url,
-                           delete_normalize_project_api_url_partial = delete_normalize_project_api_url_partial,
-                           
-                           upload_api_url_partial=url_for('upload', project_id=''),
-                           next_url_partial=next_url_partial,
-                           MAX_FILE_SIZE=MAX_FILE_SIZE)    
-    
-
-# TODO: look into use of sessions for url generation
-@app.route('/web/link/select_files/<project_id>', methods=['GET']) # (Actually select_projects)
-@cross_origin()
-def web_link_select_files(project_id):
-    '''View to create or join 1 or 2 normalization projects (1 for norm, 2 for link)'''
-    
-    # TODO: Cannot select twice the same file
-    MAX_FILE_SIZE = 1048576
-    
-    next_url = url_for('web_match_columns', project_id=project_id, file_role='source')
-    
-    new_normalize_project_api_url = url_for('new_project', project_type='normalize')
-    delete_normalize_project_api_url_partial=url_for('delete_project', 
-                                                     project_type='normalize', 
-                                                     project_id='')
-
-    # Do what you fina do
-    admin = Admin()
-    all_user_projects = admin.list_projects('normalize') # TODO: take care of this
-    all_internal_projects = admin.list_projects('normalize') 
-
-    # TODO: If you have link, also add files to current     
-    return render_template('select_files_linker.html', 
-                           project_id=project_id,
-                           all_user_projects=all_user_projects, 
-                           all_internal_projects=all_internal_projects,
-                           new_normalize_project_api_url=new_normalize_project_api_url,
-                           delete_normalize_project_api_url_partial = delete_normalize_project_api_url_partial,
-                           
-                           upload_api_url_partial=url_for('upload', project_id=''),
-                           select_file_api_url=url_for('select_file', project_id=project_id),
-                           next_url=next_url,
-                           MAX_FILE_SIZE=MAX_FILE_SIZE)
-
-@app.route('/web/select_columns/normalize/<project_id>/', methods=['GET']) # (Actually select_project)
-@app.route('/web/select_columns/normalize/<project_id>/<file_name>/', methods=['GET']) # (Actually select_project)
-@cross_origin()
-def web_normalize_select_columns(project_id, file_name=None):
-    '''
-    Configurate file to return for ref and source in same page as well as columns
-    that are supposed to match to test results (ex: Siren, SIRENE)
-    '''
-    # TODO: default to matching columns
-
-
-    if file_name is None:
-        proj = UserNormalizer(project_id)
-        (_, file_name) = proj.get_last_written()
-
-    ROWS_TO_DISPLAY = range(3)
-
-    proj = UserNormalizer(project_id)
-
-    proj.load_data('INIT', file_name, restrict_to_selected=False)
-    samples = proj.get_sample(None, None, {'sample_ilocs':ROWS_TO_DISPLAY})
-    
-    selected_columns = proj.read_selected_columns()
-    
-    index = list(samples[0].keys())
-    
-    select_columns_normalize_api_url = url_for('add_selected_columns', 
-                                          project_id=project_id)
-    
-    next_url = url_for('web_mvs_normalize', project_id=project_id, file_name=file_name)
-    return render_template('select_columns_normalize.html', 
-                           index=index,                           
-                           samples=samples,
-                           selected_columns=selected_columns,
-                           select_columns_normalize_api_url=select_columns_normalize_api_url,
-                           next_url=next_url)
-    
-
-
-# Three methods for type inference (i.e. try to guess the likeliest type for each CSV column)
-
-@app.route('/web/infer_types/normalize/<project_id>/', methods=['GET'])
-@app.route('/web/infer_types/normalize/<project_id>/<file_name>/', methods=['GET'])
-@cross_origin()
-def web_infertypes_normalize(project_id, file_name=None):
-    # TODO: remove hack with file_name=None
-    if file_name is None:
-        proj = UserNormalizer(project_id)
-        (_, file_name) = proj.get_last_written()
-    
-    next_url = url_for('web_launch_normalize', 
-                       project_id=project_id, 
-                       file_name=file_name)   
-    return _web_infertypes_normalize(project_id, file_name, next_url)
-    
-@app.route('/web/infer_types/link/<project_id>/<file_role>/', methods=['GET'])
-@cross_origin()   
-def web_infertypes_link(project_id, file_role):
-    _check_file_role(file_role)
-    
-    proj = UserLinker(project_id)
-    normalize_project_id = proj.metadata['files'][file_role]['project_id']
-    normalize_file_name = proj.metadata['files'][file_role]['file_name']
-    
-    if file_role == 'source':
-        next_url = url_for('_web_infertypes_link', project_id=project_id, file_role='ref')
-    else:
-        next_url = url_for('web_mvs', project_id=project_id)
-    return _web_infertypes_normalize(normalize_project_id, normalize_file_name, next_url)
-
-
-def _web_infertypes_normalize(project_id, file_name, next_url):
-    NUM_ROWS_TO_DISPLAY = 30
-    # Show the same number of cell values (per column) as for missing values
-    NUM_PER_COLUMN_TO_DISPLAY = 4          
-    
-    # Act on last file 
-    proj = UserNormalizer(project_id)
-    (module_name, file_name) = proj.get_last_written(None, file_name, before_module='normalize_types') 
-    
-    # Read config or perform inference for project
-    proj.load_data(module_name, file_name)
-    types_config = proj.read_config_data('normalizeTypes', 'config.json')
-    if not types_config:
-      # Infer data types and save
-      inferredTypes = proj.infer('inferTypes', params = None)
-    
-    # Generate sample to display
-    sample_params = {
-                    'num_rows_to_display': NUM_ROWS_TO_DISPLAY,
-                    'num_per_column_to_display': NUM_PER_COLUMN_TO_DISPLAY,
-                    'drop_duplicates': True
-                     }
-    sample = proj.get_sample('sample_types', types_config, sample_params)
-
-    formatted_inferred_types = dict()
-    # An (input field name, likeliest type) dictionary
-    formatted_inferred_types['columns'] = inferredTypes['dataTypes']
-    # The list of all available types so the user can override any automatically inferred type
-    formatted_inferred_types['all'] = preprocess_fields_v3.allDatatypes()
-    # The tags associated to each supported data type
-    formatted_inferred_types['tags'] = preprocess_fields_v3.typeTags()
-    
-    data_params = {'module_name': module_name, 'file_name': file_name}
-
-    return render_template('infer_types.html',
-                           project_id = project_id, 
-                           formatted_inferred_types = formatted_inferred_types,
-                           index=list(sample[0].keys()),
-                           sample=sample,                           
-                           data_params=data_params,
-                           add_config_api_url=url_for('upload_config', 
-                                                      project_type='normalize',
-                                                      project_id=project_id),
-                           recode_missing_values_api_url=url_for('normalizeTypes', 
-                                                      project_id=project_id),
-                           next_url=next_url)
-
-
-@app.route('/web/missing_values/normalize/<project_id>/', methods=['GET'])
-@app.route('/web/missing_values/normalize/<project_id>/<file_name>/', methods=['GET'])
-@cross_origin()
-def web_mvs_normalize(project_id, file_name=None):
-    # TODO: remove hack with file_name=None
-    if file_name is None:
-        proj = UserNormalizer(project_id)
-        (_, file_name) = proj.get_last_written()
-    
-    next_url = url_for('web_launch_normalize', 
-                       project_id=project_id, 
-                       file_name=file_name)   
-    return _web_mvs_normalize(project_id, file_name, next_url)
-    
-@app.route('/web/missing_values/link/<project_id>/<file_role>/', methods=['GET'])
-@cross_origin()   
-def web_mvs_link(project_id, file_role):
-    _check_file_role(file_role)
-    
-    proj = UserLinker(project_id)
-    normalize_project_id = proj.metadata['files'][file_role]['project_id']
-    normalize_file_name = proj.metadata['files'][file_role]['file_name']
-    
-    if file_role == 'source':
-        next_url = url_for('web_mvs_link', project_id=project_id, file_role='ref')
-    else:
-        next_url = url_for('web_dedupe', project_id=project_id)
-    return _web_mvs_normalize(normalize_project_id, 
-                              normalize_file_name, 
-                              next_url)
-
-def _web_mvs_normalize(project_id, file_name, next_url):
-    NUM_ROWS_TO_DISPLAY = 30
-    NUM_PER_MISSING_VAL_TO_DISPLAY = 4          
-    # TODO: add click directly on cells with missing values
-    
-    # Act on last file 
-    proj = UserNormalizer(project_id)
-    (module_name, file_name) = proj.get_last_written(None, file_name, before_module='replace_mvs') 
-    
-    # Read config or perform inference for project
-    proj.load_data(module_name, file_name)
-    mvs_config = proj.read_config_data('replace_mvs', 'config.json')
-    if not mvs_config:
-        # Infer missing values + save
-        mvs_config = proj.infer('infer_mvs', params=None)
-    
-    # Generate sample to display
-    sample_params = {
-                    'num_rows_to_display': NUM_ROWS_TO_DISPLAY,
-                    'num_per_missing_val_to_display': NUM_PER_MISSING_VAL_TO_DISPLAY,
-                    'drop_duplicates': True
-                     }
-    sample = proj.get_sample('sample_mvs', mvs_config, sample_params)
-    
-    # Format infered_mvs for display in web app
-    formated_infered_mvs = dict()
-    formated_infered_mvs['columns'] = {col:[mv['val'] for mv in mvs if mv['score'] >= mvs_config['thresh']] \
-                    for col, mvs in mvs_config['mvs_dict']['columns'].items()}
-    formated_infered_mvs['all'] = [mv['val'] for mv in mvs_config['mvs_dict']['all'] if mv['score'] >= mvs_config['thresh']]
-    
-    data_params = {'module_name': module_name, 'file_name': file_name}
-
-    return render_template('missing_values.html',
-                           project_id=project_id, 
-                           formated_infered_mvs=formated_infered_mvs,
-                           index=list(sample[0].keys()),
-                           sample=sample,
-                           
-                           data_params=data_params,
-                           add_config_api_url=url_for('upload_config', 
-                                                      project_type='normalize',
-                                                      project_id=project_id),
-                           recode_missing_values_api_url=url_for('schedule_job',
-                                                      job_name='replace_mvs',
-                                                      project_id=project_id),
-                           next_url=next_url)
-
-
-@app.route('/web/link/match_columns/<project_id>/', methods=['GET'])
-@cross_origin()
-def web_match_columns(project_id):
-    ROWS_TO_DISPLAY = range(3)
-    
-    proj = UserLinker(project_id)
-    
-    # 
-    sample_params = {'sample_ilocs':ROWS_TO_DISPLAY}
-    
-    # Load source and regsample
-    samples = dict()
-    for file_role in ['ref', 'source']:
-        proj.load_project_to_merge(file_role)
-        (_, file_name) = proj.__dict__[file_role].get_last_written(module_name=None, 
-                                                      file_name=None)
-        proj.__dict__[file_role].load_data('INIT', 
-                                         file_name, 
-                                         nrows=max(ROWS_TO_DISPLAY)+1,
-                                         restrict_to_selected=False)
-        samples[file_role] = proj.__dict__[file_role].get_sample(None, None, sample_params)
-        proj.__dict__[file_role].clear_memory()
-
-    
-    # Check valid onfirm valid columns for 
-    def config_is_coherent(config, source_sample, ref_sample):
-        do_break = False
-        for pair in config:
-            for col in pair['source']:
-                if col not in source_sample[0]:
-                    do_break = True
-                    break
-            for col in pair['ref']:
-                if col not in ref_sample[0]:
-                    do_break = True
-                    break     
-            if do_break:
-                config = []
-                break
-        
-        return config != []
-
-    # Load previous config
-    config = proj.read_col_matches()
-    config = config * config_is_coherent(config, samples['source'], samples['ref'])                    
-    
-    return render_template('match_columns.html',
-                           config=config,
-                           
-                           source_index=list(samples['source'][0].keys()),
-                           ref_index=list(samples['ref'][0].keys()),
-                           
-                           source_sample=samples['source'],
-                           ref_sample=samples['ref'],
-                                                      
-                           add_column_matches_api_url=url_for('add_column_matches', project_id=project_id),
-                           next_url=url_for('web_mvs_link', project_id=project_id, file_role='source'))
-
-    
-@socketio.on('answer', namespace='/')
-def web_get_answer(message_received):
-    # TODO: avoid multiple click (front)
-    # TODO: add safeguards  if not enough train (front)
-
-    message_received = json.loads(message_received)
-    logging.info(message_received)
-    project_id = message_received['project_id']
-    user_input = message_received['user_input']
-    
-    
-    message_to_display = ''
-    #message = 'Expect to have about 50% of good proposals in this phase. The more you label, the better...'
-    if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].answer_is_valid(user_input):
-        flask._app_ctx_stack.labeller_mem[project_id]['labeller'].parse_valid_answer(user_input)
-        if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].finished:
-            logging.info('Writing train')
-            flask._app_ctx_stack.labeller_mem[project_id]['labeller'].write_training(flask._app_ctx_stack.labeller_mem[project_id]['paths']['train'])
-            logging.info('Wrote train')
-            
-            try:
-                del flask._app_ctx_stack.labeller_mem[project_id]['labeller']
-                logging.info('Deleted labeller for project: {0}'.format(project_id))
-            except:
-                logging.warning('Could not delete labeller for project: {0}'.format(project_id))
-            try:
-                del flask._app_ctx_stack.labeller_mem[project_id]['paths']
-            except:
-                logging.warning('Could not delete paths for project: {0}'.format(project_id))
-                
-            # TODO: Do dedupe
-            next_url = url_for('web_select_return', project_type='link', project_id=project_id)
-            emit('redirect', {'url': next_url})
-        else:
-            flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
-    else:
-        message_to_display = 'Sent an invalid answer'
-    emit('message', flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=message_to_display))
-    
-
-@socketio.on('terminate', namespace='/')
-def web_terminate_labeller_load(message_received):
-    '''Clear memory in application for selected project'''
-    message_received = json.loads(message_received)
-    project_id = message_received['project_id']
-    
-    try:
-        del flask._app_ctx_stack.labeller_mem[project_id]['labeller']
-        logging.info('Deleted labeller for project: {0}'.format(project_id))
-    except:
-        logging.warning('Could not delete labeller for project: {0}'.format(project_id))
-    try:
-        del flask._app_ctx_stack.labeller_mem[project_id]['paths']
-    except:
-        logging.warning('Could not delete paths for project: {0}'.format(project_id))
-            
-    
-@socketio.on('load_labeller', namespace='/')
-def load_labeller(message_received):
-    '''Loads labeller. Necessary to have a separate call to preload page'''
-    message_received = json.loads(message_received)
-    project_id = message_received['project_id']
-    
-    # TODO: put variables in memory
-    # TODO: remove from memory at the end
-    proj = UserLinker(project_id=project_id)
-    paths = proj._gen_paths_es() 
-    
-    # Create flask labeller memory if necessary and add current labeller
-    try:
-        flask._app_ctx_stack.labeller_mem[project_id] = dict()
-    except:
-        flask._app_ctx_stack.labeller_mem = {project_id: dict()}
-    
-    # Generate dedupe paths and create labeller
-    flask._app_ctx_stack.labeller_mem[project_id]['paths'] = paths
-    flask._app_ctx_stack.labeller_mem[project_id]['labeller'] = proj._read_labeller('es_linker')
-    
-    flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
-    
-    encoder = MyEncoder()
-    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message='')))
-
-
-@app.route('/web/link/dedupe_linker/<project_id>/', methods=['GET'])
-@cross_origin()    
-def web_dedupe(project_id):
-    '''Labelling / training and matching using dedupe'''
-    proj = UserLinker(project_id)
-    
-    source_id = proj.metadata['files']['source']['project_id']
-    ref_id = proj.metadata['files']['source']['project_id']
-    
-    source_cat_api_url = url_for('schedule_job',
-                                    job_name='concat_with_init', 
-                                    project_id=source_id)
-    ref_cat_api_url = url_for('schedule_job',
-                                    job_name='concat_with_init', 
-                                    project_id=ref_id)
-    dummy_labeller = proj._gen_dedupe_dummy_labeller()
-    
-    return render_template('dedupe_training.html',
-                           **dummy_labeller.to_emit(''),
-                           create_es_index_api_url=url_for('schedule_job',
-                                                            job_name='create_es_index', 
-                                                            project_id=project_id),
-                           create_labeller_api_url=url_for('schedule_job',
-                                                            job_name='create_es_labeller', 
-                                                            project_id=project_id),
-                           source_cat_api_url=source_cat_api_url,
-                           ref_cat_api_url=ref_cat_api_url,
-                           project_id=project_id)
-
-
-@app.route('/web/select_return/<project_type>/<project_id>', methods=['GET'])
-@cross_origin()
-def web_select_return(project_type, project_id):
-    '''
-    Configurate file to return for ref and source in same page as well as columns
-    that are supposed to match to test results (ex: Siren, SIRENE)
-    '''
-    # TODO: default to matching columns
-    _check_project_type(project_type)
-    if project_type == 'normalize':
-        raise Exception('Normalize project_type is not supported for select_return')
-    
-    
-    ROWS_TO_DISPLAY = range(3)
-    
-    proj = UserLinker(project_id)
-    
-    samples = dict()
-    selected_columns_to_return = dict()
-
-    for file_role in ['source', 'ref']:
-        # Load sample
-        data = proj.metadata['files'][file_role]
-        
-        proj.load_project_to_merge(file_role)       
-        (module_name, file_name) = proj.__dict__[file_role].get_last_written(None, 
-                                                    data['file_name'])
-
-        # TODO: temporary solution here
-        from api_queued_modules import _concat_with_init
-        _concat_with_init(proj.__dict__[file_role].project_id, {'module_name': module_name, 'file_name': file_name})        
-        # Reload after modifications
-        proj.load_project_to_merge(file_role) 
-    
-        # TODO: figure out why columns are restricted
-      
-        proj.__dict__[file_role].load_data(
-                        'concat_with_init', 
-                        file_name,
-                        nrows=max(ROWS_TO_DISPLAY)+1, 
-                        restrict_to_selected=False)
-        samples[file_role] = proj.__dict__[file_role].get_sample(None, None, {'sample_ilocs':ROWS_TO_DISPLAY})
-        
-        selected_columns_to_return[file_role] = proj.read_cols_to_return(file_role) 
-    
-    column_matches = proj.read_col_certain_matches()
-    
-    indexes = dict()
-    indexes['source'] = list(samples['source'][0].keys())
-    indexes['ref'] = list(samples['ref'][0].keys())
-    
-    select_return_api_urls = dict()
-    select_return_api_urls['source'] = url_for('add_columns_to_return', 
-                                          project_id=project_id, file_role='source')
-    select_return_api_urls['ref'] = url_for('add_columns_to_return', 
-                                          project_id=project_id, file_role='ref')
-    
-    next_url = url_for('web_download', project_type=project_type, project_id=project_id)
-    return render_template('select_return.html', 
-                           indexes=indexes,                           
-                           samples=samples,
-                           selected_columns_to_return=selected_columns_to_return,    
-                           column_matches=column_matches,
-                                                              
-                           add_column_certain_matches_api_url=url_for(\
-                                        'add_column_certain_matches', project_id=project_id),                          
-
-                           select_return_api_urls=select_return_api_urls,
-                           next_url=next_url)
-
-
-@app.route('/web/download/normalize/<project_id>/<file_name>', methods=['GET'])
-def web_launch_normalize(project_id, file_name):
-    
-    return render_template('last_page_normalize.html',
-                           concat_with_init_api_url=url_for('schedule_job', job_name='concat_with_init', project_id=project_id),
-                           home_url=url_for('web_index'))
-
-
-@app.route('/web/download/<project_type>/<project_id>/', methods=['GET'])
-def web_download(project_type, project_id):
-    if project_type == 'normalize':
-        raise NotImplementedError
-    
-    proj = _init_project(project_type, project_id=project_id)
-    res_file_name = 'm3_result.csv'
-    file_path = proj.path_to('dedupe_linker', res_file_name)    
-    has_results =  os.path.isfile(file_path) 
-    
-    next_url = url_for('web_view_results', project_type='link', project_id=project_id)
-    return render_template('last_page_link.html', 
-                           has_results=has_results,
-                           project_id=project_id,
-                           count_jobs_in_queue_before_api_url_partial=url_for('count_jobs_in_queue'),
-                           linker_api_url=url_for('schedule_job', job_name='linker', project_id=project_id),
-                           download_api_url=url_for('download', 
-                                project_type=project_type, project_id=project_id),
-                           next_url=next_url)
-  
-    
-
-@app.route('/web/view_results/<project_type>/<project_id>/', methods=['GET'])
-def web_view_results(project_type, project_id):      
-    if project_type == 'normalize':
-        raise NotImplementedError
-    
-    proj = _init_project(project_type, project_id=project_id)
-    
-    res_file_name = 'm3_result.csv'
-
-    # Identify rows to display
-    proj.load_data('dedupe_linker', res_file_name)  
-
-    certain_col_matches = proj.read_col_certain_matches()
-    use_lower = True
-    metrics = proj.infer('link_results_analyzer', {'col_matches': certain_col_matches, 'lower':use_lower})
-
-    # Choose the columns to display # TODO: Absolutely move this
-    col_matches = proj.read_col_matches() # TODO: API this
-    suffixes = ('_x', '_y')
-    cols_to_display_match = []
-    
-    # TODO: fix for multiple selects of same column
-    cols_to_display_match = []
-    for col in [_col for match in col_matches for _col in match['source'] + match['ref']]: #\
-                #+ proj.read_cols_to_return('ref'):
-        if col in cols_to_display_match:
-            cols_to_display_match.remove(col)
-            cols_to_display_match.append(col + suffixes[0])
-            cols_to_display_match.append(col + suffixes[1])
-        else:
-            cols_to_display_match.append(col)
-            
-    cols_to_display_match.append('__CONFIDENCE')
-    print(cols_to_display_match)
-        
-
-    # Choose the columns to display for single source and single ref 
-    # TODO: Absolutely change this
-    cols_to_display_source = []
-    for match in col_matches:
-        for col in match['source']:
-            if col in cols_to_display_source:
-                cols_to_display_source.remove(col)
-            else:
-                cols_to_display_source.append(col)
-
-    cols_to_display_ref = []
-    for match in col_matches:
-        for col in match['ref']:
-            if col in cols_to_display_ref:
-                cols_to_display_ref.remove(col)
-            else:
-                cols_to_display_ref.append(col)
-
-
-    # Choose rows to display # TODO: Absolutely move this
-    NUM_ROWS_TO_DISPLAY = 1000
-    rows_to_display = list(proj.mem_data.index[proj.mem_data.__CONFIDENCE.notnull()])
-    rows_to_display = rows_to_display[:NUM_ROWS_TO_DISPLAY + 1]
-    
-    # Generate display sample
-    sample_params = {
-                    'sample_ilocs': rows_to_display,
-                    'drop_duplicates': True,
-                    'cols_to_display': cols_to_display_match
-                     }
-    match_sample = proj.get_sample(None, None, sample_params)
-    
-    if certain_col_matches:
-        sel = proj.mem_data.__CONFIDENCE.notnull()
-        if use_lower:
-            sel = sel & (proj.mem_data[certain_col_matches['source']].str.lower() \
-                         != proj.mem_data[certain_col_matches['ref']].str.lower())
-        else:
-            sel = sel & (proj.mem_data[certain_col_matches['source']] \
-                         != proj.mem_data[certain_col_matches['ref']])
-        rows_to_display_error = list(proj.mem_data.index[sel])
-        rows_to_display_error = rows_to_display_error[:NUM_ROWS_TO_DISPLAY + 1]
-        
-        sample_params = {
-                        'sample_ilocs': rows_to_display_error,
-                        'drop_duplicates': True
-                         }        
-        
-        match_error_samples = proj.get_sample(None, None, sample_params)
-    else:
-        match_error_samples = []
-    
-    #    source_sample = proj.get_sample('INIT', proj.metadata['files']['source']['file_name'],
-    #                                row_idxs=rows_to_display, columns=cols_to_display_source)
-    #ref_sample = proj.get_sample('ref', 'INIT', proj.metadata['files']['ref']['file_name'],
-    #                            row_idxs=rows_to_display, columns=cols_to_display_ref)
-
-    return render_template('last_page_old.html', 
-                           project_id=project_id,
-                           
-                           match_index=cols_to_display_match,
-                           match_sample=match_sample,
-                           match_error_samples=match_error_samples,                           
-                           
-                           source_index=cols_to_display_source,
-                           ref_index=cols_to_display_ref,
-                           # ref_sample=ref_sample,  
-                           metrics=metrics,
-                           download_api_url=url_for('download', 
-                                project_type=project_type, project_id=project_id))
 
 #==============================================================================
 # API
@@ -1504,6 +818,93 @@ def add_columns_to_return(project_id, file_role):
     proj = UserLinker(project_id=project_id)
     proj.add_cols_to_return(file_role, columns_to_return)    
     return jsonify(error=False)
+
+
+# =============================================================================
+# Socket methods
+# =============================================================================
+    
+@socketio.on('load_labeller', namespace='/')
+def load_labeller(message_received):
+    '''Loads labeller. Necessary to have a separate call to preload page'''
+    message_received = json.loads(message_received)
+    project_id = message_received['project_id']
+    
+    # TODO: put variables in memory
+    # TODO: remove from memory at the end
+    proj = UserLinker(project_id=project_id)
+    paths = proj._gen_paths_es() 
+    
+    # Create flask labeller memory if necessary and add current labeller
+    try:
+        flask._app_ctx_stack.labeller_mem[project_id] = dict()
+    except:
+        flask._app_ctx_stack.labeller_mem = {project_id: dict()}
+    
+    # Generate dedupe paths and create labeller
+    flask._app_ctx_stack.labeller_mem[project_id]['paths'] = paths
+    flask._app_ctx_stack.labeller_mem[project_id]['labeller'] = proj._read_labeller('es_linker')
+    
+    flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
+    
+    encoder = MyEncoder()
+    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message='')))
+
+    
+@socketio.on('answer', namespace='/')
+def web_get_answer(message_received):
+    # TODO: avoid multiple click (front)
+    # TODO: add safeguards  if not enough train (front)
+
+    message_received = json.loads(message_received)
+    logging.info(message_received)
+    project_id = message_received['project_id']
+    user_input = message_received['user_input']
+    
+    
+    message_to_display = ''
+    #message = 'Expect to have about 50% of good proposals in this phase. The more you label, the better...'
+    if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].answer_is_valid(user_input):
+        flask._app_ctx_stack.labeller_mem[project_id]['labeller'].parse_valid_answer(user_input)
+        if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].finished:
+            logging.info('Writing train')
+            flask._app_ctx_stack.labeller_mem[project_id]['labeller'].write_training(flask._app_ctx_stack.labeller_mem[project_id]['paths']['train'])
+            logging.info('Wrote train')
+            
+            try:
+                del flask._app_ctx_stack.labeller_mem[project_id]['labeller']
+                logging.info('Deleted labeller for project: {0}'.format(project_id))
+            except:
+                logging.warning('Could not delete labeller for project: {0}'.format(project_id))
+            try:
+                del flask._app_ctx_stack.labeller_mem[project_id]['paths']
+            except:
+                logging.warning('Could not delete paths for project: {0}'.format(project_id))
+            
+        else:
+            flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
+    else:
+        message_to_display = 'Sent an invalid answer'
+    emit('message', flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=message_to_display))
+    
+
+@socketio.on('terminate', namespace='/')
+def web_terminate_labeller_load(message_received):
+    '''Clear memory in application for selected project'''
+    message_received = json.loads(message_received)
+    project_id = message_received['project_id']
+    
+    try:
+        del flask._app_ctx_stack.labeller_mem[project_id]['labeller']
+        logging.info('Deleted labeller for project: {0}'.format(project_id))
+    except:
+        logging.warning('Could not delete labeller for project: {0}'.format(project_id))
+    try:
+        del flask._app_ctx_stack.labeller_mem[project_id]['paths']
+    except:
+        logging.warning('Could not delete paths for project: {0}'.format(project_id))
+            
+
 
 #==============================================================================
 # SCHEDULER
