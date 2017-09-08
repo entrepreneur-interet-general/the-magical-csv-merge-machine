@@ -17,7 +17,7 @@ from dedupe_linker import format_for_dedupe, current_load_gazetteer
 from es_match import Labeller as ESLabeller
 from labeller import Labeller, DummyLabeller
 from normalizer import ESReferential, UserNormalizer
-from restrict_reference import perform_restriction
+# from restrict_reference import perform_restriction
 
 from CONFIG import LINK_DATA_PATH
 from MODULES import LINK_MODULES, LINK_MODULE_ORDER_log
@@ -483,47 +483,47 @@ class Linker(AbstractDataProject):
 #    common_words = find_common_words(training_df)
 #    common_vals = find_common_vals(training_df)    
     
-    def perform_restriction(self, params):
-        '''
-        Writes a new file with the path restricted reference
-        
-        /!\ Contrary to infer or transform, the log is written directly.
-        '''
-        
-        current_module_name = 'restriction'
-        
-        # Initiate log
-        self.mem_data_info['file_role'] = 'link' # Role of file being modified
-        
-        log = self._init_active_log(current_module_name, 'link')
-        
-        # TODO: Move this
-        self.load_project_to_merge('ref')
-        module_name = self.metadata['files']['ref']['module_name']
-        file_name = self.metadata['files']['ref']['file_name']
-        
-        self.ref.load_data(module_name, file_name, restrict_to_selected=False)   
-        
-        self.mem_data = (perform_restriction(part_tab, params)[0] \
-                                   for part_tab in self.ref.mem_data) # TODO: no run info !
-        
-        # Complete log
-        self.log_buffer.append(self._end_active_log(log, error=False))    
-        self.mem_data_info['file_name'] = self.ref.mem_data_info['file_name']
-        self.mem_data_info['module_name'] = current_module_name        
-        
-        # TODO: fix fishy:
-        #        self.run_info_buffer[(current_module_name, '__REF__')] = {}
-        #        self.run_info_buffer[(current_module_name, '__REF__')][current_module_name] = run_info # TODO: fishy
-        
-        # Add restricted to current for restricted
-        self.metadata['files']['ref']['restricted'] = True
-        
-        # TODO: write new_ref to "restriction"
-        self.write_data()
-        self.clear_memory()
-        
-        return {} #run_info
+    #    def perform_restriction(self, params):
+    #        '''
+    #        Writes a new file with the path restricted reference
+    #        
+    #        /!\ Contrary to infer or transform, the log is written directly.
+    #        '''
+    #        
+    #        current_module_name = 'restriction'
+    #        
+    #        # Initiate log
+    #        self.mem_data_info['file_role'] = 'link' # Role of file being modified
+    #        
+    #        log = self._init_active_log(current_module_name, 'link')
+    #        
+    #        # TODO: Move this
+    #        self.load_project_to_merge('ref')
+    #        module_name = self.metadata['files']['ref']['module_name']
+    #        file_name = self.metadata['files']['ref']['file_name']
+    #        
+    #        self.ref.load_data(module_name, file_name, restrict_to_selected=False)   
+    #        
+    #        self.mem_data = (perform_restriction(part_tab, params)[0] \
+    #                                   for part_tab in self.ref.mem_data) # TODO: no run info !
+    #        
+    #        # Complete log
+    #        self.log_buffer.append(self._end_active_log(log, error=False))    
+    #        self.mem_data_info['file_name'] = self.ref.mem_data_info['file_name']
+    #        self.mem_data_info['module_name'] = current_module_name        
+    #        
+    #        # TODO: fix fishy:
+    #        #        self.run_info_buffer[(current_module_name, '__REF__')] = {}
+    #        #        self.run_info_buffer[(current_module_name, '__REF__')][current_module_name] = run_info # TODO: fishy
+    #        
+    #        # Add restricted to current for restricted
+    #        self.metadata['files']['ref']['restricted'] = True
+    #        
+    #        # TODO: write new_ref to "restriction"
+    #        self.write_data()
+    #        self.clear_memory()
+    #        
+    #        return {} #run_info
 
         # TODO: Add to current reference
         

@@ -11,7 +11,7 @@ from es_match import es_linker
 from results_analyzer import link_results_analyzer
 from missing_values import infer_mvs, replace_mvs, sample_mvs_ilocs
 from preprocess_fields_v3 import infer_types, normalize_values, sample_types_ilocs
-from restrict_reference import infer_restriction, perform_restriction
+# from restrict_reference import infer_restriction, perform_restriction
 
 
 NORMALIZE_MODULE_ORDER_log = ['INIT', 'make_mini', 'add_selected_columns', 
@@ -98,11 +98,11 @@ LINK_MODULES = {
                                 'write_to': 'results_analysis',
                                 'desc': link_results_analyzer.__doc__
                             },
-                'infer_restriction': {
-                                'func': infer_restriction,
-                                'write_to': 'restriction',
-                                'desc': link_results_analyzer.__doc__                        
-                            }
+#                'infer_restriction': {
+#                                'func': infer_restriction,
+#                                'write_to': 'restriction',
+#                                'desc': link_results_analyzer.__doc__                        
+#                            }
                 },
         'link': {
                 'dedupe_linker': {
