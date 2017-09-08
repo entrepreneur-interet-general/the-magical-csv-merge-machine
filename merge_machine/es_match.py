@@ -26,6 +26,8 @@ import numpy as np
 import pandas as pd
 import unidecode
 
+from my_json_encoder import MyEncoder
+
 es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
  
 def my_unidecode(string):
@@ -843,10 +845,11 @@ class Labeller():
         params['exact_pairs'] = self.pairs
         return params
     
-    def write_training(self, file_path):
+    def write_training(self, file_path):        
+        params = self.export_best_params()
+        encoder = MyEncoder()
         with open(file_path, 'w') as w:
-            params = self.export_best_params()
-            json.dump(params, w)
+            w.write(encoder.encode(params))
     
     def update_musts(self, must, must_not):
         self.must = must
