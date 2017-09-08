@@ -8,12 +8,12 @@ Created on Fri Apr 21 19:48:22 2017
 Abstract project
 
 METHODS:
-    - gen_id()
+    - _gen_id()
     - _path_to(self, data_path, module_name='', file_name='')
     - upload_config_data(self, config_dict, module_name, file_name)
     - read_config_data(self, module_name, file_name)    
     - read_metadata(self)
-    - write_metadata(self)
+    - _write_metadata(self)
     - remove(self, module_name='', file_name='')
     - delete_project(self)
 
@@ -25,8 +25,6 @@ import os
 import random
 import shutil
 import time
-
-import numpy as np
 
 from my_json_encoder import MyEncoder
 
@@ -48,7 +46,7 @@ class AbstractProject():
         if create_new: 
             # Generate project id if none is passed
             if project_id is None:
-                self.project_id = self.gen_id()
+                self.project_id = self._gen_id()
             else:
                 self.project_id = project_id
             
@@ -61,8 +59,8 @@ class AbstractProject():
                 os.makedirs(path_to_proj)
             
             # Create metadata
-            self.metadata = self.create_metadata(description=description, display_name=display_name)
-            self.write_metadata()
+            self.metadata = self._create_metadata(description=description, display_name=display_name)
+            self._write_metadata()
         else:
             self.project_id = project_id
             try:
@@ -72,7 +70,9 @@ class AbstractProject():
         
 
     def read_full_config(self, exclude_modules=['INIT'], exclude_files=['run_info.json']):
-        '''Put all json files in a single dictionnary (for export)'''
+        '''
+        Put all json files in a single dictionnary (for export)
+        '''
         all_dirs = [x for x in os.listdir(self.path_to()) if os.path.isdir(self.path_to(x))]
         
         full_config = dict()
@@ -102,7 +102,7 @@ class AbstractProject():
                 self.upload_config_data(config, module_name, file_name)
       
     @staticmethod
-    def gen_id():
+    def _gen_id():
         '''Generate unique non-guessable string for project ID'''
         unique_string = str(time.time()) + '_' + str(random.random())
         h = hashlib.md5()
@@ -110,7 +110,7 @@ class AbstractProject():
         project_id = h.hexdigest()
         return project_id
 
-    def create_metadata(self, description=None, display_name=None):
+    def _create_metadata(self, description=None, display_name=None):
         '''Core metadatas'''
         metadata = dict()
         metadata['description'] = description
@@ -169,7 +169,7 @@ class AbstractProject():
         assert metadata['project_id'] == self.project_id
         return metadata
     
-    def write_metadata(self):
+    def _write_metadata(self):
         self.metadata['last_timestamp'] = time.time()
         self.upload_config_data(self.metadata, 
                                 module_name='', 

@@ -95,8 +95,8 @@ class Linker(AbstractDataProject):
             if self.metadata['files'][file_role] is None:
                 raise Exception('{0} is not defined for this linking project'.format(file_role))
     
-    def create_metadata(self, description=None, display_name=None):
-        metadata = super().create_metadata(description=description, display_name=display_name)
+    def _create_metadata(self, description=None, display_name=None):
+        metadata = super()._create_metadata(description=description, display_name=display_name)
         metadata['files'] = {'source': None, 'ref': None} # {'source': {internal: False, project_id: "ABC123", file_name: "source.csv.csv"}, 'ref': None}
         return metadata   
 
@@ -123,7 +123,7 @@ class Linker(AbstractDataProject):
         # Add to log
         for file_name in self.metadata['log']:
             self.metadata['log'][file_name]['add_selected_columns']['completed'] = True        
-        self.write_metadata()   
+        self._write_metadata()   
 
         
     def read_col_matches(self, add_created=True):
@@ -227,13 +227,13 @@ class Linker(AbstractDataProject):
         
         # Create log for source
         if file_role == 'source':
-            self.metadata['log'][self.output_file_name(file_name)] = self.default_log()
+            self.metadata['log'][self.output_file_name(file_name)] = self._default_log()
         
         # Add project selection 
         if (self.metadata['files']['source'] is not None) and (self.metadata['files']['ref'] is not None):
             for file_name in self.metadata['log']:
                 self.metadata['log'][file_name]['INIT']['completed'] = True
-        self.write_metadata()
+        self._write_metadata()
         self.load_project_to_merge(file_role)
        
     def read_selected_files(self):
@@ -282,7 +282,7 @@ class Linker(AbstractDataProject):
         self.mem_data_info['file_role'] = 'link' # Role of file being modified
         self.mem_data_info['file_name'] = self.output_file_name(os.path.split(data_params['source'])[-1]) # File being modified
         
-        log = self.init_active_log('dedupe_linker', 'link')
+        log = self._init_active_log('dedupe_linker', 'link')
 
         self.mem_data, run_info = self.MODULES['link']['dedupe_linker']['func'](data_params, module_params)
         
@@ -293,7 +293,7 @@ class Linker(AbstractDataProject):
         self.mem_data_info['module_name'] = 'dedupe_linker'
         
         # Complete log
-        log = self.end_active_log(log, error=False)
+        log = self._end_active_log(log, error=False)
                           
         # Update buffers
         self.run_info_buffer[('dedupe_linker', self.mem_data_info['file_name'])] = run_info
@@ -495,7 +495,7 @@ class Linker(AbstractDataProject):
         # Initiate log
         self.mem_data_info['file_role'] = 'link' # Role of file being modified
         
-        log = self.init_active_log(current_module_name, 'link')
+        log = self._init_active_log(current_module_name, 'link')
         
         # TODO: Move this
         self.load_project_to_merge('ref')
@@ -508,7 +508,7 @@ class Linker(AbstractDataProject):
                                    for part_tab in self.ref.mem_data) # TODO: no run info !
         
         # Complete log
-        self.log_buffer.append(self.end_active_log(log, error=False))    
+        self.log_buffer.append(self._end_active_log(log, error=False))    
         self.mem_data_info['file_name'] = self.ref.mem_data_info['file_name']
         self.mem_data_info['module_name'] = current_module_name        
         
@@ -536,14 +536,14 @@ class Linker(AbstractDataProject):
 #        self.mem_data_info['file_role'] = 'link' # Role of file being modified
 #        self.mem_data_info['file_name'] = self.output_file_name(os.path.split(paths['source'])[-1]) # File being modified
 #        
-#        log = self.init_active_log(module_name, 'link')
+#        log = self._init_active_log(module_name, 'link')
 #
 #        self.mem_data, run_info = MODULES['link'][module_name]['func'](paths, params)
 #        
 #        self.mem_data_info['module_name'] = module_name
 #        
 #        # Complete log
-#        log = self.end_active_log(log, error=False)
+#        log = self._end_active_log(log, error=False)
 #                          
 #        # Update buffers
 #        self.log_buffer.append(log)        

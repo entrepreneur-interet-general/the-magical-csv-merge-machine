@@ -681,7 +681,7 @@ def upload(project_id):
         if proj.metadata['has_mini']:
             proj.write_data()
         else:
-            proj.write_metadata()
+            proj._write_metadata()
 
     return jsonify(run_info=run_info, project_id=proj.project_id)
 

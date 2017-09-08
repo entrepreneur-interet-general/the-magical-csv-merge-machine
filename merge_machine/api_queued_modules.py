@@ -39,7 +39,7 @@ def _infer_mvs(project_id, data_params, module_params):
     result = proj.infer('infer_mvs', module_params)
         
     # Write log
-    proj.write_log_buffer(False)
+    proj._write_log_buffer(False)
     return result
 
 
@@ -89,7 +89,7 @@ def _infer_types(project_id, data_params, module_params):
     result = proj.infer('infer_types', module_params)
         
     # Write log
-    proj.write_log_buffer(False)
+    proj._write_log_buffer(False)
     return result
 
 
@@ -312,7 +312,7 @@ def _infer_restriction(project_id, _, module_params):
     result = proj.infer('infer_restriction', module_params)
         
     # Write log
-    proj.write_log_buffer(False)
+    proj._write_log_buffer(False)
     return result
 
 def _perform_restriction(project_id, _, module_params):
@@ -399,7 +399,7 @@ def _link_results_analyzer(project_id, data_params, *argv):
     result = proj.infer('link_results_analyzer', {})
     
     # Write log
-    proj.write_log_buffer(False)
+    proj._write_log_buffer(False)
     return result
 
 

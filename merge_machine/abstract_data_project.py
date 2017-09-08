@@ -9,14 +9,14 @@ AbstractDataProject
 
 METHODS:
     
-    - init_active_log(self, module_name, module_type)
-    - end_active_log(self, log, error=False)
-    - check_mem_data(self)
+    - _init_active_log(self, module_name, module_type)
+    - _end_active_log(self, log, error=False)
+    - _check_mem_data(self)
     - load_data(self, module_name, file_name, nrows=None, columns=None)
     - get_header(self, module_name, file_name)
     - get_sample(self, sampler_module_name, params, sample_params)
-    - write_log_buffer(self, written)
-    - write_run_info_buffer(self)
+    - _write_log_buffer(self, written)
+    - _write_run_info_buffer(self)
     - write_data(self)
     - clear_memory(self)
     - infer(self, module_name, params)
@@ -29,7 +29,6 @@ import gc
 import logging
 from itertools import tee
 import os
-import shutil
 import time
 
 import numpy as np
@@ -66,7 +65,7 @@ class AbstractDataProject(AbstractProject):
         self.last_written = {}
 
 
-    def default_log(self):
+    def _default_log(self):
         '''Default log for a new file'''
         return {module_name: copy.deepcopy(self.default_module_log) 
                 for module_name in self.MODULE_ORDER_log}
@@ -74,7 +73,9 @@ class AbstractDataProject(AbstractProject):
     def get_last_written(self, module_name=None, file_name=None, 
                          before_module=None):
         '''
-        Return info on data that was last successfully written (from log)
+        Return info on data that was last successfully written (from log). 
+        Optional filters will restrict results to the subset of data matching
+        these filters
         
         INPUT:
             - module_name: filter on given module
@@ -93,7 +94,8 @@ class AbstractDataProject(AbstractProject):
         if module_name is not None:
             modules_to_search = [module_name]
         else:        
-            previous_modules = {self.MODULE_ORDER[i]: self.MODULE_ORDER[:i] for i in range(len(self.MODULE_ORDER))}
+            previous_modules = {self.MODULE_ORDER[i]: self.MODULE_ORDER[:i] \
+                                for i in range(len(self.MODULE_ORDER))}
             previous_modules[None] = self.MODULE_ORDER
             modules_to_search = previous_modules[before_module][::-1]
         
@@ -114,19 +116,22 @@ class AbstractDataProject(AbstractProject):
         return (module_name, file_name)
 
 
-    def clean_after(self, module_name, file_name, include_current_module=True):
+    def clean_after(self, module_name, file_name, delete_current_module=True):
         '''
-        Removes all occurences of file and transformations
-        at and after the given module (self.MODULE_ORDER)
-        '''
-        # TODO: move to normalize
+        Removes all occurences of file (file_name) and transformations
+        at and after the given module (module_name) based on the order in 
+        self.MODULE_ORDER
         
+        INPUT:
+            - module_name
+            - file_name
+            - delete_current_module: also delete the file in module_name
+        '''
         if file_name not in self.metadata['log']:
-            # TODO: put warning here instead
-            pass
-            # raise Exception('This file cannot be cleaned: it cannot be found in log')
+            logging.warning('File {0} was not found in logs'.format(file_name))
+            return
         
-        start_idx = self.MODULE_ORDER_log.index(module_name) + int(not include_current_module)
+        start_idx = self.MODULE_ORDER_log.index(module_name) + int(not delete_current_module)
         for iter_module_name in self.MODULE_ORDER_log[start_idx:]:            
             # module_log = self.metadata['log'][file_name]
             # TODO: check skipped, written instead of try except            
@@ -141,16 +146,20 @@ class AbstractDataProject(AbstractProject):
                 self.metadata['log'][file_name][iter_module_name] = copy.deepcopy(self.default_module_log)
             except:
                 pass
-            self.write_metadata()
+            self._write_metadata()
 
 
     def upload_init_data(self, file, file_name, user_given_name=None):
         raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
 
-    def end_active_log(self, log, error=False):
-        '''
-        Close a log mesage started with init_active_log (right after module call)
+    def _end_active_log(self, log, error=False):
+        '''    
+        Close a log mesage started with _init_active_log (right after module call)
         and append to log buffer
+        
+        INPUT:
+            - log: a log object created by _init_active_log
+            - error: whether or not there was an error during execution
         '''
         log['end_timestamp'] = time.time()
         log['error'] = error
@@ -159,9 +168,14 @@ class AbstractDataProject(AbstractProject):
         self.log_buffer.append(log)# TODO: change for dict
         return log    
 
-    def init_active_log(self, module_name, module_type):
+    def _init_active_log(self, module_name, module_type):
         '''
-        Initiate a log (before a module call). Use end_active_log to complete log message
+        Initiate a log (before a module call). Use _end_active_log to complete 
+        log message
+        
+        INPUT:
+            - module_name:
+            - module_type: 'transform', 'infer', or 'link'
         '''
         # TODO: change this
         # TODO: look where to load source and ref (linker)
@@ -172,7 +186,7 @@ class AbstractDataProject(AbstractProject):
                
                 # Modification at hand                        
                'module_name': module_name, # Module to be executed
-               'module_type': module_type, # Type (transform, infer, or dedupe)
+               'module_type': module_type, # Type (transform, infer, or link)
                'start_timestamp': time.time(),
                'end_timestamp': None, 'error':None, 'error_msg':None, 'written': False
                }
@@ -181,16 +195,16 @@ class AbstractDataProject(AbstractProject):
     def set_skip(self, module_name, file_name, skip_value):
         '''Sets the "skiped value to True in log"'''
         self.metadata['log'][file_name]['module_name']['skiped'] = skip_value
-        self.write_metadata() #TODO: Do we write meta"data?
+        self._write_metadata() #TODO: Do we write meta"data?
 
-    def check_mem_data(self):
+    def _check_mem_data(self):
         '''Check that there is data loaded in memory'''
         if self.mem_data is None:
             raise Exception('No data in memory: use `load_data` (reload is \
                         mandatory after dedupe)')
     
-    def static_load_data(self, file_path, nrows=None, columns=None): 
-        
+    def _static_load_data(self, file_path, nrows=None, columns=None): 
+        ''' #TODO: document this isht '''
         if columns is None:
             columns = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
                                     nrows=0, usecols=columns).columns
@@ -199,6 +213,7 @@ class AbstractDataProject(AbstractProject):
                 return bool
             else:
                 return str
+            
         dtype = {col: choose_dtype(col) for col in columns}
                                    
         if nrows is not None:
@@ -214,14 +229,20 @@ class AbstractDataProject(AbstractProject):
         '''
         Load data as pandas DataFrame to memory. Overwritten in normalize
         
-        Returns a 2-element tuple:
-            - first element is a generator which generates pandas DataFrames
-            - second element is a 
+        Creates two properties for self:
+            - mem_data: is a generator which generates pandas DataFrames
+            - mem_data_info: contains information on the data currently in memory
+            
+        INPUT:
+            - module_name:
+            - file_name:
+            - nrows: how many rows to read from the file
+            - columns: what columns to load
         '''
         logging.debug('Columns selected to load are: {0}'.format(columns))
 
         file_path = self.path_to(module_name, file_name)     
-        self.mem_data = self.static_load_data(file_path, nrows, columns)
+        self.mem_data = self._static_load_data(file_path, nrows, columns)
         self.mem_data_info = {'file_name': file_name,
                               'module_name': module_name,
                               'nrows': nrows, 
@@ -241,6 +262,10 @@ class AbstractDataProject(AbstractProject):
         Columns containing "__" will be written the second sheet
         
         Use for download only!
+        
+        INPUT:
+            - module_name:
+            - file_name:
         '''
         raise DeprecationWarning('Excel download currently not supported due'\
                                  'to potential memory issues with large files')
@@ -279,7 +304,7 @@ class AbstractDataProject(AbstractProject):
             - sample
         
         '''
-        self.check_mem_data()
+        self._check_mem_data()
         
         self.mem_data, tab_gen = tee(self.mem_data)
         part_tab = next(tab_gen)
@@ -329,6 +354,7 @@ class AbstractDataProject(AbstractProject):
     
     @staticmethod
     def _is_mini(file_name):
+        '''Does name match with that of a "mini" file'''
         return file_name[:len(MINI_PREFIX)] == MINI_PREFIX
     
     @staticmethod
@@ -340,10 +366,16 @@ class AbstractDataProject(AbstractProject):
         '''
         Creates a smaller version of the table in memory. 
         Set mem_data_info and current file to mini
+        
+        INPUT:
+            - params:
+                sample_size: #TODO: what is this?
+                randomize: chose elements randomly #TODO: how does this work ?
+                
         '''
         # TODO: Change current 
         # TODO: Current for normalize ?        
-        self.check_mem_data()
+        self._check_mem_data()
     
         # Set defaults
         sample_size = params.get('sample_size', self.CHUNKSIZE - 1)
@@ -362,7 +394,7 @@ class AbstractDataProject(AbstractProject):
             self.clean_after('INIT', new_file_name) # TODO: check module_name for clean_after
             
             # Initiate log
-            log = self.init_active_log('INIT', 'transform')  # TODO: hack here: module_name should be 'make_mini'
+            log = self._init_active_log('INIT', 'transform')  # TODO: hack here: module_name should be 'make_mini'
             
             if randomize:
                 sample_index = np.random.permutation(part_tab.index)[:sample_size]
@@ -377,7 +409,7 @@ class AbstractDataProject(AbstractProject):
             self.mem_data_info['file_name'] = new_file_name
             
             # Create new empty log in metadata # TODO: make class method
-            self.metadata['log'][new_file_name] = self.default_log()
+            self.metadata['log'][new_file_name] = self._default_log()
         
             log['og_file_name'] = log['file_name']
             log['file_name'] = new_file_name
@@ -385,7 +417,7 @@ class AbstractDataProject(AbstractProject):
             # TODO: think if transformation should / should not be complete
     
             # Complete log
-            log = self.end_active_log(log, error=False) 
+            log = self._end_active_log(log, error=False) 
             # TODO: Make sure that run_info_buffer should not be extended
             return log
         
@@ -393,18 +425,18 @@ class AbstractDataProject(AbstractProject):
             self.metadata['has_mini'] = False
             return {}
     
-    def write_log_buffer(self, written):
+    def _write_log_buffer(self, written):
         '''
         Appends log buffer to metadata, writes metadata and clears log_buffer.
         
         INPUT: 
-            - written: weather or not the data was written
+            - written: whether or not the data was written
         '''
         if not self.log_buffer:
             # TODO: Put warning here
             pass
             #            raise Exception('No log buffer: no operations were executed since \
-            #                            write_log_buffer was last called')
+            #                            _write_log_buffer was last called')
 
         # Indicate if any data was written
         if written:
@@ -430,11 +462,11 @@ class AbstractDataProject(AbstractProject):
             if file_name is not None: # TODO: burn this heresy
                 self.metadata['log'][file_name][module_name].update(log)
         # Write metadata and clear log buffer
-        self.write_metadata()
+        self._write_metadata()
         self.log_buffer = []
 
 
-    def write_run_info_buffer(self):
+    def _write_run_info_buffer(self):
         '''
         Appends run info buffer to metadata, writes metadata and clears run_info_buffer.        
         '''
@@ -446,7 +478,7 @@ class AbstractDataProject(AbstractProject):
         
     def write_data(self):
         '''Write data stored in memory to proper module'''
-        self.check_mem_data()
+        self._check_mem_data()
             
         # Write data
         dir_path = self.path_to(self.mem_data_info['module_name'])
@@ -472,8 +504,8 @@ class AbstractDataProject(AbstractProject):
 
 
         logging.info('Wrote to: {0}'.format(file_path))
-        self.write_log_buffer(True)
-        self.write_run_info_buffer()
+        self._write_log_buffer(True)
+        self._write_run_info_buffer()
 
 
         if nrows == 0:
@@ -499,14 +531,14 @@ class AbstractDataProject(AbstractProject):
         if (params is not None) and params.get('NO_MEM_DATA', False):
             data = None
         else:
-            self.check_mem_data()
+            self._check_mem_data()
             self.mem_data, tab_gen = tee(self.mem_data)
             data = next(tab_gen) # pd.concat(tab_gen) # TODO: check that this is what we want
             valid_columns = [col for col in data if '__MODIFIED' not in col]
             data = data[valid_columns]
             
         # Initiate log
-        log = self.init_active_log(module_name, 'infer')
+        log = self._init_active_log(module_name, 'infer')
         
         # We duplicate the generator to load a full version of the table and
         # while leaving self.mem_data unchanged
@@ -519,12 +551,12 @@ class AbstractDataProject(AbstractProject):
         self.upload_config_data(infered_params, module_to_write_to, 'infered_config.json')
         
         # Update log buffer
-        self.end_active_log(log, error=False)  
+        self._end_active_log(log, error=False)  
         
         return infered_params
     
     @staticmethod
-    def count_modifications(modified):
+    def _count_modifications(modified):
         '''
         Counts the number of modified values per column
         
@@ -539,7 +571,7 @@ class AbstractDataProject(AbstractProject):
         return mod_count
     
     @staticmethod
-    def add_mod(mod_count, new_mod_count):
+    def _add_mod(mod_count, new_mod_count):
         '''
         Updates the modification count
         '''
@@ -563,8 +595,8 @@ class AbstractDataProject(AbstractProject):
 
         # Store modificiations in run_info_buffer
         self.run_info_buffer[(module_name, self.mem_data_info['file_name'])]['mod_count'] = \
-            self.add_mod(self.run_info_buffer[(module_name, self.mem_data_info['file_name'])]['mod_count'], \
-                         self.count_modifications(modified))
+            self._add_mod(self.run_info_buffer[(module_name, self.mem_data_info['file_name'])]['mod_count'], \
+                         self._count_modifications(modified))
 
         modified.columns = [col + '__MODIFIED' for col in modified.columns]
         for col in modified.columns:
@@ -579,11 +611,11 @@ class AbstractDataProject(AbstractProject):
         Run module on pandas DataFrame in memory and update memory state.
         /!\ DATA IS CLEANED WHEN transform IS CALLED
         '''
-        self.check_mem_data()
+        self._check_mem_data()
         self.clean_after(module_name, self.mem_data_info['file_name'])
         
         # Initiate log
-        log = self.init_active_log(module_name, 'transform')
+        log = self._init_active_log(module_name, 'transform')
 
         # Initiate run_info
         run_info = dict()
@@ -600,7 +632,7 @@ class AbstractDataProject(AbstractProject):
         self.mem_data_info['module_name'] = module_name
 
         # Complete log
-        log = self.end_active_log(log, error=False)
+        log = self._end_active_log(log, error=False)
                           
         # Add time to run_info (# TODO: is this the best way?) 
 #        run_info['start_timestamp'] = log['start_timestamp']

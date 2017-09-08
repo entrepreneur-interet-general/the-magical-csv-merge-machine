@@ -33,8 +33,8 @@ class Normalizer(AbstractDataProject):
         memory as Pandas DataFrame. Transformations are only written to disk if
         write_data is called. A log that describes the changes made to the 
         data in memory is stored in log_buffer. Agter writing data, you should
-        also write the log_buffer (write_log_buffer) and run_info_buffer 
-        (write_log_info_buffer) to log the changes that were performed.
+        also write the log_buffer (_write_log_buffer) and run_info_buffer 
+        (_write_log_info_buffer) to log the changes that were performed.
     
     In short: Objects stored in memory are:
         - TODO: write this
@@ -51,8 +51,8 @@ class Normalizer(AbstractDataProject):
     def __init__(self, project_id=None, create_new=False, description=None, display_name=None):
         super().__init__(project_id, create_new, description, display_name=display_name)
 
-    def create_metadata(self, description=None, display_name=None):
-        metadata = super().create_metadata(description=description, 
+    def _create_metadata(self, description=None, display_name=None):
+        metadata = super()._create_metadata(description=description, 
                                             display_name=display_name)
         # For dicts below, keys are file_names
         metadata['column_tracker'] = None
@@ -147,7 +147,7 @@ class Normalizer(AbstractDataProject):
         '''
         Read CSV and perform inference on streaming file
         
-        /!\ Use only on upload. Otherwise, look into static_load_data in parent
+        /!\ Use only on upload. Otherwise, look into _static_load_data in parent
         class        
         '''
         ENCODINGS = ['utf-8', 'windows-1252']
@@ -253,7 +253,7 @@ class Normalizer(AbstractDataProject):
             raise Exception('File: {0} already exists. Delete this file ' \
                              + 'or choose another name'.format(file_name))
         
-        log = self.init_active_log('INIT', 'transform')
+        log = self._init_active_log('INIT', 'transform')
 
         if extension == 'csv':
             self.mem_data, sep, encoding, columns = self.read_csv(file, chars_to_replace)
@@ -281,10 +281,10 @@ class Normalizer(AbstractDataProject):
                 
         # Create new empty log in metadata
         self.mem_data_info['file_name'] = file_name
-        self.metadata['log'][file_name] = self.default_log()
+        self.metadata['log'][file_name] = self._default_log()
                 
         # Complete log
-        log = self.end_active_log(log, error=False)
+        log = self._end_active_log(log, error=False)
                           
         # Update log buffer
         self.log_buffer.append(log)
@@ -331,7 +331,7 @@ class Normalizer(AbstractDataProject):
         # pre-existing files. Because we will have to re-run processing 
         if any(col not in self.metadata['column_tracker']['selected'] for col in columns):
             for file_name in self.metadata['files']:
-                self.clean_after('INIT', file_name, include_current_module=False)
+                self.clean_after('INIT', file_name, delete_current_module=False)
 
         # Add to log
         for file_name in self.metadata['log']:
@@ -340,7 +340,7 @@ class Normalizer(AbstractDataProject):
         # Add selected columns to metadata
         self.metadata['column_tracker']['selected'] = columns
         
-        self.write_metadata()   
+        self._write_metadata()   
 
     def read_selected_columns(self):
         return self.metadata['column_tracker']['selected']
@@ -357,8 +357,8 @@ class Normalizer(AbstractDataProject):
             if file_name == _file_name:
                 self.remove(module_name, file_name)
         
-        self.metadata['log'][file_name] = self.default_log()
-        self.write_metadata()
+        self.metadata['log'][file_name] = self._default_log()
+        self._write_metadata()
 
 
     
@@ -368,15 +368,15 @@ class Normalizer(AbstractDataProject):
         
         TODO: merge with transform
         '''
-        self.check_mem_data()
+        self._check_mem_data()
         
         # Initiate log
-        log = self.init_active_log('concat_with_init', 'transform')
+        log = self._init_active_log('concat_with_init', 'transform')
     
         og_file_name = self.mem_data_info['file_name']
         og_file_path = self.path_to('INIT', og_file_name)
 
-        og_tab = self.static_load_data(og_file_path, None, None)
+        og_tab = self._static_load_data(og_file_path, None, None)
         
         def rename_column(col):
             if '__' in col:
@@ -409,7 +409,7 @@ class Normalizer(AbstractDataProject):
         run_info = {} # TODO: check specifications for run_info
 
         # Complete log
-        log = self.end_active_log(log, error=False)
+        log = self._end_active_log(log, error=False)
                           
         # Add time to run_info (# TODO: is this the best way?)
         run_info['start_timestamp'] = log['start_timestamp']
@@ -433,7 +433,7 @@ class Normalizer(AbstractDataProject):
         # TODO: move to abstract_data_project ?
         # TODO: check skipped
         '''
-        self.check_mem_data()
+        self._check_mem_data()
         
         all_run_infos = {}
         # Only run all if there is a MINI version of the file # TODO: check that this is valid
@@ -490,14 +490,14 @@ class ESReferential(UserNormalizer):
             
         
         if not self.ic.exists(self.index_name):
-            log = self.init_active_log('INIT', 'transform')
+            log = self._init_active_log('INIT', 'transform')
             
             index_settings = es_insert.gen_index_settings(columns_to_index)
             self.ic.create(self.index_name, body=json.dumps(index_settings))  
             es_insert.index(ref_gen, self.index_name, testing)
         
-            log = self.end_active_log(log, error=False)
-        self.write_log_buffer(written=False)
+            log = self._end_active_log(log, error=False)
+        self._write_log_buffer(written=False)
     
     def delete_index(self):
         return self.ic.delete(self.index_name)
@@ -576,16 +576,16 @@ if __name__ == '__main__':
     # Write transformed file
 #    assert False
 #    print('Rows written', proj.write_data())
-#    proj.write_log_buffer(written=True)
-#    proj.write_run_info_buffer()
+#    proj._write_log_buffer(written=True)
+#    proj._write_run_info_buffer()
 #    
 #    assert False
     
     # Concat with init
     proj.concat_with_init()
     proj.write_data()
-    proj.write_log_buffer(written=True)
-    proj.write_run_info_buffer()
+    proj._write_log_buffer(written=True)
+    proj._write_run_info_buffer()
     
     # Remove previously uploaded file
     # proj.remove_data('source', 'INIT', 'source.csv')    
