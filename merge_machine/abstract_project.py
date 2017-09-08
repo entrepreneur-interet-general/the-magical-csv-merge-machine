@@ -118,6 +118,7 @@ class AbstractProject():
         metadata['log'] = {}
         metadata['project_id'] = self.project_id
         metadata['timestamp'] = time.time()
+        metadata['last_timestamp'] = metadata['timestamp']
         metadata['user_id'] = '__ NOT IMPLEMENTED'
         return metadata     
 
@@ -169,6 +170,7 @@ class AbstractProject():
         return metadata
     
     def write_metadata(self):
+        self.metadata['last_timestamp'] = time.time()
         self.upload_config_data(self.metadata, 
                                 module_name='', 
                                 file_name='metadata.json')
