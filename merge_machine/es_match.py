@@ -564,7 +564,7 @@ class Labeller():
             for res in results[:num_results]:
                 if res['_id'] not in ids_done \
                         and ((res['_score']>=0.001)) \
-                        and res['_ids'] not in self.pairs_not_match[self.idx]: #  TODO: not neat
+                        and res['_id'] not in self.pairs_not_match[self.idx]: #  TODO: not neat
                     ids_done.append(res['_id'])
                     yield res
 
