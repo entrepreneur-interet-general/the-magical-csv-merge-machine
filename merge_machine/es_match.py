@@ -5,9 +5,6 @@ Created on Tue Aug 29 13:39:55 2017
 
 @author: m75380
 
-Make a previous function?
-previous row and back to row init 
-
 Add extend sorted keys
 
 Add option to label full file (no inference on unlabelled)
@@ -16,11 +13,7 @@ multiple query
 
 security 
 
-join source columns if multiple match*
-
 big problem with add_selected_columns and cleaning of previous file
-
-add skip api method
 
 """
 from collections import defaultdict
@@ -117,6 +110,18 @@ def _remove_words(string, words):
         string = string.replace(word, '')
     return string
 
+def _reformat_s_q_t(s_q_t):
+    '''Makes sure s_q_t[1] is a list'''
+    if isinstance(s_q_t[1], str):
+        old_len = len(s_q_t)
+        s_q_t = (s_q_t[0], [s_q_t[1]], s_q_t[2], s_q_t[3], s_q_t[4])
+        assert len(s_q_t) == old_len
+    elif isinstance(s_q_t[1], str):
+        pass
+    else:
+        raise ValueError('Singel query template element 1 should be str or list')
+    return s_q_t
+
 def _gen_body(query_template, row, must={}, must_not={}, num_results=3):
     '''
     Generate the string to pass to Elastic search for it to execute query
@@ -138,13 +143,15 @@ def _gen_body(query_template, row, must={}, must_not={}, num_results=3):
     '''
     DEFAULT_MUST_FIELD = '.french'
     
+    query_template = [_reformat_s_q_t(s_q_t) for s_q_t in query_template]
+    
     body = {
           'size': num_results,
           'query': {
             'bool': dict({
                must_or_should: [
                           {'match': {
-                                  s_q_t[2] + s_q_t[3]: {'query': _remove_words(row[s_q_t[1]], must.get(s_q_t[2], [])),
+                                  s_q_t[2] + s_q_t[3]: {'query': _remove_words(row[s_q_t[1]].str.cat(sep=' '), must.get(s_q_t[2], [])),
                                                         'boost': s_q_t[4]}}
                           } \
                           for s_q_t in query_template if (s_q_t[0] == must_or_should) \
@@ -153,7 +160,7 @@ def _gen_body(query_template, row, must={}, must_not={}, num_results=3):
                         + [
                           {'multi_match': {
                                   'fields': [col + s_q_t[3] for col in s_q_t[2]], 
-                                  'query': my_unidecode(row[s_q_t[1]].lower()).replace('lycee', ''),
+                                  'query': my_unidecode(row[s_q_t[1]].str.cat(sep=' ').lower()).replace('lycee', ''),
                                   'boost': s_q_t[4]
                                   }
                           } \
