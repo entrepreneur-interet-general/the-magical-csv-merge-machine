@@ -866,13 +866,11 @@ def web_get_answer(message_received):
     #message = 'Expect to have about 50% of good proposals in this phase. The more you label, the better...'
     if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].answer_is_valid(user_input):
         flask._app_ctx_stack.labeller_mem[project_id]['labeller'].parse_valid_answer(user_input)
-        if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].finished:
+        # if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].finished:
 
-            
-        else:
-            flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
-    else:
-        message_to_display = 'Sent an invalid answer'
+        flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
+#    else:
+#        message_to_display = 'Sent an invalid answer'
         
     encoder = MyEncoder()
     emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=message_to_display)))
