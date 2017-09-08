@@ -26,6 +26,8 @@ import numpy as np
 import pandas as pd
 import unidecode
 
+from my_json_encoder import MyEncoder
+
 es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
  
 def my_unidecode(string):
@@ -839,14 +841,20 @@ class Labeller():
         params['query_templates'] = self._best_query_template()
         params['must'] = self.must
         params['must_not'] = self.must_not
-        params['thresh'] = self.threshold
+        params['thresh'] = 0 # self.threshold #TODO: fix this
         params['exact_pairs'] = self.pairs
         return params
     
+    def write_training(self, file_path):        
+        params = self.export_best_params()
+        encoder = MyEncoder()
+        with open(file_path, 'w') as w:
+            w.write(encoder.encode(params))
     
     def update_musts(self, must, must_not):
         self.must = must
         self.must_not = must_not
+        self.re_score_history()
         
     def _best_query_template(self):
         """Return query template with the best score (ratio)"""
