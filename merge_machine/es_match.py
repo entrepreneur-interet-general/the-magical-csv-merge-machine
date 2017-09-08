@@ -258,7 +258,7 @@ def gen_all_query_templates(match_cols, columns_to_index, bool_levels,
                                        for boost in boost_levels))
     all_query_templates = list(itertools.chain(*[list(itertools.combinations(single_queries, x)) \
                                         for x in range(2, max_num_levels+1)][::-1]))
-    # Queries must contain all columns at least two distinct columns
+    # Queries must contain at least two distinct columns (unless one match is mentionned)
     if len(match_cols) > 1:
         all_query_templates = list(filter(lambda query: len(set((x[1], x[2]) for x in query)) >= 2, \
                                     all_query_templates))
@@ -513,8 +513,7 @@ class Labeller():
                 break    
         return min_precision
 
-    def _console_input(self, source_item, ref_item, test_num=0):
-        '''Console input displaying the source_item, ref_item pair'''
+    def _print_pair(self, source_item, ref_item, test_num=0):
         print('\n***** {0} / {1} / ({2})'.format(ref_item['_id'], ref_item['_score'], self.num_rows_labelled))
         print('self.first_propoal_for_source_idx:', self.first_propoal_for_source_idx)
         print('self.num_rows_labelled:', self.num_rows_labelled)
@@ -529,6 +528,9 @@ class Labeller():
                 print('\n{1}   -> [{0}][source]'.format(match['source'], source_item['_source'][match['source']]))
                 print('> {1}   -> [{0}]'.format(col, ref_item['_source'][col]))
         
+    def _console_input(self, source_item, ref_item, test_num=0):
+        '''Console input displaying the source_item, ref_item pair'''
+        self._print_pair(source_item, ref_item, test_num)
         if test_num == 2:
             print(source_item['_source']['SIRET'][:-5], source_item['_source']['SIRET'][-5:], '[source]')
             print(ref_item['_source']['SIREN'], ref_item['_source']['NIC'], '[ref]')
@@ -654,9 +656,10 @@ class Labeller():
         if self.next_row: # If previous was found: try new row
             if self.row_idxs:
                 self.idx = self.row_idxs.pop()
+                
                 # Check if row was already done # TODO: will be problem with count
                 if self.idx in (x[0] for x in self.pairs):
-                    return next(self.label_row_gen)
+                    self._new_label()                      
                 
                 self.first_propoal_for_source_idx = True
             else:
@@ -703,15 +706,15 @@ class Labeller():
         Try to automatically generate the label for the pair source_item, ref_item
         '''
         # TODO: check format of exact match cols
-        source_cols = [self.certain_column_matches['source']]
-        ref_cols = [self.certain_column_matches['ref']]
+        source_cols = self.certain_column_matches['source']
+        ref_cols = self.certain_column_matches['ref']
         
         # If no values are None, check if concatenation is an exact match
-        if all(source_item[col] is not None for col in source_cols) \
-                and all(ref_item[col] is not None for col in ref_cols):
+        if all(source_item['_source'][col] is not None for col in source_cols) \
+                and all(ref_item['_source'][col] is not None for col in ref_cols):
                     
-            is_match = ''.join(source_item[col] for col in source_cols) \
-                        == ''.join(ref_item[col] for col in ref_cols)
+            is_match = ''.join(source_item['_source'][col] for col in source_cols) \
+                        == ''.join(ref_item['_source'][col] for col in ref_cols)
                         
             if is_match:
                 return 'y'
@@ -727,6 +730,10 @@ class Labeller():
                 break
             
             label = self._auto_label_pair(source_item, ref_item)
+            
+            self._print_pair(source_item, ref_item, 0)
+            print('AUTO LABEL: {0}'.format(label))
+            
             if label is not None:
                 self.update(label, ref_item['_id'])    
         

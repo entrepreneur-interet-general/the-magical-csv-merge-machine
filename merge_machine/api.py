@@ -1009,7 +1009,7 @@ def delete_project(project_type, project_id):
     _check_project_type(project_type)
     # TODO: replace by _init_project
     if project_type == 'normalize':
-        proj = UserNormalizer(project_id=project_id)
+        proj = ESReferential(project_id=project_id)
     else:
         proj = UserLinker(project_id=project_id)
     proj.delete_project()
