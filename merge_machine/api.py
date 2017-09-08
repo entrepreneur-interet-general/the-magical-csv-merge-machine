@@ -877,7 +877,7 @@ def web_get_answer(message_received):
     encoder = MyEncoder()
     emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=message_to_display)))
 
-@socketio.on('update_filters')
+@socketio.on('update_filters', namespace='/')
 def update_musts(message_received):
     message_received = json.loads(message_received)
     logging.info(message_received)
