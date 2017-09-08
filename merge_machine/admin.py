@@ -7,10 +7,11 @@ Created on Fri Mar  3 10:37:58 2017
 """
 
 import os
-import shutil
+import time
 
+from elasticsearch import client, Elasticsearch
 from linker import UserLinker
-from normalizer import UserNormalizer
+from normalizer import ESReferential
 
 from CONFIG import LINK_DATA_PATH, NORMALIZE_DATA_PATH
 
@@ -37,19 +38,38 @@ class Admin():
         '''Returns a list of all project_ids'''
         _check_project_type(project_type)
         if os.path.isdir(self.path_to(project_type)):
-            return os.listdir(self.path_to(project_type))
-        return []
+            return set(os.listdir(self.path_to(project_type)))
+        return {}
+    
+    def list_projects_by_time(self, project_type, action='created', when='before', hours_from_now=24*7):
+        '''
+        INPUT:
+            project_type: normalize or link
+            action: 'created' or 'last_used'
+            when: 'before' or 'after' (both are inclusive, but proba of equality is very slim)
+            hours_from_now: how many hours before current time are we looking at
+        '''
+        list_of_metadata = self.list_projects(project_type)
+           
+        field = {'created': 'timestamp', 'last_used': 'last_timestamp'}[action]
+        mult = {'before': 1, 'after': -1}[when]
+        now  = time.time()
+        return filter(lambda m: mult*(now - m[field]) >= mult*hours_from_now*3600, \
+                      list_of_metadata)
     
     def list_projects(self, project_type):
         '''Returns a list of project_metadatas'''
         list_of_ids = self.list_project_ids(project_type)
         
         list_of_metadatas = []
-        for _id in list_of_ids:
+        for id_ in list_of_ids:
             if project_type == 'link':
-                proj = UserLinker(_id)
+                try:
+                    proj = UserLinker(id_)
+                except:
+                    print('here', id_)
             else:
-                proj = UserNormalizer(_id)
+                proj = ESReferential(id_)
             list_of_metadatas.append(proj.metadata)
         return list_of_metadatas
     
@@ -59,17 +79,55 @@ class Admin():
         dir_path = self.path_to(project_type, project_id) 
         if not os.path.isdir(dir_path):
             raise Exception('No project found with the following ID: {0}'.format(project_id))
-        shutil.rmtree(dir_path)
+            
+        if project_type == 'normalize':
+            proj = ESReferential(project_id)
+        elif project_type == 'link':
+            proj = UserLinker(project_id)
+            
+        proj.delete_project()
+        print('Deleted project:', project_type, project_id)
     
+    def remove_project_by_time(self, project_type, action='created', when='before', hours_from_now=24*30):
+        for project in self.list_projects_by_time(project_type, action, when, hours_from_now):
+            self.remove_project(project_type, project['project_id'])
+    
+# =============================================================================
+#     Elasticsearch
+# =============================================================================
+    def list_elasticsearch_indices(self):
+        es = Elasticsearch()
+        ic = client.IndicesClient(es)
+        return set(ic.stats()['indices'].keys())
         
+    def delete_index(self, index_name):
+        es = Elasticsearch()
+        ic = client.IndicesClient(es)
+        return ic.delete(index_name)
+
+    def delete_indices(self, index_names):
+        res = []
+        for index_name in index_names:
+            res.append(self.delete_index(index_name))
+        return res
+    
+    def delete_unused_indices(self, exclude={'123vivalalgerie', '123vivalalgerie3'}):
+        '''
+        Delete ES indices whose name are not present among the normalisation
+        projects names.
+        '''
+        indices_to_delete =  self.list_elasticsearch_indices() \
+                            - self.list_project_ids('normalize') \
+                            - exclude
+        self.delete_indices(indices_to_delete)
+    
+    
+    
 if __name__ == '__main__':
     admin = Admin()
-    
-    id_ = '8b3fbab040534afae137e2ae124ce152'
-    
-    for id_ in admin.list_projects():
-        proj = UserNormalizer(id_)
-        print(proj.project_id, proj.time_since_last_action())
-        print(proj.list_csvs())
+    admin.remove_project_by_time('link', 
+                                 action='created', 
+                                 when='before', 
+                                 hours_from_now=24*30)
             
     
