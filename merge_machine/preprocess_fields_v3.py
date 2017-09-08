@@ -486,7 +486,7 @@ class TypeMatcher(object):
 	def __str__(self):
 		return '{}<{}>'.format(self.__class__.__name__, self.t)
 	def register_full_match(self, c, t, s, hit = None):
-		ms = cover_score(self.value, hit) if s is None else s
+		ms = cover_score(c.value, hit) if s is None else s
 		outputFieldPrefix = None if self.t == t else self.t 
 		c.register_full_match(t, outputFieldPrefix, ms, hit)
 		self.update_diversity(hit)
@@ -1111,7 +1111,7 @@ def checkSpan(hit, span):
 		logging.warning('Invalid span for hit=%s: %s', hit, span)
 
 def cover_score(s1, s2):
-	return len(s1) * 100 < len(s2) if len(s1) < len(s2) else cover_score(s2, s1)
+	return len(s1) * 100 / len(s2) if len(s1) <= len(s2) else cover_score(s2, s1)
 
 CONVERT_NAN_TO_EMPTY = True
 
@@ -1144,7 +1144,7 @@ class Cell(object):
 	def matches(self, t, mm):
 		return [] if t not in self.non_excluded_types() else filter(lambda ti: ti.mm == mm, self.tis[t])
 	def normalized_type(self, t, outputFieldPrefix):
-		return '++{}++'.format(self.f if outputFieldPrefix is None else outputFieldPrefix + '.' + self.f)
+		return '++{}++'.format(self.f if outputFieldPrefix is None or outputFieldPrefix == self.f else outputFieldPrefix + '.' + self.f)
 	def register_full_match(self, t, outputFieldPrefix, ms, hit = None):
 		''' If normedIfHeaderField is True and the target type is the cell's parent type, then the output
 			field should indicate that normalization has been done in order not to conflict with the
@@ -1568,7 +1568,7 @@ class FrenchAddressMatcher(LabelMatcher):
 		prioHits = sorted(hits[0] if len(hits[0]) > 0 else hits[1], key = scoreFilter)
 		for h in prioHits:
 			if scoreFilter(h) > 100:
-				self.register_full_match(c, self.t, 100, prioHits[0])
+				self.register_full_match(c, self.t, None, prioHits[0])
 				if prioHits[0] in iIdx:
 					props = iIdx[prioHits[0]]
 					for (banField, ourField) in BAN_MAPPING:
@@ -1652,13 +1652,13 @@ class VariantExpander(TypeMatcher):
 						logging.debug('%s matched on %s: %s expanded to main variant %s', self, matchRefPhrase, altVariant, mainVariant)
 						normedValue = ''.join([v[:i1], mainVariant, v[i2:]]) if self.keepContext else mainVariant
 						if i1 == 0 and k1 + k2 == len(tokens):
-							self.register_full_match(c, self.t, score, mainVariant) # , normedValue) 							
+							self.register_full_match(c, self.t, score, mainVariant)
 						elif i1 < 0 or i2 < 0:
 							logging.warning('%s could not find tokens "%s ... %s" in original "%s"', self, tokens[k1], tokens[k1 + k2 - 1], v)
-							self.register_full_match(c, self.t, score, mainVariant) # , normedValue) 
+							self.register_full_match(c, self.t, score, mainVariant)
 						else:
 							span = (i1, i2 + len(tokens[k1 + k2 - 1]))
-							self.register_partial_match(c, self.t, score, mainVariant, span) # , normedValue, span) 
+							self.register_partial_match(c, self.t, score, mainVariant, span)
 
 # Misc utilities related to value normalization
 
@@ -1839,7 +1839,7 @@ def generate_value_matchers(lvl = 1):
 	yield SubtypeMatcher(F_MESR, [F_RD, F_APB_MENTION, F_RD_DOMAIN, F_ETAB, F_ACADEMIE])
 
 	# Geo Domain
-	if lvl >= 2: 
+	if lvl >= 1: 
 		yield FrenchAddressMatcher()
 
 	if lvl >= 2: 
