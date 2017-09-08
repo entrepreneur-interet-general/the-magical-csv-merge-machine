@@ -847,6 +847,7 @@ class Labeller():
     def update_musts(self, must, must_not):
         self.must = must
         self.must_not = must_not
+        self.re_score_history()
         
     def _best_query_template(self):
         """Return query template with the best score (ratio)"""
