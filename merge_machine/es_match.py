@@ -741,9 +741,12 @@ class Labeller():
                                                           self.max_num_samples))
         self.next_row = True
         
-    #    def parse_valid_answer(self, user_input):
-    #        is_match = user_input in ['y', '1']  
-    #        return is_match
+    def parse_valid_answer(self, user_input):
+        if self.ref_item is not None:
+            ref_id = self.ref_item['_id']
+        else:
+            ref_id = None
+        return self.update(user_input, ref_id)
 
     def update(self, user_input, ref_id):
         '''
@@ -756,7 +759,7 @@ class Labeller():
                 + "n" or "0" : res_id is not a match with self.idx
                 + "u" : uncertain #TODO: is this no ?
                 + "p" : back to previous state
-            - res_id: Elasticsearch Id of the reference element being labelled
+            - ref_id: Elasticsearch Id of the reference element being labelled
         '''
         use_previous = user_input == 'p'
         
