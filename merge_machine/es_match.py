@@ -497,6 +497,7 @@ class Labeller():
         self.pairs = [] # List of (source_id, ref_es_id)
         self.pairs_not_match = defaultdict(list)
         self.next_row = True
+        self.finished = False
         
         if certain_column_matches is not None:
             self.auto_label()
@@ -663,6 +664,7 @@ class Labeller():
                 
                 self.first_propoal_for_source_idx = True
             else:
+                self.finished = True
                 return None            
             
             self.num_rows_proposed_source += 1
