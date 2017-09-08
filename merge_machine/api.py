@@ -867,19 +867,7 @@ def web_get_answer(message_received):
     if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].answer_is_valid(user_input):
         flask._app_ctx_stack.labeller_mem[project_id]['labeller'].parse_valid_answer(user_input)
         if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].finished:
-            logging.info('Writing train')
-            flask._app_ctx_stack.labeller_mem[project_id]['labeller'].write_training(flask._app_ctx_stack.labeller_mem[project_id]['paths']['train'])
-            logging.info('Wrote train')
-            
-            try:
-                del flask._app_ctx_stack.labeller_mem[project_id]['labeller']
-                logging.info('Deleted labeller for project: {0}'.format(project_id))
-            except:
-                logging.warning('Could not delete labeller for project: {0}'.format(project_id))
-            try:
-                del flask._app_ctx_stack.labeller_mem[project_id]['paths']
-            except:
-                logging.warning('Could not delete paths for project: {0}'.format(project_id))
+
             
         else:
             flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
@@ -888,8 +876,45 @@ def web_get_answer(message_received):
         
     encoder = MyEncoder()
     emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=message_to_display)))
-    
 
+@socketio.on('update_filters')
+def update_musts(message_received):
+    message_received = json.loads(message_received)
+    logging.info(message_received)
+    project_id = message_received['project_id']
+    must = message_received['must']    
+    must_not = message_received['must_not'] 
+    
+    flask._app_ctx_stack.labeller_mem[project_id]['labeller'].update_musts(must, must_not)
+    
+    encoder = MyEncoder()
+    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=message_to_display)))
+    
+    
+@socketio.on('write_labeller', namespace='/')
+def write_labeller(message_received):
+    message_received = json.loads(message_received)
+    logging.info(message_received)
+    project_id = message_received['project_id']
+
+    logging.info('Writing train')
+    flask._app_ctx_stack.labeller_mem[project_id]['labeller'].write_training(\
+                                     flask._app_ctx_stack.labeller_mem[project_id]['paths']['train'])
+    logging.info('Wrote train')
+    
+    try:
+        del flask._app_ctx_stack.labeller_mem[project_id]['labeller']
+        logging.info('Deleted labeller for project: {0}'.format(project_id))
+    except:
+        logging.warning('Could not delete labeller for project: {0}'.format(project_id))
+    try:
+        del flask._app_ctx_stack.labeller_mem[project_id]['paths']
+    except:
+        logging.warning('Could not delete paths for project: {0}'.format(project_id))    
+        
+    message_to_display = 
+    emit('wrote_labeller', {'error': False})
+    
 @socketio.on('terminate', namespace='/')
 def web_terminate_labeller_load(message_received):
     '''Clear memory in application for selected project'''
