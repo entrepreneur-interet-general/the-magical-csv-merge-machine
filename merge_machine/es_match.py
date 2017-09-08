@@ -839,7 +839,7 @@ class Labeller():
         params['query_templates'] = self._best_query_template()
         params['must'] = self.must
         params['must_not'] = self.must_not
-        params['thresh'] = self.threshold
+        params['thresh'] = 0 # self.threshold #TODO: fix this
         params['exact_pairs'] = self.pairs
         return params
     
