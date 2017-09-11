@@ -15,6 +15,8 @@ security
 
 big problem with add_selected_columns and cleaning of previous file
 
+Discrepancy btw labelling (worse) and matching (better)
+
 """
 from collections import defaultdict
 import itertools
@@ -118,8 +120,8 @@ def _reformat_s_q_t(s_q_t):
         old_len = len(s_q_t)
         s_q_t = (s_q_t[0], [s_q_t[1]], s_q_t[2], s_q_t[3], s_q_t[4])
         assert len(s_q_t) == old_len
-    elif isinstance(s_q_t[1], list):
-        pass
+    elif isinstance(s_q_t[1], list) or isinstance(s_q_t[1], tuple):
+        s_q_t = (s_q_t[0], list(s_q_t[1]), s_q_t[2], s_q_t[3], s_q_t[4])
     else:
         raise ValueError('Single query template element 1 should be str or list')
     return s_q_t
@@ -147,38 +149,41 @@ def _gen_body(query_template, row, must={}, must_not={}, num_results=3):
     
     query_template = [_reformat_s_q_t(s_q_t) for s_q_t in query_template]
     
-    body = {
-          'size': num_results,
-          'query': {
-            'bool': dict({
-               must_or_should: [
-                          {'match': {
-                                  s_q_t[2] + s_q_t[3]: {'query': _remove_words(row[s_q_t[1]].str.cat(sep=' '), must.get(s_q_t[2], [])),
-                                                        'boost': s_q_t[4]}}
-                          } \
-                          for s_q_t in query_template if (s_q_t[0] == must_or_should) \
-                                      and isinstance(s_q_t[2], str)
-                        ] \
-                        + [
-                          {'multi_match': {
-                                  'fields': [col + s_q_t[3] for col in s_q_t[2]], 
-                                  'query': my_unidecode(row[s_q_t[1]].str.cat(sep=' ').lower()).replace('lycee', ''),
-                                  'boost': s_q_t[4]
-                                  }
-                          } \
-                          for s_q_t in query_template if (s_q_t[0] == must_or_should) \
-                                      and (isinstance(s_q_t[2], tuple) or isinstance(s_q_t[2], list))
-                        ] \
-                for must_or_should in ['must', 'should']
-                        },
-                        **{
-                           'must_not': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' OR '.join(values)}}
-                                     } for field, values in must_not.items()],
-                           'filter': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' AND '.join(values)}} # TODO: french?
-                                     } for field, values in must.items()],
-                        })               
-                  }
-           }
+    try:
+        body = {
+              'size': num_results,
+              'query': {
+                'bool': dict({
+                   must_or_should: [
+                              {'match': {
+                                      s_q_t[2] + s_q_t[3]: {'query': _remove_words(row[s_q_t[1]].str.cat(sep=' '), must.get(s_q_t[2], [])),
+                                                            'boost': s_q_t[4]}}
+                              } \
+                              for s_q_t in query_template if (s_q_t[0] == must_or_should) \
+                                          and isinstance(s_q_t[2], str)
+                            ] \
+                            + [
+                              {'multi_match': {
+                                      'fields': [col + s_q_t[3] for col in s_q_t[2]], 
+                                      'query': _remove_words(row[s_q_t[1]].str.cat(sep=' '), []),
+                                      'boost': s_q_t[4]
+                                      }
+                              } \
+                              for s_q_t in query_template if (s_q_t[0] == must_or_should) \
+                                          and (isinstance(s_q_t[2], tuple) or isinstance(s_q_t[2], list))
+                            ] \
+                    for must_or_should in ['must', 'should']
+                            },
+                            **{
+                               'must_not': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' OR '.join(values)}}
+                                         } for field, values in must_not.items()],
+                               'filter': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' AND '.join(values)}} # TODO: french?
+                                         } for field, values in must.items()],
+                            })               
+                      }
+               }
+    except:
+        import pdb; pdb.set_trace()
     return body
 
 def compute_threshold(metrics, t_p=0.95, t_r=0.3):
@@ -537,7 +542,10 @@ class Labeller():
             else:
                 cols = match['ref']
             for col in cols:
-                print('\n{1}   -> [{0}][source]'.format(match['source'], source_item['_source'][match['source']]))
+                if isinstance(match['source'], str):
+                    match['source'] = [match['source']]
+                string = ' '.join([source_item['_source'][col_source] for col_source in match['source']])
+                print('\n{1}   -> [{0}][source]'.format(match['source'], string))
                 print('> {1}   -> [{0}]'.format(col, ref_item['_source'][col]))
         
     def _console_input(self, source_item, ref_item, test_num=0):
@@ -581,6 +589,20 @@ class Labeller():
                         and res['_id'] not in self.pairs_not_match[self.idx]: #  TODO: not neat
                     ids_done.append(res['_id'])
                     yield res
+                else:
+                    print(res['_id'] not in ids_done)
+                    print(res['_score']>=0.001)
+                    print(res['_id'] not in self.pairs_not_match[self.idx])
+
+
+    def _default_query(self):
+        
+        if len(self.match_cols) == 1:
+            m = self.match_cols[0]
+            return (('must', m['source'], m['ref'], '.french', 1), ('should', m['source'], m['ref'], '.integers', 1))
+        else:
+            return tuple(('must', match['source'], match['ref'], '.french', 1) for match in self.match_cols)
+        
 
     def sort_keys(self):
         '''
@@ -589,9 +611,13 @@ class Labeller():
         '''
         # Sort keys by score or most promising
         if self.num_rows_labelled <= 2:
+            # Alternate between random and largest score
             sorted_keys_1 = random.sample(list(self.full_responses.keys()), len(self.full_responses.keys()))
-            sorted_keys_2 = sorted(self.full_responses.keys(), key=lambda x: self.full_responses[x]['hits'].get('max_score') or 0, reverse=True)
-            self.sorted_keys = list(itertools.chain(*zip(sorted_keys_1, sorted_keys_2)))
+            sorted_keys_2 = sorted(self.full_responses.keys(), key=lambda x: \
+                                   self.full_responses[x]['hits'].get('max_score') or 0, reverse=True)
+            self.sorted_keys =  [self._default_query()] \
+                                + list(itertools.chain(*zip(sorted_keys_1, sorted_keys_2)))
+            # TODO: redundency with first
         else:
             # Sort by ratio but label by precision ?
             self.sorted_keys = sorted(self.full_responses.keys(), key=lambda x: self.agg_query_metrics[x]['precision'], reverse=True)
