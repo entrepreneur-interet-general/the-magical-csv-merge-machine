@@ -167,7 +167,7 @@ def _gen_body(query_template, row, must={}, must_not={}, num_results=3):
                                   }
                           } \
                           for s_q_t in query_template if (s_q_t[0] == must_or_should) \
-                                      and isinstance(s_q_t[2], tuple)
+                                      and (isinstance(s_q_t[2], tuple) or isinstance(s_q_t[2], list))
                         ] \
                 for must_or_should in ['must', 'should']
                         },
@@ -376,6 +376,8 @@ def perform_queries(table_name, all_query_templates, rows, must, must_not, num_r
         responses = []
         for bulk_body, _ in bulk_body_gen:
             responses += es.msearch(bulk_body)['responses'] #, index=table_name)
+            
+        # TODO: add error on query template with no must or should
         
         has_error_vect = ['error' in x for x in responses]
         has_hits_vect = [('error' not in x) and bool(x['hits']['hits']) for x in responses]
@@ -384,7 +386,7 @@ def perform_queries(table_name, all_query_templates, rows, must, must_not, num_r
         for (s_t, res, has_error) in zip(search_templates, responses, has_error_vect):
             if not has_error:
                 full_responses[s_t[0]] = res
-        
+    
         print('Num errors:', sum(has_error_vect))
         print('Num hits', sum(has_hits_vect))
         
@@ -436,7 +438,7 @@ def es_linker(source, params):
         confidence = pd.Series([f_r['hits']['hits'][0]['_score'] \
                                 if bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold) \
                                 else np.nan \
-                                for f_r in full_responses])
+                                for f_r in full_responses], index=matches_in_ref.index)
         matches_in_ref.columns = [x + '__REF' for x in matches_in_ref.columns]
         matches_in_ref['__CONFIDENCE'] = confidence    
     else:
@@ -452,7 +454,6 @@ def es_linker(source, params):
         exact_matches_in_ref['__CONFIDENCE'] = 999
     else:
         exact_matches_in_ref = pd.DataFrame()
-        
     #
     assert len(exact_matches_in_ref) + len(matches_in_ref) == len(source)
     new_source = pd.concat([source, pd.concat([matches_in_ref, exact_matches_in_ref])], 1)        
