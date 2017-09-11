@@ -48,6 +48,9 @@ elif test_num == 2:
 
     source_sep = ';'
     source_encoding = 'utf-8'
+elif test_num == 3:
+    source_file_path = 'local_test_data_/integration_4/hal.csv'    
+
 else:
     raise Exception('Not a valid test number')
 

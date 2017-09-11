@@ -454,6 +454,7 @@ def es_linker(source, params):
         exact_matches_in_ref['__CONFIDENCE'] = 999
     else:
         exact_matches_in_ref = pd.DataFrame()
+    
     #
     assert len(exact_matches_in_ref) + len(matches_in_ref) == len(source)
     new_source = pd.concat([source, pd.concat([matches_in_ref, exact_matches_in_ref])], 1)        

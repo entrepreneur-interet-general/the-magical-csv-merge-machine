@@ -13,9 +13,9 @@ import pickle
 import pandas as pd
 
 from abstract_data_project import AbstractDataProject
-from dedupe_linker import format_for_dedupe, current_load_gazetteer
+#from dedupe_linker import format_for_dedupe, current_load_gazetteer
 from es_match import Labeller as ESLabeller
-from labeller import Labeller, DummyLabeller
+#from labeller import Labeller, DummyLabeller
 from normalizer import ESReferential, UserNormalizer
 # from restrict_reference import perform_restriction
 
@@ -69,27 +69,29 @@ class Linker(AbstractDataProject):
 
     def load_project_to_merge(self, file_role):
         '''Uses the "current" field in metadata to load source or ref'''        
-        self.check_file_role(file_role)
+        self._check_file_role(file_role)
         # TODO: Add safeguard somewhere
         # Add source
         
-        try:
-            self.source = UserNormalizer(self.metadata['files']['source']['project_id'])
-        except:
-            self.source = None
-            
-        try:
-            self.ref = ESReferential(self.metadata['files']['ref']['project_id'])
-        except:
-            self.ref = None            
+        if file_role == 'source':
+            try:
+                self.source = UserNormalizer(self.metadata['files']['source']['project_id'])
+            except:
+                self.source = None
+        
+        if file_role == 'ref':
+            try:
+                self.ref = ESReferential(self.metadata['files']['ref']['project_id'])
+            except:
+                self.ref = None            
             #raise Exception('Normalizer project with id {0} could not be found'.format(project_id))
     
     @staticmethod
-    def check_file_role(file_role):
+    def _check_file_role(file_role):
         if file_role not in ['ref', 'source']:
             raise Exception('file_role should be either "source" or "ref"')
 
-    def check_select(self):
+    def _check_select(self):
         '''Check that a source and referential were selected'''
         for file_role in ['source', 'ref']:
             if self.metadata['files'][file_role] is None:
@@ -104,20 +106,28 @@ class Linker(AbstractDataProject):
         '''
         Adds a configuration file with the column matches between source and
         referential.
-        column_matches is a json file as dict
+        
+        INPUT:
+            - column_matches: json file as dict
         '''
         # TODO: add checks on file
+        if (self.source is None) or (self.ref is None):
+            raise RuntimeError('source or referential were not loaded (add_selected_project) and/or (load_project_to_merge)')
         
         # Add matches
         self.upload_config_data(column_matches, 'es_linker', 'column_matches.json')
         
         # Select these columns for normalization in source and ref
-        source_cols = list(set(y for x in column_matches for y in x['source']))
-        self.source.add_selected_columns(source_cols)
-
-        ref_cols = list(set(y for x in column_matches for y in x['ref']))
-        self.ref.add_selected_columns(ref_cols) 
-        
+        try:
+            source_cols = list(set(y for x in column_matches for y in x['source']))
+            self.source.add_selected_columns(source_cols)
+    
+            ref_cols = list(set(y for x in column_matches for y in x['ref']))
+            self.ref.add_selected_columns(ref_cols)
+            
+        except Exception as e:
+            self.upload_config_data({}, 'es_linker', 'column_matches.json')
+            raise Exception(e)
         
         # TODO: this will cover add_certain_col_matches
         # Add to log
@@ -191,13 +201,12 @@ class Linker(AbstractDataProject):
             - project_id
             - file_name
         '''
-        self.check_file_role(file_role)
+        self._check_file_role(file_role)
         # Check that file exists
         if internal:
             raise DeprecationWarning
-            proj = InternalNormalizer(project_id)
         else:
-            proj = UserNormalizer(project_id)
+            proj = ESReferential(project_id)
             
         #        if file_name not in proj.metadata['files']:
         #            raise Exception('File {0} could not be found in project {1} \
@@ -318,8 +327,8 @@ class Linker(AbstractDataProject):
     #  Module specific: Dedupe Linker
     #==========================================================================
 
-    def _gen_paths_dedupe(self):        
-        self.check_select()
+    def _gen_paths_dedupe_DEPRECATED(self):        
+        self._check_select()
         
         # Get path to training file for dedupe
         training_path = self.path_to('dedupe_linker', 'training.json')
@@ -371,7 +380,7 @@ class Linker(AbstractDataProject):
     def _gen_dedupe_labeller(self):
         '''Return a Labeller object'''
         
-        self.check_select()
+        self._check_select()
         # TODO: Add extra config page
         col_matches = self.read_col_matches()
         paths = self._gen_paths_dedupe()
@@ -412,7 +421,7 @@ class Linker(AbstractDataProject):
     #==========================================================================
 
     def _gen_paths_es(self):        
-        self.check_select()
+        self._check_select()
         
         # Get path to training file for ES linker
         training_path = self.path_to('es_linker', 'training.json')
@@ -438,7 +447,7 @@ class Linker(AbstractDataProject):
         '''
         Return a es_labeller object
         '''
-        self.check_select()
+        self._check_select()
         
         chunksize = 100
         
@@ -470,8 +479,10 @@ class Linker(AbstractDataProject):
     def create_es_index_ref(self, columns_to_index, force=False):
         
         self.ref = ESReferential(self.ref.project_id)
-        ref_path = self.ref.path_to(self.metadata['files']['ref']['module_name'],
-                                    self.metadata['files']['ref']['file_name'])
+        
+        # TODO: Doesn't seem safe..
+        (module_name, file_name) = proj.get_last_written(file_name=self.metadata['files']['ref']['file_name'])
+        ref_path = self.ref.path_to(module_name,file_name)
         return self.ref.create_index(ref_path, columns_to_index, force)
 
 

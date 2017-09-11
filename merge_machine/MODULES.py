@@ -6,7 +6,6 @@ Created on Mon Apr 24 17:18:28 2017
 @author: leo
 """
 
-from dedupe_linker import dedupe_linker
 from es_match import es_linker
 from results_analyzer import link_results_analyzer
 from missing_values import infer_mvs, replace_mvs, sample_mvs_ilocs
@@ -105,10 +104,10 @@ LINK_MODULES = {
 #                            }
                 },
         'link': {
-                'dedupe_linker': {
-                                'func': dedupe_linker,
-                                'desc': dedupe_linker.__doc__
-                            },
+    #                'dedupe_linker': {
+    #                                'func': dedupe_linker,
+    #                                'desc': dedupe_linker.__doc__
+    #                            },
                 },
         'sample': {
                 'standard': {

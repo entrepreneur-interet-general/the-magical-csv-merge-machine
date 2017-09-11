@@ -243,18 +243,18 @@ def replace_mvs(tab, params):
     
     INPUT:
         tab: pandas DataFrame to modify
-        OBSOLETE
-        mvs_dict: dict indicating mv values with scores. For example:
-                {
-                    'all': [],
-                    'columns': {'dech': [('-', 2.0, 'unknown')],
-                                'distance': [('-', 1, 'unknown')]}
-                }
-        thresh: minimum score to remove mvs
+        params:
+            mvs_dict: dict indicating mv values with scores. For example:
+                    {
+                        'all': [],
+                        'columns': {'dech': [('-', 2.0, 'unknown')],
+                                    'distance': [('-', 1, 'unknown')]}
+                    }
+            thresh: minimum score to remove mvs
     
     OUTPUT:
         tab: same table with values replaced by np.nan
-        run_info    
+        modified: Indicate if value was modified    
     """
     
     # Set variables and replace by default values
@@ -301,6 +301,8 @@ def sample_mvs_ilocs(tab, params, sample_params):
             - randomize: (default: True)
             - num_per_missing_val_to_display: for each missing value found, 
                                               how many examples to display
+    OUTPUT:
+        - row_idxs: index values of rows to display
     '''
     # Select rows to display based on result
     num_per_missing_val_to_display = sample_params.get('num_per_missing_val_to_display', 4)
@@ -336,8 +338,9 @@ if __name__ == '__main__':
                   'local_test_data/source.csv',
                   'local_test_data/emmanuel_1/equipe.csv',
                   'local_test_data/emmanuel_1/doctorale.csv',
-                  'local_test_data/emmanuel_1/laboratoire.csv']
-    file_path = file_paths[-3] # Path to file to test
+                  'local_test_data/emmanuel_1/laboratoire.csv',
+                  'local_test_data/integration_4/hal2.csv']
+    file_path = file_paths[-1] # Path to file to test
     
     nrows = 100000 # How many lines of the file to read for inference
     encoding = 'utf-8' # Input encoding

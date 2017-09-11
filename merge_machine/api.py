@@ -111,7 +111,7 @@ os.chdir(curdir)
 
 # Flask imports
 import flask
-from flask import Flask, jsonify, render_template, request, send_file, url_for
+from flask import Flask, jsonify, request, send_file, url_for
 from flask_session import Session
 from flask_socketio import disconnect, emit, SocketIO
 from flask_cors import CORS, cross_origin
@@ -122,8 +122,6 @@ from werkzeug.utils import secure_filename
 from rq import cancel_job as rq_cancel_job, Queue
 from rq.job import Job
 from worker import conn, VALID_QUEUES
-
-import api_queued_modules
 
 from admin import Admin
 from my_json_encoder import MyEncoder
