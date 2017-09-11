@@ -24,6 +24,11 @@ timingInfo = Counter()
 countInfo = Counter()
 MICROS_PER_SEC = 1000000
 
+# Ratio of unhandled, non-fatal errors after which a given TypeMatcher will be dropped
+MAX_ERROR_RATE = 80
+# Number of unhandled, fatal errors after which a given TypeMatcher will be dropped
+MAX_FATAL_COUNT = 5
+
 def snapshot_timing(end):
 	global lastTime
 	if lastTime > 0 and lastTime + MICROS_PER_SEC > end: return
@@ -494,9 +499,36 @@ class TypeMatcher(object):
 		outputFieldPrefix = None if self.t == t else self.t 
 		c.register_partial_match(t, outputFieldPrefix, ms, hit, span)
 		self.update_diversity(hit)
+	@timed
 	def match_all_field_values(self, f):
+		error_count = 0
+		fatal_count = 0
+		max_errors = len(f.cells) * MAX_ERROR_RATE / 100
 		for vc in f.cells:
-			self.match(vc)
+			if error_count > max_errors:
+				logging.warning('{}: bailing out after {} non-fatal matching errors'.format(self, error_count))
+				break
+			elif fatal_count > MAX_FATAL_COUNT:
+				logging.warning('{}: bailing out after {} fatal matching errors'.format(self, fatal_count))
+				break
+			try :
+				self.match(vc)
+			except TypeError as te:
+				logging.warning('{}: badly typed response or parsing error for "{}": {}'.format(self, vc.value, te))
+				fatal_count += 1
+			except UnicodeDecodeError as ude:
+				logging.error('{} : unicode error while parsing input value "{}": {}'.format(self, vc.value, ude))
+				fatal_count += 1
+			except urllib.error.HTTPError as he:
+				logging.warning('{}: request rejected for "{}": {}'.format(self, vc.value, he))
+				fatal_count += 1
+			except ValueError as ve:
+				logging.warning('{}: unexpected response for "{}": {}'.format(self, vc.value, ve))
+				fatal_count += 1
+			except OverflowError as oe:
+				logging.error('{} : overflow error (e.g. while parsing date) for "{}": {}'.format(self, vc.value, oe))
+				error_count += 1
+
 	def update_diversity(self, hit):
 		self.diversion |= set(hit if isinstance(hit, list) else [hit])
 	def check_diversity(self, cells):
@@ -739,6 +771,7 @@ class SubtypeMatcher(TypeMatcher):
 		logging.info('SET UP subtype matcher for <%s> with subtypes: %s', self.t, ', '.join(subtypes))
 		PARENT_CHILD_RELS[t] |= set(subtypes)
 		SUBTYPING_RELS[t] |= set(subtypes)
+	@timed
 	def match(self, c):
 		sts = list(self.subtypes & c.non_excluded_types())
 		if len(sts) < 1: return None
@@ -767,6 +800,7 @@ class CompositeMatcher(TypeMatcher):
 		logging.info('SET UP composite matcher for <%s> with %d types', self.t, len(compTypes))
 		PARENT_CHILD_RELS[t] |= set(compTypes)
 		COMPOSITION_RELS[t] |= set(compTypes)
+	@timed
 	def match(self, c):
 		sts = list(set(self.compTypes) & c.non_excluded_types())
 		if len(sts) < 1: return None
@@ -1257,25 +1291,20 @@ class CustomDateMatcher(TypeMatcher):
 		if c.value.isdigit():
 			logging.debug('Bailing out of %s for numeric value: %s', self, c)
 			return
-		try:
-			dd = DDP.get_date_data(c.value)
-			do, dp = dd['date_obj'], dd['period']
-			if do is None: return
-			y = do.year
-			if y < 1870 or 2120 < y: return # Safety check for too-loose matching
-			ds = str(y)
-			if dp == 'year':
-				self.register_full_match(c, F_YEAR, 100, ds)
-				return
-			ds = "{:02}/{}".format(do.month, ds)
-			if dp == 'month':
-				self.register_full_match(c, F_MONTH, 100, ds)
-			else:
-				self.register_full_match(c, F_DATE, 100, "{:02}/{}".format(do.day, ds))
-		except TypeError as te:
-			logging.error('Error while parsing value which is not a date %s: %s', c.value, te)
-		except OverflowError as oe:
-			logging.error('Overflow while parsing date %s: %s', c.value, oe)
+		dd = DDP.get_date_data(c.value)
+		do, dp = dd['date_obj'], dd['period']
+		if do is None: return
+		y = do.year
+		if y < 1870 or 2120 < y: return # Safety check for too-loose matching
+		ds = str(y)
+		if dp == 'year':
+			self.register_full_match(c, F_YEAR, 100, ds)
+			return
+		ds = "{:02}/{}".format(do.month, ds)
+		if dp == 'month':
+			self.register_full_match(c, F_MONTH, 100, ds)
+		else:
+			self.register_full_match(c, F_DATE, 100, "{:02}/{}".format(do.day, ds))
 
 def score_phone_number(z): return 100 if phonenumbers.is_valid_number(z) else 75 if phonenumbers.is_possible_number(z) else 5
 
@@ -1288,19 +1317,13 @@ class CustomTelephoneMatcher(TypeMatcher):
 	@timed
 	def match(self, c):
 		if partial:
-			try:
-				for match in phonenumbers.PhoneNumberMatcher(c.value, 'FR'):
-					# original string is in match.raw_string
-					self.register_partial_match(c, self.t, 100, normalize_phone_number(match.number), (match.start, match.end))
-			except UnicodeDecodeError as e:
-				logging.error('Unicode error while parsing phone number(s) %s: %s', c.value, e)
+			for match in phonenumbers.PhoneNumberMatcher(c.value, 'FR'):
+				# original string is in match.raw_string
+				self.register_partial_match(c, self.t, 100, normalize_phone_number(match.number), (match.start, match.end))
 		else:
-			try:
-				z = phonenumbers.parse(c.value, 'FR')
-				score = score_phone_number(z)
-				if score > 0: self.register_full_match(c, self.t, score, normalize_phone_number(z))
-			except:
-				return 0
+			z = phonenumbers.parse(c.value, 'FR')
+			score = score_phone_number(z)
+			if score > 0: self.register_full_match(c, self.t, score, normalize_phone_number(z))
 
 # Person-name matcher-normalizer code
 
@@ -1526,18 +1549,8 @@ class FrenchAddressMatcher(LabelMatcher):
 		super(FrenchAddressMatcher, self).__init__(F_ADDRESS, COMMUNE_LEXICON, MATCH_MODE_CLOSE)
 	@timed
 	def match(self, c):
-		try:
-			response = urllib.request.urlopen("http://api-adresse.data.gouv.fr/search/?q=" + urllib.parse.quote_plus(c.value))
-			data = json.loads(response.read())
-		except urllib.error.HTTPError as he:
-			logging.warning('adresse.data.gouv.fr rejected request for "{}": {}'.format(c.value, he))
-			return
-		except ValueError as ve:
-			logging.warning('adresse.data.gouv.fr returned unexpected response for "{}": {}'.format(c.value, ve))
-			return
-		except TypeError as te:
-			logging.warning('adresse.data.gouv.fr returned badly typed response for "{}": {}'.format(c.value, te))
-			return
+		response = urllib.request.urlopen("http://api-adresse.data.gouv.fr/search/?q=" + urllib.parse.quote_plus(c.value))
+		data = json.loads(response.read())
 		if not data or 'features' not in data: return
 		logging.debug('Returned %d results from api-adresse.data.gouv.fr for %s', len(data['features']), c.value)
 		# Quick and dirty way to have two-tier results since based on BAN address matching results, when parsing a
@@ -1566,6 +1579,9 @@ class FrenchAddressMatcher(LabelMatcher):
 				logging.warning('Properties unexpected geolocation feature type: %s', kind)
 		scoreFilter = partial(address_filter_score, c.value)
 		prioHits = sorted(hits[0] if len(hits[0]) > 0 else hits[1], key = scoreFilter)
+		if len(prioHits) < 1:
+			logging.warning('Could not parse any address field value for "{}"'.format(c.value))
+			return
 		for h in prioHits:
 			if scoreFilter(h) > 100:
 				self.register_full_match(c, self.t, None, prioHits[0])
