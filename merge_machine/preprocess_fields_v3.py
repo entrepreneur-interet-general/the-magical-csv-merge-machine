@@ -24,8 +24,10 @@ timingInfo = Counter()
 countInfo = Counter()
 MICROS_PER_SEC = 1000000
 
-# Number of unhandled errors after which a given TypeMatcher will be dropped
-MAX_ERR_COUNT = 5
+# Ratio of unhandled, non-fatal errors after which a given TypeMatcher will be dropped
+MAX_ERROR_RATE = 80
+# Number of unhandled, fatal errors after which a given TypeMatcher will be dropped
+MAX_FATAL_COUNT = 5
 
 def snapshot_timing(end):
 	global lastTime
@@ -499,28 +501,33 @@ class TypeMatcher(object):
 		self.update_diversity(hit)
 	@timed
 	def match_all_field_values(self, f):
-		err_count = 0
+		error_count = 0
+		fatal_count = 0
+		max_errors = len(f.cells) * MAX_ERROR_RATE / 100
 		for vc in f.cells:
-			if err_count > MAX_ERR_COUNT:
-				logging.warning('{}: bailing out after {} errors'.format(self, err_count))
+			if error_count > max_errors:
+				logging.warning('{}: bailing out after {} non-fatal matching errors'.format(self, error_count))
+				break
+			elif fatal_count > MAX_FATAL_COUNT:
+				logging.warning('{}: bailing out after {} fatal matching errors'.format(self, fatal_count))
 				break
 			try :
 				self.match(vc)
-			except urllib.error.HTTPError as he:
-				logging.warning('{}: request rejected for "{}": {}'.format(self, vc.value, he))
-				err_count += 1
-			except ValueError as ve:
-				logging.warning('{}: unexpected response for "{}": {}'.format(self, vc.value, ve))
-				err_count += 1
 			except TypeError as te:
 				logging.warning('{}: badly typed response or parsing error for "{}": {}'.format(self, vc.value, te))
-				err_count += 1
-			except OverflowError as oe:
-				logging.error('{} : overflow error (e.g. while parsing date) for "{}": {}'.format(self, vc.value, oe))
-				err_count += 1
+				fatal_count += 1
 			except UnicodeDecodeError as ude:
 				logging.error('{} : unicode error while parsing input value "{}": {}'.format(self, vc.value, ude))
-				err_count += 1
+				fatal_count += 1
+			except urllib.error.HTTPError as he:
+				logging.warning('{}: request rejected for "{}": {}'.format(self, vc.value, he))
+				fatal_count += 1
+			except ValueError as ve:
+				logging.warning('{}: unexpected response for "{}": {}'.format(self, vc.value, ve))
+				fatal_count += 1
+			except OverflowError as oe:
+				logging.error('{} : overflow error (e.g. while parsing date) for "{}": {}'.format(self, vc.value, oe))
+				error_count += 1
 
 	def update_diversity(self, hit):
 		self.diversion |= set(hit if isinstance(hit, list) else [hit])
@@ -1573,7 +1580,8 @@ class FrenchAddressMatcher(LabelMatcher):
 		scoreFilter = partial(address_filter_score, c.value)
 		prioHits = sorted(hits[0] if len(hits[0]) > 0 else hits[1], key = scoreFilter)
 		if len(prioHits) < 1:
-			raise ValueError('Could not parse any address field value')
+			logging.warning('Could not parse any address field value for "{}"'.format(c.value))
+			return
 		for h in prioHits:
 			if scoreFilter(h) > 100:
 				self.register_full_match(c, self.t, None, prioHits[0])
