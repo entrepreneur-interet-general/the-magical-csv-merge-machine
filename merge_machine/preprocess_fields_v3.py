@@ -528,7 +528,6 @@ class TypeMatcher(object):
 			except OverflowError as oe:
 				logging.error('{} : overflow error (e.g. while parsing date) for "{}": {}'.format(self, vc.value, oe))
 				error_count += 1
-
 	def update_diversity(self, hit):
 		self.diversion |= set(hit if isinstance(hit, list) else [hit])
 	def check_diversity(self, cells):
@@ -542,6 +541,7 @@ class TypeMatcher(object):
 			for c in cells: c.posit_type(self.t)
 
 class GridMatcher(TypeMatcher):
+	@timed
 	def __init__(self):
 		super(GridMatcher, self).__init__(F_GRID_LABEL)
 		gridding.init_gridding()
@@ -558,6 +558,7 @@ MATCH_MODE_CLOSE = 1
 # stdnum-based matcher-normalizer class
 
 class StdnumMatcher(TypeMatcher):
+	@timed
 	def __init__(self, t, validator, normalizer):
 		super(StdnumMatcher, self).__init__(t)
 		self.t = t
@@ -573,6 +574,7 @@ class StdnumMatcher(TypeMatcher):
 # Regex-based matcher-normalizer class
 
 class RegexMatcher(TypeMatcher):
+	@timed
 	def __init__(self, t, p, g = 0, ignoreCase = False, partial = False, validator = None, neg = False, wordBoundary = True):
 		super(RegexMatcher, self).__init__(t)
 		self.p = pattern_with_word_boundary(p)
@@ -624,6 +626,7 @@ def build_vocab_regex(vocab, partial):
 class VocabMatcher(RegexMatcher):
 	''' When matcher is not None, the matching will be dispatched to it, which is useful when normalization is far costlier 
 		than type detection. '''
+	@timed
 	def __init__(self, t, vocab, ignoreCase = False, partial = False, validator = None, neg = False, matcher = None):
 		super(VocabMatcher, self).__init__(t, build_vocab_regex(vocab, partial),
 			g = 0, ignoreCase = ignoreCase, partial = partial, validator = validator, neg = neg)
@@ -654,6 +657,7 @@ def stop_words_as_normalized_list(stopWords):
 
 DTC = 6 # Dangerous Token Count (becomes prohibitive to tokenize many source strings above this!)
 class TokenizedMatcher(TypeMatcher):
+	@timed
 	def __init__(self, t, lexicon, maxTokens = 0, scorer = tokenization_based_score, distinctCount = 0, stopWords = None):
 		super(TokenizedMatcher, self).__init__(t)
 		currentMax = maxTokens
@@ -722,6 +726,7 @@ def normalize_or_not(v, tokenize = False, stopWords = None):
 	return normalize_and_validate_phrase(v, stopWords = stopWords) if tokenize else case_phrase(v)
 
 class LabelMatcher(TypeMatcher):
+	@timed
 	def __init__(self, t, lexicon, mm, stopWords = None, synMap = None):
 		''' Parameters:
 			diversity specifies the min number of distinct reference values to qualify a column-wide match
@@ -771,7 +776,6 @@ class SubtypeMatcher(TypeMatcher):
 		logging.info('SET UP subtype matcher for <%s> with subtypes: %s', self.t, ', '.join(subtypes))
 		PARENT_CHILD_RELS[t] |= set(subtypes)
 		SUBTYPING_RELS[t] |= set(subtypes)
-	@timed
 	def match(self, c):
 		sts = list(self.subtypes & c.non_excluded_types())
 		if len(sts) < 1: return None
@@ -834,7 +838,6 @@ class CompositeRegexMatcher(TypeMatcher):
 		self.flags = re.I if ignoreCase else 0
 		self.partial = partial
 		self.validators = validators
-	@timed
 	def match(self, c):
 		if self.partial:
 			ms = re.findall(self.p, v, flags = self.flags)
@@ -1165,6 +1168,8 @@ class Cell(object):
 		# Mapping from normalized, augmented, or otherwise enriched field name to list of values for that field
 		self.values = dict()
 	def __str__(self): return '{}: {}'.format(self.f, self.value)
+	def value_to_match(self):
+		return stripped()
 	def negate_type(self, t):
 		logging.debug('Negated type {} for "{}"'.format(t, self.value))
 		self.nts.add(t)
@@ -1544,15 +1549,17 @@ class CustomAddressMatcher(TypeMatcher):
 
 COMMUNE_LEXICON = file_to_set('commune')
 
-class FrenchAddressMatcher(LabelMatcher):
+class FrenchAddressMatcher(TypeMatcher):
 	def __init__(self):
-		super(FrenchAddressMatcher, self).__init__(F_ADDRESS, COMMUNE_LEXICON, MATCH_MODE_CLOSE)
+		super(FrenchAddressMatcher, self).__init__(F_ADDRESS)
 	@timed
 	def match(self, c):
-		response = urllib.request.urlopen("http://api-adresse.data.gouv.fr/search/?q=" + urllib.parse.quote_plus(c.value))
+		v = c.value_to_match()
+		if len(v) < 1: return
+		response = urllib.request.urlopen("http://api-adresse.data.gouv.fr/search/?q=" + urllib.parse.quote_plus(v))
 		data = json.loads(response.read())
 		if not data or 'features' not in data: return
-		logging.debug('Returned %d results from api-adresse.data.gouv.fr for %s', len(data['features']), c.value)
+		logging.debug('Returned %d results from api-adresse.data.gouv.fr for %s', len(data['features']), v)
 		# Quick and dirty way to have two-tier results since based on BAN address matching results, when parsing a
 		# coarse-grained entity (city or equivalent) the results at a finer level (street, etc.) are completely unreliable
 		# as basically they are random, if not made-up, street addresses and districts.
@@ -1570,17 +1577,17 @@ class FrenchAddressMatcher(LabelMatcher):
 				if l not in iIdx: iIdx[l] = props
 				hits[1].add(l)
 			elif kind in ['town', 'city', 'municipality']: # Sanity check on the commune name : exclude []
-				v = normalize_and_validate_phrase(c.value)
+				v = normalize_and_validate_phrase(v)
 				if v is not None and fast_sim_score(self.fss.search(v), len(v))[1] > 0:
 					l = props['label']
 					if l not in iIdx: iIdx[l] = props
 					hits[0].add(l)
 			else:
 				logging.warning('Properties unexpected geolocation feature type: %s', kind)
-		scoreFilter = partial(address_filter_score, c.value)
+		scoreFilter = partial(address_filter_score, v)
 		prioHits = sorted(hits[0] if len(hits[0]) > 0 else hits[1], key = scoreFilter)
 		if len(prioHits) < 1:
-			logging.warning('Could not parse any address field value for "{}"'.format(c.value))
+			logging.warning('Could not parse any address field value for "{}"'.format(v))
 			return
 		for h in prioHits:
 			if scoreFilter(h) > 100:
