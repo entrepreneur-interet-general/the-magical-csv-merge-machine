@@ -225,35 +225,35 @@ def normalize_pipeline(params):
     #==============================================================================
     # Schedule infer Types
     #==============================================================================
-    #    url_to_append = '/api/schedule/infer_types/{0}/'.format(project_id)
-    #    body = {
-    #            'data_params': {'module_name': 'replace_mvs', 'file_name': file_name}
-    #            }
-    #    resp = post_resp(url_to_append, body)
-    #    job_id = resp['job_id']
-    #
-    #    #==============================================================================
-    #    # --> Wait for job result
-    #    #==============================================================================
-    #    url_to_append = '/queue/result/{0}'.format(job_id)
-    #    infer_types_resp = wait_get_resp(url_to_append, 100)
-    #
-    #    #==============================================================================
-    #    # Schedule recode types
-    #    #==============================================================================
-    #    url_to_append = '/api/schedule/recode_types/{0}/'.format(project_id)
-    #    body = {
-    #            'data_params': {'module_name': 'replace_mvs', 'file_name': file_name},
-    #            'module_params': infer_types_resp['result']
-    #            }
-    #    resp = post_resp(url_to_append, body)
-    #    job_id = resp['job_id']
-    #
-    #    #==============================================================================
-    #    # --> Wait for job result
-    #    #==============================================================================
-    #    url_to_append = '/queue/result/{0}'.format(job_id)
-    #    infer_mvs_resp = wait_get_resp(url_to_append)
+    url_to_append = '/api/schedule/infer_types/{0}/'.format(project_id)
+    body = {
+            'data_params': {'module_name': 'replace_mvs', 'file_name': file_name}
+            }
+    resp = post_resp(url_to_append, body)
+    job_id = resp['job_id']
+
+    #==============================================================================
+    # --> Wait for job result
+    #==============================================================================
+    url_to_append = '/queue/result/{0}'.format(job_id)
+    infer_types_resp = wait_get_resp(url_to_append, 100)
+
+    #==============================================================================
+    # Schedule recode types
+    #==============================================================================
+    url_to_append = '/api/schedule/recode_types/{0}/'.format(project_id)
+    body = {
+            'data_params': {'module_name': 'replace_mvs', 'file_name': file_name},
+            'module_params': infer_types_resp['result']
+            }
+    resp = post_resp(url_to_append, body)
+    job_id = resp['job_id']
+
+    #==============================================================================
+    # --> Wait for job result
+    #==============================================================================
+    url_to_append = '/queue/result/{0}'.format(job_id)
+    infer_mvs_resp = wait_get_resp(url_to_append)
         
     
          # TODO: add recode here
