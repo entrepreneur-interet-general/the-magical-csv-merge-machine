@@ -118,10 +118,10 @@ def _reformat_s_q_t(s_q_t):
         old_len = len(s_q_t)
         s_q_t = (s_q_t[0], [s_q_t[1]], s_q_t[2], s_q_t[3], s_q_t[4])
         assert len(s_q_t) == old_len
-    elif isinstance(s_q_t[1], str):
+    elif isinstance(s_q_t[1], list):
         pass
     else:
-        raise ValueError('Singel query template element 1 should be str or list')
+        raise ValueError('Single query template element 1 should be str or list')
     return s_q_t
 
 def _gen_body(query_template, row, must={}, must_not={}, num_results=3):
