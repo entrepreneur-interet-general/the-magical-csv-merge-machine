@@ -149,41 +149,38 @@ def _gen_body(query_template, row, must={}, must_not={}, num_results=3):
     
     query_template = [_reformat_s_q_t(s_q_t) for s_q_t in query_template]
     
-    try:
-        body = {
-              'size': num_results,
-              'query': {
-                'bool': dict({
-                   must_or_should: [
-                              {'match': {
-                                      s_q_t[2] + s_q_t[3]: {'query': _remove_words(row[s_q_t[1]].str.cat(sep=' '), must.get(s_q_t[2], [])),
-                                                            'boost': s_q_t[4]}}
-                              } \
-                              for s_q_t in query_template if (s_q_t[0] == must_or_should) \
-                                          and isinstance(s_q_t[2], str)
-                            ] \
-                            + [
-                              {'multi_match': {
-                                      'fields': [col + s_q_t[3] for col in s_q_t[2]], 
-                                      'query': _remove_words(row[s_q_t[1]].str.cat(sep=' '), []),
-                                      'boost': s_q_t[4]
-                                      }
-                              } \
-                              for s_q_t in query_template if (s_q_t[0] == must_or_should) \
-                                          and (isinstance(s_q_t[2], tuple) or isinstance(s_q_t[2], list))
-                            ] \
-                    for must_or_should in ['must', 'should']
-                            },
-                            **{
-                               'must_not': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' OR '.join(values)}}
-                                         } for field, values in must_not.items()],
-                               'filter': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' AND '.join(values)}} # TODO: french?
-                                         } for field, values in must.items()],
-                            })               
-                      }
-               }
-    except:
-        import pdb; pdb.set_trace()
+    body = {
+          'size': num_results,
+          'query': {
+            'bool': dict({
+               must_or_should: [
+                          {'match': {
+                                  s_q_t[2] + s_q_t[3]: {'query': _remove_words(row[s_q_t[1]].str.cat(sep=' '), must.get(s_q_t[2], [])),
+                                                        'boost': s_q_t[4]}}
+                          } \
+                          for s_q_t in query_template if (s_q_t[0] == must_or_should) \
+                                      and isinstance(s_q_t[2], str)
+                        ] \
+                        + [
+                          {'multi_match': {
+                                  'fields': [col + s_q_t[3] for col in s_q_t[2]], 
+                                  'query': _remove_words(row[s_q_t[1]].str.cat(sep=' '), []),
+                                  'boost': s_q_t[4]
+                                  }
+                          } \
+                          for s_q_t in query_template if (s_q_t[0] == must_or_should) \
+                                      and (isinstance(s_q_t[2], tuple) or isinstance(s_q_t[2], list))
+                        ] \
+                for must_or_should in ['must', 'should']
+                        },
+                        **{
+                           'must_not': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' OR '.join(values)}}
+                                     } for field, values in must_not.items()],
+                           'filter': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' AND '.join(values)}} # TODO: french?
+                                     } for field, values in must.items()],
+                        })               
+                  }
+           }
     return body
 
 def compute_threshold(metrics, t_p=0.95, t_r=0.3):
@@ -327,7 +324,7 @@ def gen_all_query_templates(match_cols, columns_to_index, bool_levels,
 #                    print('not first')
 #    return False, None    
 
-def make_bulk(table_name, search_templates, must, must_not, num_results, chunk_size=100):
+def _gen_bulk(table_name, search_templates, must, must_not, num_results, chunk_size=100):
     '''
     Create a bulk generator with all search templates
     
@@ -347,6 +344,8 @@ def make_bulk(table_name, search_templates, must, must_not, num_results, chunk_s
     for (q_t, row) in search_templates:
         bulk_body += json.dumps({"index" : table_name}) + '\n'
         body = _gen_body(q_t, row, must, must_not, num_results)
+        if i == 0:
+            print(body)
         bulk_body += json.dumps(body) + '\n'
         queries.append((q_t, row))
         i += 1
@@ -372,12 +371,13 @@ def perform_queries(table_name, all_query_templates, rows, must, must_not, num_r
     i = 1
     full_responses = dict() 
     og_search_templates = list(enumerate(itertools.product(all_query_templates, rows)))
-    search_templates = og_search_templates
+    search_templates = list(og_search_templates)        
     # search_template is [(id, (query, row)), ...]
     while search_templates:
         print('At search iteration', i)
         
-        bulk_body_gen = make_bulk(table_name, [x[1] for x in search_templates], must, must_not, num_results)
+        bulk_body_gen = _gen_bulk(table_name, [x[1] for x in search_templates], 
+                                  must, must_not, num_results)
         responses = []
         for bulk_body, _ in bulk_body_gen:
             responses += es.msearch(bulk_body)['responses'] #, index=table_name)
@@ -615,8 +615,10 @@ class Labeller():
             sorted_keys_1 = random.sample(list(self.full_responses.keys()), len(self.full_responses.keys()))
             sorted_keys_2 = sorted(self.full_responses.keys(), key=lambda x: \
                                    self.full_responses[x]['hits'].get('max_score') or 0, reverse=True)
-            self.sorted_keys =  [self._default_query()] \
-                                + list(itertools.chain(*zip(sorted_keys_1, sorted_keys_2)))
+            
+            d_q = self._default_query()
+            self.sorted_keys =  [d_q] \
+                        + [x for x in list(itertools.chain(*zip(sorted_keys_1, sorted_keys_2))) if x != d_q]
             # TODO: redundency with first
         else:
             # Sort by ratio but label by precision ?
@@ -697,7 +699,7 @@ class Labeller():
                 
                 # Check if row was already done # TODO: will be problem with count
                 if self.idx in (x[0] for x in self.pairs):
-                    self._new_label()                      
+                    return self._new_label() # TODP! chechk this                     
                 
                 self.first_propoal_for_source_idx = True
             else:
@@ -712,13 +714,14 @@ class Labeller():
             print('in new_label / in self.next_row / len sorted_keys: {0} / row_idx: {1}'.format(len(self.sorted_keys), self.idx))
             self.all_search_templates, self.full_responses = perform_queries(self.ref_table_name, self.sorted_keys, 
                                                                              [row], self.must, self.must_not, self.num_results_labelling)
+            # import pdb; pdb.set_trace()
             self.full_responses = {self.all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
             print('LEN OF FULL_RESPONSES:', len(self.full_responses))
             self.sort_keys()
                             
             self.label_row_gen = self.new_label_row(self.full_responses, self.sorted_keys, self.num_results_labelling)
         
-        # Reteurn next option for row or try next row
+        # Return next option for row or try next row
         try:
             self.num_rows_proposed_ref[self.idx] += 1
             return next(self.label_row_gen)
@@ -866,7 +869,7 @@ class Labeller():
         '''Returns a dictionnary with the best parameters (input for es_linker)'''
         params = dict()
         params['index_name'] = self.ref_table_name
-        params['query_templates'] = self._best_query_template()
+        params['query_template'] = self._best_query_template()
         params['must'] = self.must
         params['must_not'] = self.must_not
         params['thresh'] = 0 # self.threshold #TODO: fix this
