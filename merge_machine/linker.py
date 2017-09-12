@@ -471,8 +471,8 @@ class Linker(AbstractDataProject):
         col_matches_tmp = self.read_col_matches()
         col_matches = []
         for match in col_matches_tmp:
-            col_matches.append({'source': _tuple_or_string(match['source']), 
-                                'ref': _tuple_or_string(match['ref'])})
+            col_matches.append({'source': self._tuple_or_string(match['source']), 
+                                'ref': self._tuple_or_string(match['ref'])})
         # TODO: lists to tuple in col_matches
         
         paths = self._gen_paths_es()
