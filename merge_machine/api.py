@@ -893,10 +893,11 @@ def complete_training(message_received):
     message_received = json.loads(message_received)
     logging.info(message_received)
     project_id = message_received['project_id']
+    proj = UserLinker(project_id)
 
     logging.info('Writing train')
-    training_path = UserLinker(project_id).path_to('es_linker', 'training.json')
-    flask._app_ctx_stack.labeller_mem[project_id]['labeller'].write_training(training_path)
+    learned_settings = flask._app_ctx_stack.labeller_mem[project_id]['labeller'].export_best_params()
+    proj.add_es_learned_settings(learned_settings)
     logging.info('Wrote train')
     
     try:

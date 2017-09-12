@@ -135,6 +135,13 @@ class Linker(AbstractDataProject):
             self.metadata['log'][file_name]['add_selected_columns']['completed'] = True        
         self._write_metadata()   
 
+    def add_es_learned_settings(self, learned_settings):
+        '''Adds the learned es configuration'''
+        
+        self.upload_config_data(learned_settings, 'es_linker', 'learned_settings.json')
+        
+        for file_name in self.metadata['log']:
+            self.metadata['log'][file_name]['upload_es_train']['completed'] = True           
         
     def read_col_matches(self, add_created=True):
         '''
