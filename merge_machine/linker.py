@@ -141,7 +141,8 @@ class Linker(AbstractDataProject):
         self.upload_config_data(learned_settings, 'es_linker', 'learned_settings.json')
         
         for file_name in self.metadata['log']:
-            self.metadata['log'][file_name]['upload_es_train']['completed'] = True           
+            self.metadata['log'][file_name]['upload_es_train']['completed'] = True   
+        self._write_metadata()
         
     def read_col_matches(self, add_created=True):
         '''
