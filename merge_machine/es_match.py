@@ -19,6 +19,7 @@ Discrepancy btw labelling (worse) and matching (better)
 
 """
 from collections import defaultdict
+import copy
 import itertools
 import json
 import random
@@ -380,7 +381,7 @@ def perform_queries(table_name, all_query_templates, rows, must, must_not, num_r
                                   must, must_not, num_results)
         responses = []
         for bulk_body, _ in bulk_body_gen:
-            responses += es.msearch(bulk_body)['responses'] #, index=table_name)
+            responses.extend(es.msearch(bulk_body)['responses']) #, index=table_name)
             
         # TODO: add error on query template with no must or should
         
@@ -484,13 +485,13 @@ class Labeller():
     
     def __init__(self, source, ref_table_name, match_cols, columns_to_index, 
                  certain_column_matches=None, must={}, must_not={}):
-        self.all_query_templates = gen_all_query_templates(match_cols, 
+        all_query_templates = gen_all_query_templates(match_cols, 
                                                            columns_to_index, 
                                                            self.bool_levels, 
                                                            self.boost_levels, 
                                                            self.max_num_levels)
+        
 
-        self.sorted_keys = self.all_query_templates
         self.source = source
         self.ref_table_name = ref_table_name
         
@@ -501,8 +502,11 @@ class Labeller():
         self.num_rows_labelled = 0
         self.query_metrics = dict()
         self.agg_query_metrics = dict()
+
+        d_q = self._default_query()
+        all_query_templates = [d_q] + [x for x in all_query_templates if x != d_q]
         
-        for q_t in self.all_query_templates:
+        for q_t in all_query_templates:
             self.query_metrics[q_t] = []
         
         # TODO: Must currently not implemented
@@ -514,6 +518,8 @@ class Labeller():
         self.pairs_not_match = defaultdict(list)
         self.next_row = True
         self.finished = False
+
+        self.sorted_keys = all_query_templates
         
         if certain_column_matches is not None:
             self.auto_label()
@@ -536,7 +542,8 @@ class Labeller():
         print('self.num_rows_labelled:', self.num_rows_labelled)
         print('self.num_rows_proposed_source:', self.num_rows_proposed_source)
         print('self.num_rows_proposed_ref:', self.num_rows_proposed_ref)
-        for match in self.match_cols:
+        match_cols = copy.deepcopy(self.match_cols)
+        for match in match_cols:
             if isinstance(match['ref'], str):
                 cols = [match['ref']]
             else:
@@ -616,6 +623,7 @@ class Labeller():
             sorted_keys_2 = sorted(self.full_responses.keys(), key=lambda x: \
                                    self.full_responses[x]['hits'].get('max_score') or 0, reverse=True)
             
+            
             d_q = self._default_query()
             self.sorted_keys =  [d_q] \
                         + [x for x in list(itertools.chain(*zip(sorted_keys_1, sorted_keys_2))) if x != d_q]
@@ -690,7 +698,7 @@ class Labeller():
         # If looking for a new row from source, initiate the generator
         if not self.sorted_keys:
             raise ValueError('No keys in self.sorted_keys')
-        
+            
         self.first_propoal_for_source_idx = False
         # If on a new row, create the generator for the entire row
         if self.next_row: # If previous was found: try new row
@@ -706,20 +714,22 @@ class Labeller():
                 self.finished = True
                 return None            
             
+            
             self.num_rows_proposed_source += 1
             self.next_row = False
             
             row = self.source.loc[self.idx]
             
             print('in new_label / in self.next_row / len sorted_keys: {0} / row_idx: {1}'.format(len(self.sorted_keys), self.idx))
-            self.all_search_templates, self.full_responses = perform_queries(self.ref_table_name, self.sorted_keys, 
-                                                                             [row], self.must, self.must_not, self.num_results_labelling)
-            # import pdb; pdb.set_trace()
-            self.full_responses = {self.all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
+            all_search_templates, tmp_full_responses = perform_queries(self.ref_table_name, self.sorted_keys, [row], self.must, self.must_not, self.num_results_labelling)
+            self.full_responses = {all_search_templates[i][1][0]: values for i, values in tmp_full_responses.items()}
             print('LEN OF FULL_RESPONSES:', len(self.full_responses))
+            # import pdb; pdb.set_trace()
             self.sort_keys()
                             
-            self.label_row_gen = self.new_label_row(self.full_responses, self.sorted_keys, self.num_results_labelling)
+            self.label_row_gen = self.new_label_row(self.full_responses, 
+                                                    self.sorted_keys, 
+                                                    self.num_results_labelling)
         
         # Return next option for row or try next row
         try:
@@ -737,7 +747,7 @@ class Labeller():
             return None, None
         
         source_item = {'_id': self.idx, 
-                  '_source': self.source.loc[self.idx].to_dict()}
+                       '_source': self.source.loc[self.idx].to_dict()}
         
         self.source_item = source_item
         self.ref_item = ref_item
@@ -848,13 +858,13 @@ class Labeller():
         
         # TODO: temporary sol: put all in bulk
         for pair in self.pairs:
-            self.all_search_templates, self.full_responses = perform_queries(
+            all_search_templates, self.full_responses = perform_queries(
                                                                   self.ref_table_name, 
                                                                   self.sorted_keys, 
                                                                   [self.source.loc[pair[0]]], 
                                                                   self.must, self.must_not, 
                                                                   self.num_results_labelling)
-            self.full_responses = {self.all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
+            self.full_responses = {all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
             self.update_query_metrics_on_match(pair[1])
 
         if not self.sorted_keys:

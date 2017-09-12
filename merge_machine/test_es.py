@@ -65,7 +65,7 @@ elif test_num == 3:
     source_sep = '\t'
     source_encoding = 'utf-8'
     
-    ref_table_name = '61968b0c12429846d337947e10c34295'
+    ref_table_name = '01c670508e478300b9ab7c639a76c871'
 
 else:
     raise Exception('Not a valid test number')
