@@ -20,7 +20,7 @@ NORMALIZE_MODULE_ORDER_log = ['INIT', 'make_mini', 'add_selected_columns',
 NORMALIZE_MODULE_ORDER = ['INIT', 'make_mini', 'replace_mvs', 'recode_types', 
                           'concat_with_init']
 
-LINK_MODULE_ORDER_log = ['INIT', 'add_selected_columns', 'es_train', 'upload_es_train', 
+LINK_MODULE_ORDER_log = ['INIT', 'add_selected_columns', 'upload_es_train', 
                          'es_linker', 'link_results_analyzer']
 # NB: INIT in link is add_projects
 
