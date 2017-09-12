@@ -517,14 +517,14 @@ class TypeMatcher(object):
 			except TypeError as te:
 				logging.warning('{}: badly typed response or parsing error for "{}": {}'.format(self, vc.value, te))
 				fatal_count += 1
+			except ValueError as ve:
+				logging.warning('{}: unexpected response for "{}": {}'.format(self, vc.value, ve))
+				fatal_count += 1
 			except UnicodeDecodeError as ude:
 				logging.error('{} : unicode error while parsing input value "{}": {}'.format(self, vc.value, ude))
 				fatal_count += 1
 			except urllib.error.HTTPError as he:
 				logging.warning('{}: request rejected for "{}": {}'.format(self, vc.value, he))
-				fatal_count += 1
-			except ValueError as ve:
-				logging.warning('{}: unexpected response for "{}": {}'.format(self, vc.value, ve))
 				fatal_count += 1
 			except OverflowError as oe:
 				logging.error('{} : overflow error (e.g. while parsing date) for "{}": {}'.format(self, vc.value, oe))
@@ -1295,8 +1295,7 @@ class CustomDateMatcher(TypeMatcher):
 		# then an ambiguous date implicitly using US (not UK or AUS) locale (e.g. 03/04/2014 which should resolve to
 		# March 4th and not April 3rd)...
 		if c.value.isdigit():
-			logging.debug('Bailing out of %s for numeric value: %s', self, c)
-			return
+			raise TypeError('{} cannot parse date from numeric value: {}'.format(self, c))
 		dd = DDP.get_date_data(c.value)
 		do, dp = dd['date_obj'], dd['period']
 		if do is None: return
@@ -1550,7 +1549,7 @@ class CustomAddressMatcher(TypeMatcher):
 			self.register_full_match(c, self.t, None, ' '.join(comps))
 
 COMMUNE_LEXICON = file_to_set('commune')
-
+COUNTRY_FALLBACK = False
 class FrenchAddressMatcher(LabelMatcher):
 	def __init__(self):
 		super(FrenchAddressMatcher, self).__init__(F_ADDRESS, COMMUNE_LEXICON, MATCH_MODE_EXACT)
@@ -1589,9 +1588,6 @@ class FrenchAddressMatcher(LabelMatcher):
 				logging.warning('Properties unexpected geolocation feature type: %s', kind)
 		scoreFilter = partial(address_filter_score, v)
 		prioHits = sorted(hits[0] if len(hits[0]) > 0 else hits[1], key = scoreFilter, reverse = True)
-		if len(prioHits) < 1:
-			logging.warning('Could not parse any address field value for "{}"'.format(v))
-			return
 		for h in prioHits:
 			if scoreFilter(h) <= 100 or h not in iIdx:
 				continue
@@ -1600,7 +1596,10 @@ class FrenchAddressMatcher(LabelMatcher):
 			if len(res_address) > 3:
 				self.register_full_match(c, self.t, None, res_address)
 				return
-		self.register_full_match(c, F_COUNTRY, 100, 'France')
+		if COUNTRY_FALLBACK:
+			self.register_full_match(c, F_COUNTRY, 100, 'France')
+		else:
+			raise TypeError('Could not parse any address field value for "{}"'.format(v))
 
 def address_filter_score(src, ref):
 	a1, a2 = case_phrase(src), case_phrase(ref)
@@ -1665,7 +1664,7 @@ class VariantExpander(TypeMatcher):
 				for k1 in range(0, len(tokens) + 1 - k2):
 					matchSrcTokens = tokens[k1:k1 + k2]
 					matchRefPhrase = ' '.join(matchSrcTokens)
-					if matchRefPhrase not in self.tokenIdx: 
+					if matchRefPhrase not in self.tokenIdx:
 						continue
 					for altVariant in self.tokenIdx[matchRefPhrase]:
 						score = self.scorer(matchSrcTokens, tokens, matchRefPhrase, altVariant)
@@ -1673,7 +1672,7 @@ class VariantExpander(TypeMatcher):
 						i1 = v.find(tokens[k1])
 						if i1 >= 0: i2 = v.find(tokens[k1 + k2 - 1], i1) if k2 > 1 else i1
 						mainVariant = self.variantsMap[altVariant]
-						logging.debug('%s matched on %s: %s expanded to main variant %s', self, matchRefPhrase, altVariant, mainVariant)
+						logging.debug('%s matched on %s: "%s" expanded to main variant "%s"', self, matchRefPhrase, altVariant, mainVariant)
 						normedValue = ''.join([v[:i1], mainVariant, v[i2:]]) if self.keepContext else mainVariant
 						if i1 == 0 and k1 + k2 == len(tokens):
 							self.register_full_match(c, self.t, score, mainVariant)
