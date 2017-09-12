@@ -443,6 +443,23 @@ class Linker(AbstractDataProject):
                 }
         return paths
 
+    @staticmethod
+    def _tuple_or_string(x):
+        if isinstance(x, str):
+            return x
+        elif isinstance(x, list):
+            if len(x) == 1:
+                return x[0]
+            else:
+                return tuple(x)
+        elif isinstance(x, tuple):
+            if len(x) == 1:
+                return x[0]
+            else:
+                return x
+        else:
+            raise ValueError('Value should be str, list or tuple')
+
     def _gen_es_labeller(self, columns_to_index=None, certain_column_matches=None):
         '''
         Return a es_labeller object
@@ -454,8 +471,8 @@ class Linker(AbstractDataProject):
         col_matches_tmp = self.read_col_matches()
         col_matches = []
         for match in col_matches_tmp:
-            col_matches.append({'source': tuple(match['source']), 
-                                'ref': tuple(match['ref'])})
+            col_matches.append({'source': _tuple_or_string(match['source']), 
+                                'ref': _tuple_or_string(match['ref'])})
         # TODO: lists to tuple in col_matches
         
         paths = self._gen_paths_es()

@@ -23,7 +23,7 @@ chunksize = 3000
 file_len = 10*10**6
 
 
-test_num = 2
+test_num = 3
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
     match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},
@@ -31,12 +31,16 @@ if test_num == 0:
     source_sep = ','
     source_encoding = 'utf-8'
     
+    ref_table_name = '123vivalalgerie'
+    
 elif test_num == 1:
     source_file_path = 'local_test_data/integration_5/data_ugly.csv'
     match_cols = [{'source': 'VILLE', 'ref': 'L6_NORMALISEE'},
                   {'source': 'ETABLISSEMENT', 'ref': 'NOMEN_LONG'}]
     source_sep = ';'
     source_encoding = 'windows-1252'
+    
+    ref_table_name = '123vivalalgerie'
     
 elif test_num == 2:
     source_file_path = 'local_test_data/integration_3/export_alimconfiance.csv'
@@ -48,8 +52,20 @@ elif test_num == 2:
 
     source_sep = ';'
     source_encoding = 'utf-8'
+    
+    ref_table_name = '123vivalalgerie'
+    
 elif test_num == 3:
-    source_file_path = 'local_test_data_/integration_4/hal.csv'    
+    source_file_path = 'local_test_data/integration_4/hal.csv'
+
+    match_cols = [{
+                    "source": ("parentName_s", "label_s"),
+                    "ref": ("Name", "City")
+                  }]
+    source_sep = '\t'
+    source_encoding = 'utf-8'
+    
+    ref_table_name = '61968b0c12429846d337947e10c34295'
 
 else:
     raise Exception('Not a valid test number')
@@ -60,48 +76,56 @@ source = pd.read_csv(source_file_path,
                     dtype=str, nrows=chunksize)
 source = source.where(source.notnull(), '')
 
-ref_table_name = '123vivalalgerie'
 
 
 
 
-columns_to_index = {
-    'SIREN': {},
-    'NIC': {},
-    'L1_NORMALISEE': {
-        'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
-    },
-    'L4_NORMALISEE': {
-        'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
-    },
-    'L6_NORMALISEE': {
-        'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
-    },
-    'L1_DECLAREE': {
-        'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
-    },
-    'L4_DECLAREE': {
-        'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
-    },
-    'L6_DECLAREE': {
-        'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
-    },
-    'LIBCOM': {
-        'french', 'whitespace', 'end_n_grams', 'n_grams'
-    },
-    'CEDEX': {},
-    'ENSEIGNE': {
-        'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
-    },
-    'NOMEN_LONG': {
-        'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
-    },
-    #Keyword only 'LIBNATETAB': {},
-    'LIBAPET': {},
-    'PRODEN': {},
-    'PRODET': {}
-}
-
+if test_num in [0,1,2]:
+    columns_to_index = {
+        'SIREN': {},
+        'NIC': {},
+        'L1_NORMALISEE': {
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+        },
+        'L4_NORMALISEE': {
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+        },
+        'L6_NORMALISEE': {
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+        },
+        'L1_DECLAREE': {
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+        },
+        'L4_DECLAREE': {
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+        },
+        'L6_DECLAREE': {
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+        },
+        'LIBCOM': {
+            'french', 'whitespace', 'end_n_grams', 'n_grams'
+        },
+        'CEDEX': {},
+        'ENSEIGNE': {
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+        },
+        'NOMEN_LONG': {
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+        },
+        #Keyword only 'LIBNATETAB': {},
+        'LIBAPET': {},
+        'PRODEN': {},
+        'PRODET': {}
+    }
+elif test_num in [3]:
+    columns_to_index = {
+            "Name": {
+                    'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+                    }, 
+            "City": {
+                    'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+                    }      
+            }
 
 if test_num == 2:
     columns_certain_match = {'source': ['SIRET'], 'ref': ['SIREN', 'NIC']}

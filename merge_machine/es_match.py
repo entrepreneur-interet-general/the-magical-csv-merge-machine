@@ -601,7 +601,7 @@ class Labeller():
             m = self.match_cols[0]
             return (('must', m['source'], m['ref'], '.french', 1), ('should', m['source'], m['ref'], '.integers', 1))
         else:
-            return tuple(('must', match['source'], match['ref'], '.french', 1) for match in self.match_cols)
+            return tuple(('must', m['source'], m['ref'], '.french', 1) for m in self.match_cols)
         
 
     def sort_keys(self):
