@@ -505,14 +505,15 @@ class TypeMatcher(object):
 	def match_all_field_values(self, f):
 		error_count = 0
 		fatal_count = 0
-		max_errors = len(f.cells) * MAX_ERROR_RATE / 100
+		values_seen = 0
 		for vc in f.cells:
-			if error_count > max_errors:
-				logging.warning('{}: bailing out after {} non-fatal matching errors'.format(self, error_count))
+			if values_seen >= 100 and (error_count + fatal_count) * 100 > values_seen * MAX_ERROR_RATE:
+				logging.warning('{}: bailing out after {} total matching errors'.format(self, error_count + fatal_count))
 				break
 			elif fatal_count > MAX_FATAL_COUNT:
 				logging.warning('{}: bailing out after {} fatal matching errors'.format(self, fatal_count))
 				break
+			values_seen += 1
 			try :
 				self.match(vc)
 			# Handling non-fatal errors
@@ -631,7 +632,7 @@ class RegexMatcher(TypeMatcher):
 							return
 					except IndexError:
 						raise RuntimeError('No group %d matched in regex "%s" for input "%s"', self.g, self.p, c)
-		raise TypeError('%s unmatched "%s"', self, c.value)
+		raise ValueError('%s unmatched "%s"', self, c.value)
 
 def build_vocab_regex(vocab, partial):
 	j = '|'.join(vocab)
@@ -1328,7 +1329,7 @@ class CustomDateMatcher(TypeMatcher):
 			raise TypeError('{} found no date field from "{}"'.format(self, c))
 		y = do.year
 		if y < 1870 or 2120 < y:
-			raise TypeError('{} found no realistic date from "{}"'.format(self, c))
+			raise ValueError('{} found no realistic date from "{}"'.format(self, c))
 		ds = str(y)
 		if dp == 'year':
 			self.register_full_match(c, F_YEAR, 100, ds)
@@ -1847,8 +1848,8 @@ def generate_value_matchers(lvl = 1):
 		yield RegexMatcher(F_UMR, "UMR-?[ A-Z]{0,8}([0-9]{3,4})", g = 1, partial = True)
 	# Negate dates for all thoses regex matches (which happen to match using our custom matcher, especially for UAI patterns)
 	if lvl >= 0:
-		yield RegexMatcher(F_NNS, PAT_NNS, ignoreCase = True, neg = True)
-		yield RegexMatcher(F_UAI, PAT_UAI, ignoreCase = True, neg = True)
+		yield RegexMatcher(F_DATE, PAT_SIREN, ignoreCase = True, neg = True)
+		yield RegexMatcher(F_DATE, PAT_SIRET, ignoreCase = True, neg = True)
 
 	if lvl >= 2: 
 		# yield LabelMatcher(F_RD_STRUCT, file_to_set('structure_recherche_short.col'), MATCH_MODE_EXACT)
