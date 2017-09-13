@@ -4,11 +4,6 @@
 Created on Fri Mar  3 15:48:18 2017
 
 @author: leo
-
-
-TODO:
-    - Use external json as parameters for testing
-
 """
 
 import json
@@ -255,8 +250,6 @@ def normalize_pipeline(params):
     url_to_append = '/queue/result/{0}'.format(job_id)
     infer_mvs_resp = wait_get_resp(url_to_append)
         
-    
-         # TODO: add recode here
     #==============================================================================
     # Schedule _concat_with_init
     #==============================================================================
@@ -549,7 +542,7 @@ if __name__ == '__main__':
     #==============================================================================
     # List projects
     #==============================================================================
-    url_to_append = '/api/projects/link'
+    url_to_append = '/api/public_project_ids/<project_type>'
     resp = get_resp(url_to_append)
 
 

@@ -260,7 +260,7 @@ def DETUPLIFY_TODO_DELETE(arg):
         return arg[0]
     return arg
 
-def gen_all_query_templates(match_cols, columns_to_index, bool_levels, 
+def _gen_all_query_templates(match_cols, columns_to_index, bool_levels, 
                             boost_levels, max_num_levels):
     ''' Generate query templates #TODO: more doc '''
     single_queries = list(((bool_lvl, DETUPLIFY_TODO_DELETE(x['source']), DETUPLIFY_TODO_DELETE(x['ref']), suffix, boost) \
@@ -485,7 +485,7 @@ class Labeller():
     
     def __init__(self, source, ref_table_name, match_cols, columns_to_index, 
                  certain_column_matches=None, must={}, must_not={}):
-        all_query_templates = gen_all_query_templates(match_cols, 
+        all_query_templates = _gen_all_query_templates(match_cols, 
                                                            columns_to_index, 
                                                            self.bool_levels, 
                                                            self.boost_levels, 
@@ -893,6 +893,9 @@ class Labeller():
             w.write(encoder.encode(params))
     
     def update_musts(self, must, must_not):
+        if (not isinstance(must, dict)) or (not isinstance(must_not, dict)):
+            raise ValueError('Variables "must" and "must_not" should be dicts' \
+                'with keys being column names and values a list of strings')
         self.must = must
         self.must_not = must_not
         self.re_score_history()

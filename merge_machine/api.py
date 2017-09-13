@@ -887,7 +887,7 @@ def update_musts(message_received):
     flask._app_ctx_stack.labeller_mem[project_id]['labeller'].update_musts(must, must_not)
     
     encoder = MyEncoder()
-    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=message_to_display)))
+    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message='')))
     
     
 @socketio.on('complete_training', namespace='/')
@@ -1110,7 +1110,7 @@ def list_public_project_ids(project_type):
     list_of_project_ids = admin.list_project_ids(project_type, public_only=True)
     return jsonify(list_of_project_ids)
 
-@app.route('/api/public_project_ids/<project_type>', methods=['GET'])
+@app.route('/api/public_projects/<project_type>', methods=['GET'])
 def list_public_projects(project_type):
     '''
     
