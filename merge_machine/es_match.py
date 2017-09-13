@@ -260,7 +260,7 @@ def DETUPLIFY_TODO_DELETE(arg):
         return arg[0]
     return arg
 
-def gen_all_query_templates(match_cols, columns_to_index, bool_levels, 
+def _gen_all_query_templates(match_cols, columns_to_index, bool_levels, 
                             boost_levels, max_num_levels):
     ''' Generate query templates #TODO: more doc '''
     single_queries = list(((bool_lvl, DETUPLIFY_TODO_DELETE(x['source']), DETUPLIFY_TODO_DELETE(x['ref']), suffix, boost) \
@@ -485,7 +485,7 @@ class Labeller():
     
     def __init__(self, source, ref_table_name, match_cols, columns_to_index, 
                  certain_column_matches=None, must={}, must_not={}):
-        all_query_templates = gen_all_query_templates(match_cols, 
+        all_query_templates = _gen_all_query_templates(match_cols, 
                                                            columns_to_index, 
                                                            self.bool_levels, 
                                                            self.boost_levels, 
