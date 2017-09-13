@@ -887,7 +887,7 @@ def update_musts(message_received):
     flask._app_ctx_stack.labeller_mem[project_id]['labeller'].update_musts(must, must_not)
     
     encoder = MyEncoder()
-    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=message_to_display)))
+    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message='')))
     
     
 @socketio.on('complete_training', namespace='/')
