@@ -115,7 +115,7 @@ def normalize_pipeline(params):
     url_to_append = '/api/new/normalize'
     #    body = {'description': 'File to use as source for testing',
     #            'display_name': 'test_source.csv',
-    #            'internal': False}
+    #            'public': False}
     body = params['new_project']
     resp = post_resp(url_to_append, body)
     project_id = resp['project_id']

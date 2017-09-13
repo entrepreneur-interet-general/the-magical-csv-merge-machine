@@ -8,7 +8,7 @@ Created on Mon Feb  6 15:01:16 2017
 TODO:
     - Safe file name / not unique per date
     
-    - API: List of internal referentials
+    - API: List of public referentials
     - API: List of finished modules for given project / source
     - API: List of loaded sources
     
@@ -19,7 +19,7 @@ TODO:
     
     - Use logging module
     
-    - Change metadata to use_internal and ref_name to last used or smt. Data to
+    - Change metadata to use_public and ref_name to last used or smt. Data to
       use is specified on api call and not read from metadata (unless using last used)
     
     - Protect admin functions
@@ -287,18 +287,18 @@ def new_project(project_type):
     POST:
         - (description): project description
         - (display_name): name to show to user
-        - (internal): (synonymous to public)
+        - (public): make project freely available
     
     '''
     _check_project_type(project_type)
     
-    # TODO: include internal in form somewhere
+    # TODO: include public in form somewhere
     description = request.json.get('description', '')
     display_name = request.json.get('display_name', '')
-    internal = request.json.get('internal', False)
+    public = request.json.get('public', False)
     
-    if internal and (not description):
-        raise Exception('Internal projects should have a description')
+    if public and (not description):
+        raise Exception('Public projects should have a description')
 
     if project_type == 'normalize':
         proj = UserNormalizer(create_new=True, description=description, display_name=display_name)
@@ -741,7 +741,7 @@ def select_file(project_id):
     TODO: FIX THIS MESS  !!!!
     
     Choose a file to use as source or referential for merging
-    send {file_role: "source", project_id: "ABCYOUANDME", internal: False}
+    send {file_role: "source", project_id: "ABCYOUANDME", public: False}
     
     GET:
         - project_id: ID for the "link" project
@@ -753,7 +753,7 @@ def select_file(project_id):
     proj = UserLinker(project_id)
     params = request.json
     proj.add_selected_project(file_role=params['file_role'], 
-                           internal=params.get('internal', False), # TODO: remove internal
+                           public=params.get('public', False),
                            project_id=params['project_id'])
     return jsonify(error=False)
 
@@ -1101,16 +1101,23 @@ def count_jobs_in_queue():
     # Admin
 #==============================================================================
 
-@app.route('/api/projects/<project_type>', methods=['GET'])
-def list_projects(project_type):
+@app.route('/api/public_project_ids/<project_type>', methods=['GET'])
+def list_public_project_ids(project_type):
     '''
-    TODO: TEMPORARY !! DELETE FOR PROD !!!
+    
     '''
     admin = Admin()
-    list_of_projects = admin.list_project_ids(project_type)
+    list_of_project_ids = admin.list_project_ids(project_type, public_only=True)
+    return jsonify(list_of_project_ids)
+
+@app.route('/api/public_project_ids/<project_type>', methods=['GET'])
+def list_public_projects(project_type):
+    '''
+    
+    '''
+    admin = Admin()
+    list_of_projects = admin.list_projects(project_type, public_only=True)
     return jsonify(list_of_projects)
-
-
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)

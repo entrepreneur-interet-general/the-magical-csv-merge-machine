@@ -99,7 +99,7 @@ class Linker(AbstractDataProject):
     
     def _create_metadata(self, description=None, display_name=None):
         metadata = super()._create_metadata(description=description, display_name=display_name)
-        metadata['files'] = {'source': None, 'ref': None} # {'source': {internal: False, project_id: "ABC123", file_name: "source.csv.csv"}, 'ref': None}
+        metadata['files'] = {'source': None, 'ref': None} # {'source': {public: False, project_id: "ABC123", file_name: "source.csv.csv"}, 'ref': None}
         return metadata   
 
     def add_col_matches(self, column_matches):
@@ -199,26 +199,26 @@ class Linker(AbstractDataProject):
         return config
 
 
-    def add_selected_project(self, file_role, internal, project_id):
+    def add_selected_project(self, file_role, public, project_id):
         '''
         Select file to use as source or referential.
         
         INPUT:
             - file_role: "source" or "referential"
-            - internal: (bool) is the project available to all (or is it a user project)
+            - public: (bool) is the project available to all (or is it a user project)
             - project_id
             - file_name
         '''
         self._check_file_role(file_role)
         # Check that file exists
-        if internal:
+        if public:
             raise DeprecationWarning
         else:
             proj = ESReferential(project_id)
             
         #        if file_name not in proj.metadata['files']:
         #            raise Exception('File {0} could not be found in project {1} \
-        #                 (internal: {2})'.format(file_name, project_id, internal))
+        #                 (public: {2})'.format(file_name, project_id, public))
         
         # Check that normalization project has only one file (and possibly a MINI__ version)
         if not len(proj.metadata['files']):
@@ -236,7 +236,7 @@ class Linker(AbstractDataProject):
             proj = 'MINI__' + file_name.replace('MINI__', '')
 
         # Check that         
-        self.metadata['files'][file_role] = {'internal': internal, 
+        self.metadata['files'][file_role] = {'public': public, 
                                              'project_id': project_id,
                                              'module_name': module_name,
                                              'file_name': file_name,
