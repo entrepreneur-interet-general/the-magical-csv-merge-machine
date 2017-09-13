@@ -25,7 +25,7 @@ countInfo = Counter()
 MICROS_PER_SEC = 1000000
 
 # Ratio of unhandled, non-fatal errors after which a given TypeMatcher will be dropped
-MAX_ERROR_RATE = 80
+MAX_ERROR_RATE = 20
 # Number of unhandled, fatal errors after which a given TypeMatcher will be dropped
 MAX_FATAL_COUNT = 5
 
@@ -38,12 +38,13 @@ def snapshot_timing(end):
 		logging.debug('')
 	lastTime = end
 
+TIMING_BY_INSTANCE = False
 def timed(original_func):
 	def wrapper(*args, **kwargs):
 		start = time.clock()
 		result = original_func(*args, **kwargs)
 		end = time.clock()
-		key = original_func.__name__ if len(args) < 1 else args[0].__class__.__name__ + '.' + original_func.__name__
+		key = original_func.__name__ if len(args) < 1 else (args[0] if TIMING_BY_INSTANCE else args[0].__class__.__name__) + '.' + original_func.__name__
 		t = int((end - start) * MICROS_PER_SEC)
 		timingInfo[key] += t
 		countInfo[key] += 1
@@ -182,7 +183,7 @@ def to_ASCII(phrase): return unidecode.unidecode(phrase)
 def rejoin(v): return to_ASCII(v)
 
 def case_phrase(p, keepAcronyms = False):
-	ps = pre_split(p)
+	ps = pre_split(p) if p is not None else ''
 	return to_ASCII(lower_or_not(ps.strip(), keepAcronyms))
 
 def replace_by_space(str, *patterns): return reduce(lambda s, p: re.sub(p, ' ', s), patterns, str)
@@ -514,11 +515,19 @@ class TypeMatcher(object):
 				break
 			try :
 				self.match(vc)
-			except TypeError as te:
-				logging.warning('{}: badly typed response or parsing error for "{}": {}'.format(self, vc.value, te))
-				fatal_count += 1
+			# Handling non-fatal errors
 			except ValueError as ve:
-				logging.warning('{}: unexpected response for "{}": {}'.format(self, vc.value, ve))
+				logging.warning('{}: value error for "{}": {}'.format(self, vc.value, ve))
+				error_count += 1
+			except OverflowError as oe:
+				logging.error('{} : overflow error (e.g. while parsing date) for "{}": {}'.format(self, vc.value, oe))
+				error_count += 1
+			# Handling fatal errors
+			except RuntimeError as rte:
+				logging.warning('{}: runtime error for "{}": {}'.format(self, vc.value, rte))
+				fatal_count += 1
+			except TypeError as te:
+				logging.warning('{}: type or parsing error for "{}": {}'.format(self, vc.value, te))
 				fatal_count += 1
 			except UnicodeDecodeError as ude:
 				logging.error('{} : unicode error while parsing input value "{}": {}'.format(self, vc.value, ude))
@@ -526,9 +535,6 @@ class TypeMatcher(object):
 			except urllib.error.HTTPError as he:
 				logging.warning('{}: request rejected for "{}": {}'.format(self, vc.value, he))
 				fatal_count += 1
-			except OverflowError as oe:
-				logging.error('{} : overflow error (e.g. while parsing date) for "{}": {}'.format(self, vc.value, oe))
-				error_count += 1
 	def update_diversity(self, hit):
 		self.diversion |= set(hit if isinstance(hit, list) else [hit])
 	def check_diversity(self, cells):
@@ -593,22 +599,27 @@ class RegexMatcher(TypeMatcher):
 			if ms:
 				if self.neg:
 					c.negate_type(self.t)
+					return
 				else:
 					for m in ms:
 						if not isinstance(m, str):
-							if len(m) > self.g: m = m[self.g]
-							else: continue
+							if len(m) > self.g: 
+								m = m[self.g]
+							else: 
+								continue
 						i1 = c.value.find(m)
 						if i1 >= 0:
 							if self.validator is None or self.validator(m):
 								self.register_partial_match(c, self.t, 100, m, (i1, i1 + len(m)))
+								return
 						else:
-							logging.warning('%s could not find regex multi-match "%s" in original "%s"', self, m, c.value)
+							raise RuntimeError('%s could not find regex multi-match "%s" in original "%s"', self, m, c.value)
 		else:
 			m = re.match(self.p, c.value, self.flags)
 			if m:
 				if self.neg:
 					c.negate_type(self.t)
+					return
 				else:
 					try:
 						grp = m.group(self.g)
@@ -617,8 +628,10 @@ class RegexMatcher(TypeMatcher):
 								self.register_full_match(c, self.t, 100, grp)
 							else:
 								self.register_partial_match(c, self.t, 100, grp, (0, len(grp)))
+							return
 					except IndexError:
-						logging.error('No group %d matched in regex "%s" for input "%s"', self.g, self.p, c)
+						raise RuntimeError('No group %d matched in regex "%s" for input "%s"', self.g, self.p, c)
+		raise TypeError('%s unmatched "%s"', self, c.value)
 
 def build_vocab_regex(vocab, partial):
 	j = '|'.join(vocab)
@@ -637,9 +650,11 @@ class VocabMatcher(RegexMatcher):
 		if self.matcher is not None:
 			logging.debug('%s normalizing "%s" from %s', self, c, self.matcher)
 			self.matcher.match(c)
-		if self.matcher is None or self.t not in c.non_excluded_types():
+		elif self.matcher is None or self.t not in c.non_excluded_types():
 			logging.debug('%s normalizing "%s" from vocab only', self, c)
 			super(VocabMatcher, self).match(c)
+		else:
+			raise TypeError('{} matcher only found excluded type in "{}"'.format(self, c))
 
 # Tokenization-based matcher-normalizer class
 
@@ -695,7 +710,6 @@ class TokenizedMatcher(TypeMatcher):
 						score = self.scorer(matchSrcTokens, tokens, matchRefPhrase, nm)
 						if nm not in self.phrasesMap:
 							raise RuntimeError('Normalized phrase {} not found in phrases map'.format(nm))
-							continue
 						hit = self.phrasesMap[nm]
 						v = case_phrase(c.value)
 						# The next line joins on '' and not on ' ' because non-pure space chars might have been transformed
@@ -706,6 +720,8 @@ class TokenizedMatcher(TypeMatcher):
 							logging.warning('%s could not find tokens "%s" in original "%s"', self, matchRefPhrase, v)
 							span = (0, len(c.value))
 						self.register_partial_match(c, self.t, score, hit, span)
+						return
+		raise ValueError('{} found no matching token sequence in "{}"'.format(self, c))
 
 # Label-based matcher-normalizer class and its underlying FSS structure
 
@@ -751,17 +767,21 @@ class LabelMatcher(TypeMatcher):
 	@timed
 	def match(self, c):
 		v = normalize_or_not(c.value, stopWords = self.stopWords, tokenize = self.tokenize)
-		if not v: return
+		if not v:
+			raise TypeError('{} found no non-trivial label value from "{}"'.format(self, c))
 		if self.synMap is not None and v in self.synMap: # Check for synonyms
 			v = self.synMap[v]
 		if self.mm == MATCH_MODE_EXACT:
 			if v in self.labelsMap:
 				self.register_full_match(c, self.t, 100, self.labelsMap[v])
+				return
 		elif self.mm == MATCH_MODE_CLOSE:
 			(matchedRefPhrases, score) = fast_sim_score(self.fss.search(v), len(v))
 			if score > 0:
 				for matchedRefPhrase in matchedRefPhrases:
 					self.register_full_match(c, self.t, score, matchedRefPhrase)
+					return
+		raise ValueError('{} found no matching label in "{}"'.format(self, c))		
 
 class HeaderMatcher(LabelMatcher):
 	def __init__(self, t, lexicon):
@@ -898,7 +918,10 @@ class Fields(object):
 		for hm in header_matchers():
 			for hc in self.fields.keys():
 				logging.debug('RUNNING %s on %s header', hm, hc.value)
-				hm.match(hc)
+				try:
+					hm.match(hc)
+				except:
+					pass # Ignore errors on header matching since no need to bail out (few values to check)
 		logging.info('RUNNING all value matchers')
 		for vm in value_matchers():
 			if isinstance(vm, SubtypeMatcher): continue
@@ -1170,7 +1193,10 @@ class Cell(object):
 		self.values = dict()
 	def __str__(self): return '{}: {}'.format(self.f, self.value)
 	def value_to_match(self):
-		return stripped(self.value)
+		if self.value is not None:
+			s = stripped(self.value)
+			if s is not None: return s
+		return None
 	def negate_type(self, t):
 		logging.debug('Negated type {} for "{}"'.format(t, self.value))
 		self.nts.add(t)
@@ -1295,12 +1321,14 @@ class CustomDateMatcher(TypeMatcher):
 		# then an ambiguous date implicitly using US (not UK or AUS) locale (e.g. 03/04/2014 which should resolve to
 		# March 4th and not April 3rd)...
 		if c.value.isdigit():
-			raise TypeError('{} cannot parse date from numeric value: {}'.format(self, c))
+			raise TypeError('{} cannot parse date from numeric value "{}"'.format(self, c))
 		dd = DDP.get_date_data(c.value)
 		do, dp = dd['date_obj'], dd['period']
-		if do is None: return
+		if do is None:
+			raise TypeError('{} found no date field from "{}"'.format(self, c))
 		y = do.year
-		if y < 1870 or 2120 < y: return # Safety check for too-loose matching
+		if y < 1870 or 2120 < y:
+			raise TypeError('{} found no realistic date from "{}"'.format(self, c))
 		ds = str(y)
 		if dp == 'year':
 			self.register_full_match(c, F_YEAR, 100, ds)
@@ -1657,31 +1685,36 @@ class VariantExpander(TypeMatcher):
 	@timed
 	def match(self, c):
 		if self.domainType is not None and self.domainType not in c.non_excluded_types():
-			return
+			raise TypeError('{} only found excluded type in "{}"'.format(self, c))
 		tokens = normalize_and_validate_tokens(c.value)
-		if tokens is not None:
-			for k2 in range(self.maxTokens, 0, -1):
-				for k1 in range(0, len(tokens) + 1 - k2):
-					matchSrcTokens = tokens[k1:k1 + k2]
-					matchRefPhrase = ' '.join(matchSrcTokens)
-					if matchRefPhrase not in self.tokenIdx:
-						continue
-					for altVariant in self.tokenIdx[matchRefPhrase]:
-						score = self.scorer(matchSrcTokens, tokens, matchRefPhrase, altVariant)
-						v = case_phrase(c.value)
-						i1 = v.find(tokens[k1])
-						if i1 >= 0: i2 = v.find(tokens[k1 + k2 - 1], i1) if k2 > 1 else i1
-						mainVariant = self.variantsMap[altVariant]
-						logging.debug('%s matched on %s: "%s" expanded to main variant "%s"', self, matchRefPhrase, altVariant, mainVariant)
-						normedValue = ''.join([v[:i1], mainVariant, v[i2:]]) if self.keepContext else mainVariant
-						if i1 == 0 and k1 + k2 == len(tokens):
-							self.register_full_match(c, self.t, score, mainVariant)
-						elif i1 < 0 or i2 < 0:
-							logging.warning('%s could not find tokens "%s ... %s" in original "%s"', self, tokens[k1], tokens[k1 + k2 - 1], v)
-							self.register_full_match(c, self.t, score, mainVariant)
-						else:
-							span = (i1, i2 + len(tokens[k1 + k2 - 1]))
-							self.register_partial_match(c, self.t, score, mainVariant, span)
+		if tokens is None:
+			raise TypeError('{} found no non-trivial token sequence in "{}"'.format(self, c))
+		found_one = False
+		for k2 in range(self.maxTokens, 0, -1):
+			for k1 in range(0, len(tokens) + 1 - k2):
+				matchSrcTokens = tokens[k1:k1 + k2]
+				matchRefPhrase = ' '.join(matchSrcTokens)
+				if matchRefPhrase not in self.tokenIdx:
+					continue
+				for altVariant in self.tokenIdx[matchRefPhrase]:
+					score = self.scorer(matchSrcTokens, tokens, matchRefPhrase, altVariant)
+					v = case_phrase(c.value)
+					i1 = v.find(tokens[k1])
+					if i1 >= 0: i2 = v.find(tokens[k1 + k2 - 1], i1) if k2 > 1 else i1
+					mainVariant = self.variantsMap[altVariant]
+					logging.debug('%s matched on %s: "%s" expanded to main variant "%s"', self, matchRefPhrase, altVariant, mainVariant)
+					normedValue = ''.join([v[:i1], mainVariant, v[i2:]]) if self.keepContext else mainVariant
+					if i1 == 0 and k1 + k2 == len(tokens):
+						self.register_full_match(c, self.t, score, mainVariant)
+					elif i1 < 0 or i2 < 0:
+						logging.warning('%s could not find tokens "%s ... %s" in original "%s"', self, tokens[k1], tokens[k1 + k2 - 1], v)
+						self.register_full_match(c, self.t, score, mainVariant)
+					else:
+						span = (i1, i2 + len(tokens[k1 + k2 - 1]))
+						self.register_partial_match(c, self.t, score, mainVariant, span)
+					found_one = True
+		if not found_one:
+			raise ValueError('{} found no token sequence to expand in "{}"'.format(self, c))
 
 # Misc utilities related to value normalization
 
@@ -1802,8 +1835,6 @@ def generate_value_matchers(lvl = 1):
 	PAT_SIREN = "[0-9]{9}"
 	PAT_SIRET = "[0-9]{14}"
 	if lvl >= 0: 
-		# yield RegexMatcher(F_DATE, PAT_SIREN, ignoreCase = True, neg = True)
-		# yield RegexMatcher(F_DATE, PAT_SIRET, ignoreCase = True, neg = True)
 		yield StdnumMatcher(F_SIREN, stdnum.fr.siren.is_valid, stdnum.fr.siren.compact)
 		yield StdnumMatcher(F_SIRET, stdnum.fr.siret.is_valid, stdnum.fr.siret.compact)
 	PAT_NNS = "[0-9]{9}[a-zA-Z]"
@@ -1816,8 +1847,8 @@ def generate_value_matchers(lvl = 1):
 		yield RegexMatcher(F_UMR, "UMR-?[ A-Z]{0,8}([0-9]{3,4})", g = 1, partial = True)
 	# Negate dates for all thoses regex matches (which happen to match using our custom matcher, especially for UAI patterns)
 	if lvl >= 0:
-		yield RegexMatcher(F_DATE, PAT_NNS, ignoreCase = True, neg = True)
-		yield RegexMatcher(F_DATE, PAT_UAI, ignoreCase = True, neg = True)
+		yield RegexMatcher(F_NNS, PAT_NNS, ignoreCase = True, neg = True)
+		yield RegexMatcher(F_UAI, PAT_UAI, ignoreCase = True, neg = True)
 
 	if lvl >= 2: 
 		# yield LabelMatcher(F_RD_STRUCT, file_to_set('structure_recherche_short.col'), MATCH_MODE_EXACT)
