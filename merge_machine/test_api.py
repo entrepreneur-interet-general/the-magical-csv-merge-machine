@@ -542,7 +542,7 @@ if __name__ == '__main__':
     #==============================================================================
     # List projects
     #==============================================================================
-    url_to_append = '/api/list_public_project_ids/link'
+    url_to_append = '/api/public_project_ids/<project_type>'
     resp = get_resp(url_to_append)
 
 

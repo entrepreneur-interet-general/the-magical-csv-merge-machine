@@ -1110,7 +1110,7 @@ def list_public_project_ids(project_type):
     list_of_project_ids = admin.list_project_ids(project_type, public_only=True)
     return jsonify(list_of_project_ids)
 
-@app.route('/api/public_project_ids/<project_type>', methods=['GET'])
+@app.route('/api/public_projects/<project_type>', methods=['GET'])
 def list_public_projects(project_type):
     '''
     
