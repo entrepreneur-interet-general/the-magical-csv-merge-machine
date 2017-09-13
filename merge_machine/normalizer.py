@@ -179,7 +179,7 @@ class Normalizer(AbstractDataProject):
                     could_read = True
                     break
                 except Exception as e:
-                    print(e)
+                    logging.infoe)
                     
         if could_read:
             # Create actual generator
@@ -457,7 +457,7 @@ class Normalizer(AbstractDataProject):
                         _, run_info = self.transform(module_name, params)
                     except: 
                         run_info = {'skipped': True, }
-                        print('WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
+                        logging.warning'WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
                     all_run_infos[module_name] = run_info
 
 
@@ -570,13 +570,13 @@ if __name__ == '__main__':
     
     #    inferredTypes = proj.infer('infer_types', params = None)
     #    
-    #    print('Inferred data types:', inferredTypes)
+    #    logging.info'Inferred data types:', inferredTypes)
     #
     #    proj.transform('recode_types', inferredTypes)
     
     # Write transformed file
 #    assert False
-#    print('Rows written', proj.write_data())
+#    logging.info'Rows written', proj.write_data())
 #    proj._write_log_buffer(written=True)
 #    proj._write_run_info_buffer()
 #    
