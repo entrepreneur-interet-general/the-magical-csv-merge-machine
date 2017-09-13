@@ -893,6 +893,9 @@ class Labeller():
             w.write(encoder.encode(params))
     
     def update_musts(self, must, must_not):
+        if (not isinstance(must, dict)) or (not isinstance(must_not, dict)):
+            raise ValueError('Variables "must" and "must_not" should be dicts' \
+                'with keys being column names and values a list of strings')
         self.must = must
         self.must_not = must_not
         self.re_score_history()
