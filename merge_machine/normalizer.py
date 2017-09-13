@@ -11,6 +11,7 @@ Created on Fri Apr 21 19:39:45 2017
 import io
 import itertools
 import json
+import logging
 import os
 import time
 
@@ -349,6 +350,9 @@ class Normalizer(AbstractDataProject):
         '''
         Remove all occurences of files with a given file_name from the project
         and clears all mentions of this file_name in metadata
+        
+        INPUT:
+            file_name: file to remove from project
         '''
         # TODO: deal with .csv dependency
         all_files = self._list_files(extensions=['.csv'])
@@ -454,7 +458,6 @@ class Normalizer(AbstractDataProject):
                     except: 
                         run_info = {'skipped': True, }
                         print('WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
-                        # TODO: warning here
                     all_run_infos[module_name] = run_info
 
 
@@ -535,8 +538,6 @@ class ESReferential(UserNormalizer):
     
 
 if __name__ == '__main__':
-    import logging
-
     source_file_name = 'source.csv' # 'SIREN_FUI.col' # 'abes.csv'
     user_given_name = 'second_file.csv'
 
