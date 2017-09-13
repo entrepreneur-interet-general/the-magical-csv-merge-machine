@@ -179,7 +179,7 @@ class Normalizer(AbstractDataProject):
                     could_read = True
                     break
                 except Exception as e:
-                    logging.infoe)
+                    logging.info(e)
                     
         if could_read:
             # Create actual generator
@@ -457,7 +457,7 @@ class Normalizer(AbstractDataProject):
                         _, run_info = self.transform(module_name, params)
                     except: 
                         run_info = {'skipped': True, }
-                        logging.warning'WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
+                        logging.warning('WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
                     all_run_infos[module_name] = run_info
 
 
