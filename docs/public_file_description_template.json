@@ -1,0 +1,19 @@
+{
+"url": "url_of_file_source_or_description",
+
+"columns": {
+
+	"column_1":{
+		"short": "a short description",
+		"long": "additional information",
+		"examples": ["an example", "another example", "..."],
+		"prop_non_null": 0
+		},
+	"column_2":{
+		"short": "a short description",
+		"long": "additional information",
+		"examples": ["an example", "another example", "..."],
+		"prop_non_null": 0
+		}
+}
+}
