@@ -533,8 +533,8 @@ class TypeMatcher(object):
 			except UnicodeDecodeError as ude:
 				logging.error('{} : unicode error while parsing input value "{}": {}'.format(self, vc.value, ude))
 				fatal_count += 1
-			except urllib.error.HTTPError as he:
-				logging.warning('{}: request rejected for "{}": {}'.format(self, vc.value, he))
+			except urllib.error.URLError as ue:
+				logging.warning('{}: request rejected for "{}": {}'.format(self, vc.value, ue))
 				fatal_count += 1
 	def update_diversity(self, hit):
 		self.diversion |= set(hit if isinstance(hit, list) else [hit])
