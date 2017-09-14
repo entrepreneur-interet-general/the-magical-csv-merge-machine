@@ -878,7 +878,13 @@ def web_get_answer(message_received):
 
 @socketio.on('update_filters', namespace='/')
 def update_musts(message_received):
-    message_received = json.loads(message_received)
+    try:
+        # If object received is string
+        message_received = json.loads(message_received)
+    except:
+        # If object received is dict
+        pass
+    
     logging.info(message_received)
     project_id = message_received['project_id']
     must = message_received['must']    
@@ -887,13 +893,8 @@ def update_musts(message_received):
     flask._app_ctx_stack.labeller_mem[project_id]['labeller'].update_musts(must, must_not)
     
     encoder = MyEncoder()
-    try:
-        # If object received is string
-        emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message='')))
-    except:
-        # If object received is dict
-        emit('message', flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=''))
-    
+    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message='')))
+
 @socketio.on('complete_training', namespace='/')
 def complete_training(message_received):
     '''Writes the data in the labeller and deletes the labeller'''
