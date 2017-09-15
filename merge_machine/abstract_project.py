@@ -190,5 +190,14 @@ class AbstractProject():
         path_to_proj = self.path_to()
         shutil.rmtree(path_to_proj)
     
+    
+    def add_info(self, info):
+        '''
+        Creates or replaces the "info" field in metadata with the input data
+        
+        INPUT:
+            - info: data to add 
+        '''
+        self.metadata['info'] = info
 
 

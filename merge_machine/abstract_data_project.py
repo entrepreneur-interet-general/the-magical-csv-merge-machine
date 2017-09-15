@@ -46,7 +46,7 @@ class AbstractDataProject(AbstractProject):
     '''    
     default_module_log = {'completed': False, 'skipped': False}    
     
-    CHUNKSIZE = 2000
+    CHUNKSIZE = 3000
     
     def __init__(self, 
                  project_id=None, 
@@ -215,7 +215,7 @@ class AbstractDataProject(AbstractProject):
                 return str
             
         dtype = {col: choose_dtype(col) for col in columns}
-                                   
+
         if nrows is not None:
             logging.debug('Nrows is: {0}'.format(nrows))
             tab = pd.read_csv(file_path, encoding='utf-8', dtype=dtype, 
@@ -223,6 +223,7 @@ class AbstractDataProject(AbstractProject):
         else:
             tab = pd.read_csv(file_path, encoding='utf-8', dtype=dtype, 
                                         usecols=columns, chunksize=self.CHUNKSIZE)
+
         return tab
         
     def load_data(self, module_name, file_name, nrows=None, columns=None):
@@ -495,8 +496,8 @@ class AbstractDataProject(AbstractProject):
                     logging.debug('At part {0}'.format(i))
                     part_tab.to_csv(w, encoding='utf-8', 
                                          index=False,  
-                                         header=i==0, 
-                                         quoting=csv.QUOTE_NONNUMERIC)
+                                         header=i==0)
+                                         #quoting=csv.QUOTE_NONNUMERIC)
                     nrows += len(part_tab)
                     
             except KeyboardInterrupt as e:
