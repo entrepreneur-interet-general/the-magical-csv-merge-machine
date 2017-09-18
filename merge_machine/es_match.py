@@ -276,6 +276,26 @@ def _gen_all_query_templates(match_cols, columns_to_index, bool_levels,
                                     all_query_templates))
     return all_query_templates    
     
+def _expand_by_boost(all_query_templates):
+    '''
+    For each query template, and for each single query template within, generate
+    a new compound query template by doubling the boost level of a single query
+    template (and normalizing)
+    '''
+    new_query_templates = copy.deepcopy(all_query_templates)
+    
+    for compound_query in all_query_templates:
+        if len(compound_query) >= 2:
+            old_boost = [x[4] for x in compound_query]
+            for i in range(len(compound_query)):
+                new_boost = copy.deepcopy(old_boost)
+                new_boost[i] *= 2
+                new_boost = [x/sum(new_boost) * len(new_boost) for x in new_boost]
+                new_compound_query = tuple((x[0], x[1], x[2], x[3], b) for x, b in zip(compound_query, new_boost))
+                if new_compound_query not in new_query_templates:
+                    new_query_templates.append(new_compound_query)
+    return new_query_templates
+    
 #def gen_label(full_responses, sorted_keys, row, num_results, num_rows_labelled):
 #    '''
 #    User labelling going through potential results (order given by sorted_keys) 
@@ -502,6 +522,7 @@ def es_linker(source, params):
 class Labeller():
     max_num_samples = 100
     min_precision_tab = [(20, 0.7), (10, 0.5), (5, 0.3)]
+    max_num_keys_tab = [(20, 50), (10, 100), (3, 300), (0, 1000)]
     num_results_labelling = 3
     
     max_num_levels = 3 # Number of match clauses
@@ -564,6 +585,17 @@ class Labeller():
                 break    
         return min_precision
 
+    def _max_num_keys(self):
+        '''
+        Max number of labels based on the number of rows currently labelled
+        '''
+        max_num_keys = self.max_num_keys_tab[-1][1]
+        for min_idx, max_num_keys in self.max_num_keys_tab[:-1]:
+            if self.num_rows_labelled >= min_idx:
+                break    
+        return max_num_keys
+        
+
     def _print_pair(self, source_item, ref_item, test_num=0):
         print('\n***** {0} / {1} / ({2})'.format(ref_item['_id'], ref_item['_score'], self.num_rows_labelled))
         print('self.first_propoal_for_source_idx:', self.first_propoal_for_source_idx)
@@ -583,7 +615,7 @@ class Labeller():
                 print('\n{1}   -> [{0}][source]'.format(match['source'], string))
                 print('> {1}   -> [{0}]'.format(col, ref_item['_source'][col]))
         
-    def _console_input(self, source_item, ref_item, test_num=0):
+    def console_input(self, source_item, ref_item, test_num=0):
         '''Console input displaying the source_item, ref_item pair'''
         self._print_pair(source_item, ref_item, test_num)
         if test_num == 2:
@@ -596,42 +628,12 @@ class Labeller():
                 return 'n'
         else:
             return input('Is match?\n > ')
-        
-    def new_label_row(self, full_responses, sorted_keys, num_results):
-        '''
-        User labelling going through potential results (order given by sorted_keys) 
-        looking for a match. This goes through all keys and all results (up to
-        num_results) and asks the user to label the data. Labelling ends once the 
-        user finds a match for the current row or there is no more potential matches.
-        
-        INPUT:
-            - full_responses: result of "perform_queries" ; {query: response, ...}
-            - sorted_keys: order in which to perform labelling
-            - num_results: how many results to display per search template (1
-                        will display only most probable result for each template)
-            
-        OUTPUT:
-            - res: result of potential match to label
-        '''
-        
-        ids_done = []
-        for key in sorted_keys:
-            print('\nkey: ', key)
-            results = full_responses[key]['hits']['hits']
-            for res in results[:num_results]:
-                if res['_id'] not in ids_done \
-                        and ((res['_score']>=0.001)) \
-                        and res['_id'] not in self.pairs_not_match[self.idx]: #  TODO: not neat
-                    ids_done.append(res['_id'])
-                    yield res
-                else:
-                    print(res['_id'] not in ids_done)
-                    print(res['_score']>=0.001)
-                    print(res['_id'] not in self.pairs_not_match[self.idx])
 
 
     def _default_query(self):
-        
+        '''
+        The default query to be performed in the first few rounds of labelling
+        '''        
         if len(self.match_cols) == 1:
             m = self.match_cols[0]
             return (('must', m['source'], m['ref'], '.french', 1), ('should', m['source'], m['ref'], '.integers', 1))
@@ -639,11 +641,12 @@ class Labeller():
             return tuple(('must', m['source'], m['ref'], '.french', 1) for m in self.match_cols)
         
 
-    def sort_keys(self):
+    def _sort_keys(self):
         '''
         Update sorted_keys, that determin the order in which samples are shown
         to the user        
         '''
+        
         # Sort keys by score or most promising
         if self.num_rows_labelled <= 2:
             # Alternate between random and largest score
@@ -662,17 +665,19 @@ class Labeller():
             
             # Remove queries if precision is too low (thresh depends on number of labels)
             self.sorted_keys = list(filter(lambda x: self.agg_query_metrics[x]['precision'] \
-                                      >= self._min_precision(), self.sorted_keys))            
+                                      >= self._min_precision(), self.sorted_keys))
+            
+            self.sorted_keys  = self.sorted_keys[:self._max_num_keys()]
 
     def previous(self):
         '''Return to pseudo-previous state.'''
         print('self.next_row:', self.next_row)
         if self.first_propoal_for_source_idx:
-            self.previous_row()
+            self._previous_row()
         else:
-            self.restart_row()        
+            self._restart_row()        
     
-    def restart_row(self):
+    def _restart_row(self):
         '''Re-initiates labelling for row self.idx'''       
         if not hasattr(self, 'idx'):
             raise RuntimeError('No row to restart')
@@ -699,12 +704,12 @@ class Labeller():
         # self.query_metrics = dict()
         
             
-    def previous_row(self):
+    def _previous_row(self):
         '''Todo this deals with previous '''
         if not self.pairs:
             raise RuntimeError('No previous labels')
         
-        self.restart_row()
+        self._restart_row()
         
         previous_idx = self.pairs.pop()[0]
         self.row_idxs.append(previous_idx)
@@ -715,14 +720,53 @@ class Labeller():
         
         # TODO: remove try, except
         try:
-            self.update_agg_query_metrics()       
+            self._update_agg_query_metrics()       
         except:
             print('Could not update agg_query_metrics')
             pass        
         print('self.next_row:', self.next_row)
+
+        
+    def _new_label_row(self, full_responses, sorted_keys, num_results):
+        '''
+        User labelling going through potential results (order given by sorted_keys) 
+        looking for a match. This goes through all keys and all results (up to
+        num_results) and asks the user to label the data. Labelling ends once the 
+        user finds a match for the current row or there is no more potential matches.
+        
+        INPUT:
+            - full_responses: result of "perform_queries" ; {query: response, ...}
+            - sorted_keys: order in which to perform labelling
+            - num_results: how many results to display per search template (1
+                        will display only most probable result for each template)
+            
+        OUTPUT:
+            - res: result of potential match in reference to label
+        '''
+        
+        ids_done = []
+        for key in sorted_keys:
+            print('\nkey: ', key)
+            try:
+                print('precision: ', self.agg_query_metrics[key]['precision'])
+                print('recall: ', self.agg_query_metrics[key]['recall'])
+            except:
+                print('no precision/recall to display...')
+            results = full_responses[key]['hits']['hits']
+            for res in results[:num_results]:
+                if res['_id'] not in ids_done \
+                        and ((res['_score']>=0.001)) \
+                        and res['_id'] not in self.pairs_not_match[self.idx]: #  TODO: not neat
+                    ids_done.append(res['_id'])
+                    yield res
+                else:
+                    print(res['_id'] not in ids_done)
+                    print(res['_score']>=0.001)
+                    print(res['_id'] not in self.pairs_not_match[self.idx])
+
     
     def _new_label(self):
-        '''Return the next pair to label'''
+        '''Return the next potential match in reference to label to label'''
         # If looking for a new row from source, initiate the generator
         if not self.sorted_keys:
             raise ValueError('No keys in self.sorted_keys')
@@ -753,9 +797,9 @@ class Labeller():
             self.full_responses = {all_search_templates[i][1][0]: values for i, values in tmp_full_responses.items()}
             print('LEN OF FULL_RESPONSES:', len(self.full_responses))
             # import pdb; pdb.set_trace()
-            self.sort_keys()
+            self._sort_keys()
                             
-            self.label_row_gen = self.new_label_row(self.full_responses, 
+            self.label_row_gen = self._new_label_row(self.full_responses, 
                                                     self.sorted_keys, 
                                                     self.num_results_labelling)
         
@@ -841,6 +885,9 @@ class Labeller():
                 + "p" : back to previous state
             - ref_id: Elasticsearch Id of the reference element being labelled
         '''
+        MIN_NUM_KEYS = 30 # Number under which to expand
+        EXPAND_FREQ = 4
+        
         use_previous = user_input == 'p'
         
         if use_previous:
@@ -852,17 +899,23 @@ class Labeller():
             if is_match:
                 self.pairs.append((self.idx, ref_id))
     
-                self.update_query_metrics_on_match(ref_id)
+                self._update_query_metrics_on_match(ref_id)
                 self.num_rows_labelled += 1
                 self.next_row = True
             if is_not_match:
                 self.pairs_not_match[self.idx].append(ref_id)
+                
+            
+            if (len(self.sorted_keys) < MIN_NUM_KEYS) \
+                or((self.num_rows_labelled+1) % EXPAND_FREQ==0):
+                self.sorted_keys = _expand_by_boost(self.sorted_keys)
+                self.re_score_history()                
     
         
-    def update_agg_query_metrics(self):
+    def _update_agg_query_metrics(self):
         self.agg_query_metrics = calc_agg_query_metrics(self.query_metrics, t_p=self.t_p, t_r=self.t_r)
 
-    def update_query_metrics_on_match(self, ref_id):
+    def _update_query_metrics_on_match(self, ref_id):
         '''
         Assuming res_id is the Elasticsearch id of the matching refential,
         update the metrics
@@ -872,7 +925,7 @@ class Labeller():
         # Update individual and aggregated metrics
         for key, response in self.full_responses.items():
             self.query_metrics[key].append([self.idx, compute_metrics(response['hits']['hits'], ref_id)])
-        self.update_agg_query_metrics()
+        self._update_agg_query_metrics()
         
 
 
@@ -893,10 +946,12 @@ class Labeller():
                                                                   self.must, self.must_not, 
                                                                   self.num_results_labelling)
             self.full_responses = {all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
-            self.update_query_metrics_on_match(pair[1])
+            self._update_query_metrics_on_match(pair[1])
+
+        self._sort_keys()
 
         if not self.sorted_keys:
-            raise ValueError('No keys in self.sorted_keys hore')
+            raise ValueError('No keys in self.sorted_keys')
         
     def answer_is_valid(self, user_input):
         '''Check if the user input is valid'''

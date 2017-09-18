@@ -23,7 +23,7 @@ chunksize = 3000
 file_len = 10*10**6
 
 
-test_num = 3
+test_num = 2
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
     match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},
@@ -144,7 +144,7 @@ for i in range(100):
         break
     
     for x in range(10):
-        user_input = labeller._console_input(source_item, ref_item, test_num)
+        user_input = labeller.console_input(source_item, ref_item, test_num)
         if labeller.answer_is_valid(user_input):
             break
         else:
