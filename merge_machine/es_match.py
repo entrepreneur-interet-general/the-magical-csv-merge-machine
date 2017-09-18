@@ -132,7 +132,7 @@ def _gen_body(query_template, row, must={}, must_not={}, num_results=3):
     Generate the string to pass to Elastic search for it to execute query
     
     INPUT:
-        - query_template: ((source_col, ref_col, analyzer_suffix, boost), ...)
+        - query_template: ((bool_lvl, source_col, ref_col, analyzer_suffix, boost), ...)
         - row: pandas.Series from the source object
         - must: terms to filter by field (AND: will include ONLY IF ALL are in text)
         - must_not: terms to exclude by field from search (OR: will exclude if ANY is found)
@@ -405,6 +405,34 @@ def perform_queries(table_name, all_query_templates, rows, must, must_not, num_r
             
     return og_search_templates, full_responses
 
+#def exact_es_linker(source, params):
+#    table_name = params['index_name']
+#    certain_col_matches = params['certain_col_matches']
+#    exact_pairs = params.get('exact_pairs', [])
+#    
+#    exact_source_indexes = [x[0] for x in exact_pairs]
+#    source_indexes = (x[0] for x in source.iterrows() if x [0] not in exact_source_indexes)    
+#    
+#    query_template = ('must', certain_col_matches['source'], certain_col_matches['ref'], '', 1)
+#
+#    rows = (x[1] for x in source.iterrows() if x[0] not in exact_source_indexes)
+#    all_search_templates, full_responses = perform_queries(table_name, [query_template], rows, [], [], num_results=1)    
+#    full_responses = [full_responses[i] for i in range(len(full_responses))] # Don't use items to preserve order
+#    
+#    matches_in_ref = pd.DataFrame([f_r['hits']['hits'][0]['_source'] \
+#                               if bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold) \
+#                               else {} \
+#                               for f_r in full_responses], index=source_indexes)
+#                    
+#    confidence = pd.Series([f_r['hits']['hits'][0]['_score'] \
+#                            if bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold) \
+#                            else np.nan \
+#                            for f_r in full_responses], index=matches_in_ref.index)
+#    matches_in_ref.columns = [x + '__REF' for x in matches_in_ref.columns]
+#    matches_in_ref['__CONFIDENCE'] = 998    
+    
+    
+    
 def es_linker(source, params):
     '''
     Return concatenation of source and reference with the matches found

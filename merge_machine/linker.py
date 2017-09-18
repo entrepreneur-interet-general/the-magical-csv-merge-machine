@@ -266,7 +266,7 @@ class Linker(AbstractDataProject):
         return super().infer(module_name, params)
     
     def linker(self, module_name, data_params, module_params):
-        
+        '''Wrapper aro'''
         if module_name == 'es_linker':
             return self.es_linker(module_params)
         elif module_name == 'dedupe_linker':

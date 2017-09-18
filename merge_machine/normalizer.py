@@ -5,8 +5,6 @@ Created on Fri Apr 21 19:39:45 2017
 
 @author: leo
 
-#TODO: all logging as decorators
-
 """
 import io
 import itertools
@@ -151,54 +149,96 @@ class Normalizer(AbstractDataProject):
         /!\ Use only on upload. Otherwise, look into _static_load_data in parent
         class        
         '''
-        ENCODINGS = ['utf-8', 'windows-1252']
+        ENCODINGS = ['utf-8', 'ISO-8859-1', 'windows-1252']
         
         first_lines = b''.join([file.readline() for _ in range(self.CHUNKSIZE)])
         could_read = False    
-        for sep_arg in [None, ',']: # Fix for pandas that can't find separators for single columns
-            for encoding in ENCODINGS:
+        #for sep_arg in [None, ',']: # Fix for pandas that can't find separators for single columns
+        for encoding in ENCODINGS:
+            best_sep = None
+            best_sep_num_cols = 0    
+            for sep in [';', ',', '\t']:
                 try:
-                    # Just read column name and first few lines for encoding and separator
-                    first_lines_io = io.BytesIO(first_lines)
-                    if sep_arg is None:
-                        sep = pd.read_csv(first_lines_io, 
-                                               sep=sep_arg, 
-                                               encoding=encoding,
-                                               iterator=True,
-                                               dtype=str)._engine.data.dialect.delimiter
-                    else:
-                        sep = sep_arg
-                            
                     first_lines_io = io.BytesIO(first_lines)
                     tab_part = pd.read_csv(first_lines_io, 
                                            sep=sep, 
                                            encoding=encoding, 
                                            dtype=str)
                     columns = tab_part.columns
-        
+                    print(len(columns))
+                    
+                    if len(columns) >= best_sep_num_cols:
+                        best_sep = sep
+                        best_columns = columns
+                        best_sep_num_cols = len(columns)
                     could_read = True
-                    break
+                    
                 except Exception as e:
                     logging.info(e)
                     
-        if could_read:
-            # Create actual generator
-            try:
-                tab_next = pd.read_csv(file, 
-                                     sep=sep, 
-                                     encoding=encoding,     
-                                     dtype=str,
-                                     header=None,
-                                     chunksize=self.CHUNKSIZE)
-                tab = itertools.chain([tab_part], tab_next)
-            except:
-                tab = itertools.chain([tab_part])
-            
-        if not could_read:
+            # If one or more separators were valid with this encoding
+            if could_read:    
+                break
+       
+        else:
             raise Exception('Separator and/or Encoding not detected. Try uploading' \
-                          + ' a csv with "," as separator with utf-8 encoding')            
+                          + ' a csv with "," as separator with utf-8 encoding')                
+
+        if sep != best_sep:
+            first_lines_io = io.BytesIO(first_lines)
+            tab_part = pd.read_csv(first_lines_io, 
+                                   sep=best_sep, 
+                                   encoding=encoding, 
+                                   dtype=str)   
+        try:
+            
+         
+            tab_next = pd.read_csv(file, 
+                                 sep=best_sep, 
+                                 encoding=encoding,     
+                                 dtype=str,
+                                 header=None,
+                                 chunksize=self.CHUNKSIZE)
+            tab = itertools.chain([tab_part], tab_next)
+        except:
+            tab = itertools.chain([tab_part])  
+            
+        print(tab, best_sep, encoding, best_columns)
+        return tab, best_sep, encoding, best_columns
+                    
+#                try:
+#                    # Just read column name and first few lines for encoding and separator
+#                    first_lines_io = io.BytesIO(first_lines)
+#                    if sep_arg is None:
+#                        sep = pd.read_csv(first_lines_io, 
+#                                               sep=sep_arg, 
+#                                               encoding=encoding,
+#                                               iterator=True,
+#                                               dtype=str)._engine.data.dialect.delimiter
+#                    else:
+#                        sep = sep_arg
+#                            
+#                    first_lines_io = io.BytesIO(first_lines)
+#                    tab_part = pd.read_csv(first_lines_io, 
+#                                           sep=sep, 
+#                                           encoding=encoding, 
+#                                           dtype=str)
+#                    columns = tab_part.columns
+#        
+#                    could_read = True
+#                    break
+#                except Exception as e:
+#                    logging.info(e)
+                    
+#        if could_read:
+#            # Create actual generator
+#
+#            
+#        if not could_read:
+#            raise Exception('Separator and/or Encoding not detected. Try uploading' \
+#                          + ' a csv with "," as separator with utf-8 encoding')            
         
-        return tab, sep, encoding, columns
+#        return tab, sep, encoding, columns
     
     def read_excel(self, file, chars_to_replace):
         # TODO: add iterator and return columns
@@ -232,7 +272,6 @@ class Normalizer(AbstractDataProject):
         if self.metadata['files']:
             raise Exception('Cannot upload multiple files to the same project anymore :(')
         
-
         og_file_name = file_name
 
         base_name = secure_filename(file_name.rsplit('.')[0])
@@ -263,7 +302,7 @@ class Normalizer(AbstractDataProject):
         else:
             self.mem_data, sep, encoding, columns = self.read_excel(file, chars_to_replace)
             file_type = 'excel'
-            
+        
         if len(set(columns)) != len(columns):
             raise Exception('Column names should all be different')
 
@@ -363,8 +402,7 @@ class Normalizer(AbstractDataProject):
         
         self.metadata['log'][file_name] = self._default_log()
         self._write_metadata()
-
-
+        
     
     def concat_with_init(self):
         '''

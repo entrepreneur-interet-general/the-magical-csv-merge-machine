@@ -683,7 +683,7 @@ def upload(project_id):
             proj.write_data()
         else:
             proj._write_metadata()
-
+    
     return jsonify(run_info=run_info, project_id=proj.project_id)
 
 
@@ -851,7 +851,7 @@ def load_labeller(message_received):
     encoder = MyEncoder()
     emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message='')))
 
-    
+
 @socketio.on('answer', namespace='/')
 def web_get_answer(message_received):
     # TODO: avoid multiple click (front)
