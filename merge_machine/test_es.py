@@ -23,7 +23,7 @@ chunksize = 3000
 file_len = 10*10**6
 
 
-test_num = 2
+test_num = 4
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
     match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},
@@ -43,6 +43,7 @@ elif test_num == 1:
     ref_table_name = '123vivalalgerie'
     
 elif test_num == 2:
+    # ALIM to SIRENE
     source_file_path = 'local_test_data/integration_3/export_alimconfiance.csv'
     match_cols = [{'source': 'Libelle_commune', 'ref': 'LIBCOM'},
                   #{'source': 'Libelle_commune', 'ref': 'L6_NORMALISEE'},
@@ -56,6 +57,7 @@ elif test_num == 2:
     ref_table_name = '123vivalalgerie'
     
 elif test_num == 3:
+    # HAL to GRID
     source_file_path = 'local_test_data/integration_4/hal.csv'
 
     match_cols = [{
@@ -64,6 +66,18 @@ elif test_num == 3:
                   }]
     source_sep = '\t'
     source_encoding = 'utf-8'
+    
+    ref_table_name = '01c670508e478300b9ab7c639a76c871'
+
+elif test_num == 4:
+    source_file_path = 'local_test_data/integration_6_hal_2/2017_09_15_HAL_09_08_2015_Avec_RecageEchantillon.csv'
+
+    match_cols = [{
+                    "source": ("parentName_s", "label_s"),
+                    "ref": ("Name", "City")
+                  }]
+    source_sep = ';'
+    source_encoding = 'ISO-8859-1'
     
     ref_table_name = '01c670508e478300b9ab7c639a76c871'
 
@@ -117,7 +131,7 @@ if test_num in [0,1,2]:
         'PRODEN': {},
         'PRODET': {}
     }
-elif test_num in [3]:
+elif test_num in [3, 4]:
     columns_to_index = {
             "Name": {
                     'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
@@ -129,6 +143,9 @@ elif test_num in [3]:
 
 if test_num == 2:
     columns_certain_match = {'source': ['SIRET'], 'ref': ['SIREN', 'NIC']}
+    labeller = Labeller(source, ref_table_name, match_cols, columns_to_index, columns_certain_match)
+elif test_num == 4:
+    columns_certain_match = {'source': ['grid'], 'ref': ['ID']}
     labeller = Labeller(source, ref_table_name, match_cols, columns_to_index, columns_certain_match)
 else:
     labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)

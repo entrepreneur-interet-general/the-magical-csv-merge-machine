@@ -17,6 +17,10 @@ big problem with add_selected_columns and cleaning of previous file
 
 Discrepancy btw labelling (worse) and matching (better)
 
+Problem with precision when no match found during labelling
+
+--> add (source_id, None) to pairs when none are found
+
 """
 from collections import defaultdict
 import copy
@@ -40,20 +44,20 @@ def my_unidecode(string):
     else:
         return ''
 
-def compute_metrics(hits, ref_id):
+def analyze_hits(hits, ref_id):
     '''
-    Computes metrics for based on the : res['hits']['hits']
+    Computes a summary for based on the : res['hits']['hits']
     
     INPUT:
         - hits: res['hits']['hits']
         - ref_id: The real target Elasticsearch ID
         
     OUTPUT:
-        - metrics: dict with various information    
+        - summary: dict with various information    
     '''
-    metrics = dict()
     
-    # General query metrics
+    
+    # General query summary
     num_hits = len(hits)
 
     if num_hits:
@@ -61,7 +65,7 @@ def compute_metrics(hits, ref_id):
     else:
         _score_first = 0
     
-    # Match metrics
+    # Match summary
     try:
         i = next((i for i, hit in enumerate(hits) if hit['_id']==ref_id))
         has_match = True
@@ -77,14 +81,15 @@ def compute_metrics(hits, ref_id):
         es_id_score = 0
         pos_score = 0
         
-    metrics['_score_first'] = _score_first
-    metrics['num_hits'] = num_hits
-    metrics['has_match'] = has_match
-    metrics['is_first'] = is_first
-    metrics['es_id_score'] = es_id_score
-    metrics['pos_score'] = pos_score
+    summary = dict()
+    summary['_score_first'] = _score_first
+    summary['num_hits'] = num_hits
+    summary['has_match'] = has_match
+    summary['is_first'] = is_first
+    summary['es_id_score'] = es_id_score
+    summary['pos_score'] = pos_score
     
-    return metrics
+    return summary
 
 def _gen_suffix(columns_to_index, s_q_t_2):
     '''
@@ -184,12 +189,12 @@ def _gen_body(query_template, row, must={}, must_not={}, num_results=3):
            }
     return body
 
-def compute_threshold(metrics, t_p=0.95, t_r=0.3):
+def compute_threshold(summaries, t_p=0.95, t_r=0.3):
     ''' 
     Compute the optimal threshold and the associated metrics 
     
     INPUT:
-        - metrics: list of individual metrics for one query (result of compute_metrics)
+        - summaries: list of individual summaries for one query (result of analyze_hits)
         - t_p: target_precision
         - t_r: target_recall
         
@@ -199,16 +204,16 @@ def compute_threshold(metrics, t_p=0.95, t_r=0.3):
         - recall
         - ratio
     '''
-    num_metrics = len(metrics)
+    num_summaries = len(summaries)
 
     # Scores deal with empty hits
-    sorted_metrics = sorted(metrics, key=lambda x: x['_score_first'], reverse=True)
+    sorted_summaries = sorted(summaries, key=lambda x: x['_score_first'], reverse=True)
     
-    # score_vect = np.array([x['_score_first'] for x in sorted_metrics])
-    is_first_vect = np.array([bool(x['is_first']) for x in sorted_metrics])
-    # rolling_score_mean = score_vect.cumsum() / (np.arange(num_metrics) + 1)
-    rolling_precision = is_first_vect.cumsum() / (np.arange(num_metrics) + 1)
-    rolling_recall = is_first_vect.cumsum() / num_metrics
+    # score_vect = np.array([x['_score_first'] for x in sorted_summaries])
+    is_first_vect = np.array([bool(x['is_first']) for x in sorted_summaries])
+    # rolling_score_mean = score_vect.cumsum() / (np.arange(num_summaries) + 1)
+    rolling_precision = is_first_vect.cumsum() / (np.arange(num_summaries) + 1)
+    rolling_recall = is_first_vect.cumsum() / num_summaries
     
     # WHY is recall same as precision ?
     
@@ -220,9 +225,9 @@ def compute_threshold(metrics, t_p=0.95, t_r=0.3):
     rolling_ratio = a*b
 
     # Find best index for threshold
-    idx = max(num_metrics - rolling_ratio[::-1].argmax() - 1, min(6, num_metrics-1))
+    idx = max(num_summaries - rolling_ratio[::-1].argmax() - 1, min(6, num_summaries-1))
     
-    thresh = sorted_metrics[idx]['_score_first']
+    thresh = sorted_summaries[idx]['_score_first']
     precision = rolling_precision[idx]
     recall = rolling_recall[idx]
     ratio = rolling_ratio[idx]
@@ -233,27 +238,27 @@ def compute_threshold(metrics, t_p=0.95, t_r=0.3):
         return thresh, precision, recall, ratio
 
 
-def calc_agg_query_metrics(query_metrics, t_p=0.95, t_r=0.3):
+def calc_query_metrics(query_summaries, t_p=0.95, t_r=0.3):
     '''
     Find optimal threshold for each query and compute the aggregated metrics.
     
     INPUT:
-        - query_metrics: dict of all results of previous queries
+        - query_summaries: dict of all results of previous queries
             
     OUTPUT:
-        - agg_query_metrics: aggregated metrics for each query in query_metrics
+        - query_metrics: aggregated metrics for each query in query_summaries
     '''
     
-    agg_query_metrics = dict()
-    for key, metrics in query_metrics.items():
-        thresh, precision, recall, ratio = compute_threshold([x[1] for x in metrics], t_p=0.95, t_r=0.3) #TODO: change name in compute_threshold
-        agg_query_metrics[key] = dict()
-        agg_query_metrics[key]['thresh'] = thresh
-        agg_query_metrics[key]['precision'] = precision
-        agg_query_metrics[key]['recall'] = recall
-        agg_query_metrics[key]['ratio'] = ratio
+    query_metrics = dict()
+    for key, summaries in query_summaries.items():
+        thresh, precision, recall, ratio = compute_threshold([x[1] for x in summaries], t_p=0.95, t_r=0.3) #TODO: change name in compute_threshold
+        query_metrics[key] = dict()
+        query_metrics[key]['thresh'] = thresh
+        query_metrics[key]['precision'] = precision
+        query_metrics[key]['recall'] = recall
+        query_metrics[key]['ratio'] = ratio
 
-    return agg_query_metrics
+    return query_metrics
 
 def DETUPLIFY_TODO_DELETE(arg):
     if isinstance(arg, tuple) and (len(arg) == 1):
@@ -290,6 +295,7 @@ def _expand_by_boost(all_query_templates):
             for i in range(len(compound_query)):
                 new_boost = copy.deepcopy(old_boost)
                 new_boost[i] *= 2
+                # TODO: do not expand if boost is already large 
                 new_boost = [x/sum(new_boost) * len(new_boost) for x in new_boost]
                 new_compound_query = tuple((x[0], x[1], x[2], x[3], b) for x, b in zip(compound_query, new_boost))
                 if new_compound_query not in new_query_templates:
@@ -365,8 +371,8 @@ def _gen_bulk(table_name, search_templates, must, must_not, num_results, chunk_s
     for (q_t, row) in search_templates:
         bulk_body += json.dumps({"index" : table_name}) + '\n'
         body = _gen_body(q_t, row, must, must_not, num_results)
-        if i == 0:
-            print(body)
+        #        if i == 0:
+        #            print(body)
         bulk_body += json.dumps(body) + '\n'
         queries.append((q_t, row))
         i += 1
@@ -375,7 +381,7 @@ def _gen_bulk(table_name, search_templates, must, must_not, num_results, chunk_s
             queries = []
             bulk_body = ''
             i = 0
-            
+    
     if bulk_body:
         yield bulk_body, queries
 
@@ -522,7 +528,7 @@ def es_linker(source, params):
 class Labeller():
     max_num_samples = 100
     min_precision_tab = [(20, 0.7), (10, 0.5), (5, 0.3)]
-    max_num_keys_tab = [(20, 50), (10, 100), (3, 300), (0, 1000)]
+    max_num_keys_tab = [(20, 10), (10, 50), (7, 200), (5, 500), (0, 1000)]
     num_results_labelling = 3
     
     max_num_levels = 3 # Number of match clauses
@@ -549,14 +555,14 @@ class Labeller():
         self.num_rows_proposed_source = 0
         self.num_rows_proposed_ref = defaultdict(int)
         self.num_rows_labelled = 0
+        self.query_summaries = dict()
         self.query_metrics = dict()
-        self.agg_query_metrics = dict()
 
         d_q = self._default_query()
         all_query_templates = [d_q] + [x for x in all_query_templates if x != d_q]
         
         for q_t in all_query_templates:
-            self.query_metrics[q_t] = []
+            self.query_summaries[q_t] = []
         
         # TODO: Must currently not implemented
         self.must = must
@@ -597,7 +603,7 @@ class Labeller():
         
 
     def _print_pair(self, source_item, ref_item, test_num=0):
-        print('\n***** {0} / {1} / ({2})'.format(ref_item['_id'], ref_item['_score'], self.num_rows_labelled))
+        print('\n***** ref_id: {0} / score: {1} / num_rows_labelled: {2}'.format(ref_item['_id'], ref_item['_score'], self.num_rows_labelled))
         print('self.first_propoal_for_source_idx:', self.first_propoal_for_source_idx)
         print('self.num_rows_labelled:', self.num_rows_labelled)
         print('self.num_rows_proposed_source:', self.num_rows_proposed_source)
@@ -661,10 +667,10 @@ class Labeller():
             # TODO: redundency with first
         else:
             # Sort by ratio but label by precision ?
-            self.sorted_keys = sorted(self.full_responses.keys(), key=lambda x: self.agg_query_metrics[x]['precision'], reverse=True)
+            self.sorted_keys = sorted(self.full_responses.keys(), key=lambda x: self.query_metrics[x]['precision'], reverse=True)
             
             # Remove queries if precision is too low (thresh depends on number of labels)
-            self.sorted_keys = list(filter(lambda x: self.agg_query_metrics[x]['precision'] \
+            self.sorted_keys = list(filter(lambda x: self.query_metrics[x]['precision'] \
                                       >= self._min_precision(), self.sorted_keys))
             
             self.sorted_keys  = self.sorted_keys[:self._max_num_keys()]
@@ -692,7 +698,7 @@ class Labeller():
             self.num_rows_labelled -= 1
             self.pairs.pop()
             
-            for val in self.query_metrics.values():
+            for val in self.query_summaries.values():
                 if val and (val[-1][0] == self.idx):
                     val.pop()
                     
@@ -701,7 +707,7 @@ class Labeller():
         
         self.row_idxs.append(self.idx)
         
-        # self.query_metrics = dict()
+        # self.query_summaries = dict()
         
             
     def _previous_row(self):
@@ -720,9 +726,9 @@ class Labeller():
         
         # TODO: remove try, except
         try:
-            self._update_agg_query_metrics()       
+            self._update_query_metrics()       
         except:
-            print('Could not update agg_query_metrics')
+            print('Could not update query_metrics')
             pass        
         print('self.next_row:', self.next_row)
 
@@ -745,24 +751,36 @@ class Labeller():
         '''
         
         ids_done = []
-        for key in sorted_keys:
-            print('\nkey: ', key)
+        num_keys = len(sorted_keys)
+        for i, key in enumerate(sorted_keys):
             try:
-                print('precision: ', self.agg_query_metrics[key]['precision'])
-                print('recall: ', self.agg_query_metrics[key]['recall'])
+                print('precision: ', self.query_metrics[key]['precision'])
+                print('recall: ', self.query_metrics[key]['recall'])
             except:
                 print('no precision/recall to display...')
+                
             results = full_responses[key]['hits']['hits']
+            
+            if len(results):
+                print('\nkey ({0}/{1}): {2}'.format(i, num_keys, key))
+                print('Num hits for this key: ', len(results)) 
+            else:
+                print('\nkey ({0}/{1}) has no results...'.format(i, num_keys))
             for res in results[:num_results]:
+                min_score = self.query_metrics.get(key, {}).get('thresh', 0)/1.5
                 if res['_id'] not in ids_done \
-                        and ((res['_score']>=0.001)) \
+                        and ((res['_score']>=min_score)) \
                         and res['_id'] not in self.pairs_not_match[self.idx]: #  TODO: not neat
                     ids_done.append(res['_id'])
                     yield res
                 else:
-                    print(res['_id'] not in ids_done)
-                    print(res['_score']>=0.001)
-                    print(res['_id'] not in self.pairs_not_match[self.idx])
+                    print('>>> res not analyzed because:')
+                    if res['_id'] in ids_done: 
+                        print('> res already done for this row')
+                    if res['_score'] < min_score:
+                        print('> score too low ({0} < {1})'.format(res['_score'], min_score))
+                    if res['_id'] in self.pairs_not_match[self.idx]: 
+                        print('> already a NOT match')
 
     
     def _new_label(self):
@@ -792,7 +810,7 @@ class Labeller():
             
             row = self.source.loc[self.idx]
             
-            print('in new_label / in self.next_row / len sorted_keys: {0} / row_idx: {1}'.format(len(self.sorted_keys), self.idx))
+            print('\n' + '*'*40+'\n', 'in new_label / in self.next_row / len sorted_keys: {0} / row_idx: {1}'.format(len(self.sorted_keys), self.idx))
             all_search_templates, tmp_full_responses = perform_queries(self.ref_table_name, self.sorted_keys, [row], self.must, self.must_not, self.num_results_labelling)
             self.full_responses = {all_search_templates[i][1][0]: values for i, values in tmp_full_responses.items()}
             print('LEN OF FULL_RESPONSES:', len(self.full_responses))
@@ -874,7 +892,7 @@ class Labeller():
 
     def update(self, user_input, ref_id):
         '''
-        Update query metrics and agg_query_metrics and other variables based 
+        Update query summaries and query_metrics and other variables based 
         on the user given label and the elasticsearch id of the reference item being labelled
         
         INPUT:
@@ -886,7 +904,7 @@ class Labeller():
             - ref_id: Elasticsearch Id of the reference element being labelled
         '''
         MIN_NUM_KEYS = 30 # Number under which to expand
-        EXPAND_FREQ = 4
+        EXPAND_FREQ = 9
         
         use_previous = user_input == 'p'
         
@@ -899,54 +917,54 @@ class Labeller():
             if is_match:
                 self.pairs.append((self.idx, ref_id))
     
-                self._update_query_metrics_on_match(ref_id)
+                self._update_query_summaries_on_match(ref_id)
                 self.num_rows_labelled += 1
                 self.next_row = True
             if is_not_match:
                 self.pairs_not_match[self.idx].append(ref_id)
                 
-            
+#            if False:
             if (len(self.sorted_keys) < MIN_NUM_KEYS) \
                 or((self.num_rows_labelled+1) % EXPAND_FREQ==0):
                 self.sorted_keys = _expand_by_boost(self.sorted_keys)
                 self.re_score_history()                
     
         
-    def _update_agg_query_metrics(self):
-        self.agg_query_metrics = calc_agg_query_metrics(self.query_metrics, t_p=self.t_p, t_r=self.t_r)
+    def _update_query_metrics(self):
+        self.query_metrics = calc_query_metrics(self.query_summaries, t_p=self.t_p, t_r=self.t_r)
 
-    def _update_query_metrics_on_match(self, ref_id):
+    def _update_query_summaries_on_match(self, ref_id):
         '''
         Assuming res_id is the Elasticsearch id of the matching refential,
-        update the metrics
+        update the summaries
         '''
 
         print('in update / in is_match')
-        # Update individual and aggregated metrics
+        # Update individual and aggregated summaries
         for key, response in self.full_responses.items():
-            self.query_metrics[key].append([self.idx, compute_metrics(response['hits']['hits'], ref_id)])
-        self._update_agg_query_metrics()
+            self.query_summaries[key].append([self.idx, analyze_hits(response['hits']['hits'], ref_id)])
+        self._update_query_metrics()
         
-
-
+        
     def re_score_history(self):
         '''Use this if updated must or must_not'''
+        print('WARNING: Re-Scoring history')
 
-        # Re-initiate query_metrics 
-        self.query_metrics = dict()
+        # Re-initiate query_summaries
+        self.query_summaries = dict()
         for q_t in self.sorted_keys:
-            self.query_metrics[q_t] = []
+            self.query_summaries[q_t] = []
         
         # TODO: temporary sol: put all in bulk
         for pair in self.pairs:
             all_search_templates, self.full_responses = perform_queries(
-                                                                  self.ref_table_name, 
-                                                                  self.sorted_keys, 
-                                                                  [self.source.loc[pair[0]]], 
-                                                                  self.must, self.must_not, 
-                                                                  self.num_results_labelling)
+                                                          self.ref_table_name, 
+                                                          self.sorted_keys, 
+                                                          [self.source.loc[pair[0]]], 
+                                                          self.must, self.must_not, 
+                                                          self.num_results_labelling)
             self.full_responses = {all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
-            self._update_query_metrics_on_match(pair[1])
+            self._update_query_summaries_on_match(pair[1])
 
         self._sort_keys()
 
@@ -985,9 +1003,9 @@ class Labeller():
         
     def _best_query_template(self):
         """Return query template with the best score (ratio)"""
-        if self.agg_query_metrics:
-            return sorted(self.agg_query_metrics.keys(), key=lambda x: \
-                          self.agg_query_metrics[x]['ratio'], reverse=True)[0]
+        if self.query_metrics:
+            return sorted(self.query_metrics.keys(), key=lambda x: \
+                          self.query_metrics[x]['ratio'], reverse=True)[0]
         else:
             return None
  
@@ -1008,8 +1026,8 @@ class Labeller():
         # Info on current performence
         b_q_t = self._best_query_template()
         if b_q_t is not None:
-            dict_to_emit['estimated_precision'] = str(self.agg_query_metrics.get(b_q_t, {}).get('precision'))
-            dict_to_emit['estimated_recall'] = str(self.agg_query_metrics.get(b_q_t, {}).get('recall'))
+            dict_to_emit['estimated_precision'] = str(self.query_metrics.get(b_q_t, {}).get('precision'))
+            dict_to_emit['estimated_recall'] = str(self.query_metrics.get(b_q_t, {}).get('recall'))
             dict_to_emit['best_query_template'] = str(b_q_t)
         else:
             dict_to_emit['estimated_precision'] = None
