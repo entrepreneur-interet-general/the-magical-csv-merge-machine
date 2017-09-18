@@ -28,6 +28,8 @@ MICROS_PER_SEC = 1000000
 MAX_ERROR_RATE = 20
 # Number of unhandled, fatal errors after which a given TypeMatcher will be dropped
 MAX_FATAL_COUNT = 5
+# If set to True, all errors will be treated as fatal
+FAIL_FAST_MODE = True
 
 def snapshot_timing(end):
 	global lastTime
@@ -247,8 +249,6 @@ def validated_lexical_map(lexicon, tokenize = False, stopWords = None, synMap = 
 		if syn_map0 is not None:
 			for (main_var, alt_vars) in synMap.items():
 				s = re.sub(r"\b(%s)\b" % '|'.join(alt_vars), main_var, s, re.I)
-				# for alt_var in alt_vars:
-				#     s = re.sub(r"\b%s\b" % alt_var, main_var, s)
 		add_to_lexicon_map(lexical_map, s, tokenize, stopWords)
 	return lexical_map
 
@@ -406,6 +406,7 @@ F_RD = u'Institution de recherche'
 F_ETAB = u'Etablissement'
 F_EDUC_NAT = u'Education Nationale'
 F_ACADEMIE = u'Académie'
+F_ETAB_NOTSUP = u'Etablissement des premier et second degrés'
 F_ETAB_ENSSUP = u'Etablissement d\'Enseignement Supérieur'
 F_APB_MENTION = u'Mention APB'
 F_RD_DOMAIN = u'Domaine de Recherche'
@@ -467,6 +468,7 @@ TYPE_TAGS = {
 	F_EDUC_NAT: [u'Education', u'Enseignement'],
 	F_ACADEMIE: [u'Enseignement'],
 	F_ETAB: [u'Enseignement'],
+	F_ETAB_NOTSUP: [u'Primaire', u'Secondaire', u'Lycée', u'Collège'],
 	F_ETAB_ENSSUP: [u'Enseignement supérieur'],
 	F_PHYTO: [u'Agro'],
 	F_AGRO: [u'Agro'],
@@ -519,10 +521,12 @@ class TypeMatcher(object):
 			# Handling non-fatal errors
 			except ValueError as ve:
 				logging.warning('{}: value error for "{}": {}'.format(self, vc.value, ve))
-				error_count += 1
+				if FAIL_FAST_MODE: fatal_count += 1
+				else: error_count += 1
 			except OverflowError as oe:
 				logging.error('{} : overflow error (e.g. while parsing date) for "{}": {}'.format(self, vc.value, oe))
-				error_count += 1
+				if FAIL_FAST_MODE: fatal_count += 1
+				else: error_count += 1
 			# Handling fatal errors
 			except RuntimeError as rte:
 				logging.warning('{}: runtime error for "{}": {}'.format(self, vc.value, rte))
@@ -614,7 +618,7 @@ class RegexMatcher(TypeMatcher):
 								self.register_partial_match(c, self.t, 100, m, (i1, i1 + len(m)))
 								return
 						else:
-							raise RuntimeError('%s could not find regex multi-match "%s" in original "%s"', self, m, c.value)
+							raise RuntimeError('{} could not find regex multi-match "{}" in original "{}"'.format(self, m, c.value))
 		else:
 			m = re.match(self.p, c.value, self.flags)
 			if m:
@@ -631,8 +635,8 @@ class RegexMatcher(TypeMatcher):
 								self.register_partial_match(c, self.t, 100, grp, (0, len(grp)))
 							return
 					except IndexError:
-						raise RuntimeError('No group %d matched in regex "%s" for input "%s"', self.g, self.p, c)
-		raise ValueError('%s unmatched "%s"', self, c.value)
+						raise RuntimeError('No group {} matched in regex {} for input "{}"'.format(self.g, self.p, c))
+		raise ValueError('{} unmatched "{}"'.format(self, c.value))
 
 def build_vocab_regex(vocab, partial):
 	j = '|'.join(vocab)
@@ -1877,13 +1881,24 @@ def generate_value_matchers(lvl = 1):
 		yield LabelMatcher(F_ACADEMIE, academy_labels, MATCH_MODE_EXACT, stopWords = ['académie'])    # SIES/APB
 		yield TokenizedMatcher(F_ACADEMIE, academy_labels, distinctCount = 3)
 	if lvl >= 0: 
-		yield VocabMatcher(F_ETAB, file_to_set('etablissement.vocab'), ignoreCase = True, partial = False)
+		yield VocabMatcher(F_ETAB_NOTSUP, file_to_set('etab_1er_2nd_degres.vocab'), ignoreCase = True, partial = False)
+		yield VocabMatcher(F_ETAB_ENSSUP, file_to_set('etab_enssup.vocab'), ignoreCase = True, partial = False)
+	if lvl >= 1:
+		lycees_synMap = {
+			'Lycée général et technologique' : 'Lycée',
+			'Lycée polyvalent' : 'Lycée',
+			'LP': 'Lycée professionnel',
+			'Ecole primaire privée': 'Ecole primaire'
+		} 
+		lycees_stopWords = ['privé', 'privée', 'public', 'publique']
+		yield LabelMatcher(F_ETAB_NOTSUP, file_to_set('etab_1er_2nd_degres'), MATCH_MODE_EXACT, 
+			stopWords = STOP_WORDS + lycees_stopWords, synMap = lycees_synMap)
 	if lvl >= 0: 
 		yield VocabMatcher(F_ETAB_ENSSUP, file_to_set('etab_enssup.vocab'), ignoreCase = True, partial = True, 
 			matcher = VariantExpander('etab_enssup.syn', targetType = F_ETAB_ENSSUP, keepContext = False, domainType = F_MESR))
 	if lvl >= 1:
 		yield TokenizedMatcher(F_ETAB_ENSSUP, file_to_set('etab_enssup'), maxTokens = 6)
-	yield SubtypeMatcher(F_ETAB, [F_ETAB_ENSSUP])
+	yield SubtypeMatcher(F_ETAB, [F_ETAB_NOTSUP, F_ETAB_ENSSUP])
 	if lvl >= 1: 
 		yield LabelMatcher(F_APB_MENTION, file_to_set('mention_licence_sise'), MATCH_MODE_EXACT)
 	if lvl >= 2: 
@@ -1915,6 +1930,8 @@ def generate_value_matchers(lvl = 1):
 	elif lvl >= 0: 
 		yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT, stopWords = STOP_WORDS_CITY, synMap = { 'st': 'saint' })
 		yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
+
+
 
 	if lvl >= 2:
 		yield TokenizedMatcher(F_DPT, file_to_set('departement'), distinctCount = 7)
