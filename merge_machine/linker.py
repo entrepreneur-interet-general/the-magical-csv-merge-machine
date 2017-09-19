@@ -30,9 +30,10 @@ class Linker(AbstractDataProject):
                  project_id=None, 
                  create_new=False, 
                  display_name=None,
-                 description=None):
+                 description=None,
+                 public=False):
         
-        super().__init__(project_id, create_new, display_name=display_name, description=description)
+        super().__init__(project_id, create_new, display_name=display_name, description=description, public=public)
         
         # Add source and ref if the were selected
         if (self.metadata['files']['source'] is not None) \
