@@ -44,7 +44,7 @@ def my_unidecode(string):
     else:
         return ''
 
-def analyze_hits(hits, ref_id):
+def analyze_hits(hits, target_ref_id):
     '''
     Computes a summary for based on the : res['hits']['hits']
     
@@ -56,7 +56,6 @@ def analyze_hits(hits, ref_id):
         - summary: dict with various information    
     '''
     
-    
     # General query summary
     num_hits = len(hits)
 
@@ -67,7 +66,7 @@ def analyze_hits(hits, ref_id):
     
     # Match summary
     try:
-        i = next((i for i, hit in enumerate(hits) if hit['_id']==ref_id))
+        i = next((i for i, hit in enumerate(hits) if hit['_id']==target_ref_id))
         has_match = True
     except StopIteration:
         has_match = False
@@ -88,6 +87,7 @@ def analyze_hits(hits, ref_id):
     summary['is_first'] = is_first
     summary['es_id_score'] = es_id_score
     summary['pos_score'] = pos_score
+    summary['target_id'] = target_ref_id
     
     return summary
 
@@ -532,7 +532,8 @@ class Labeller():
     num_results_labelling = 3
     
     max_num_levels = 3 # Number of match clauses
-    bool_levels = {'.integers': ['must', 'should']}
+    bool_levels = {'.integers': ['must', 'should'], 
+                   '.city': ['must', 'should']}
     boost_levels = [1]
     
     t_p = 0.95
@@ -903,7 +904,7 @@ class Labeller():
                 + "p" : back to previous state
             - ref_id: Elasticsearch Id of the reference element being labelled
         '''
-        MIN_NUM_KEYS = 30 # Number under which to expand
+        MIN_NUM_KEYS = 9 # Number under which to expand
         EXPAND_FREQ = 9
         
         use_previous = user_input == 'p'
@@ -915,25 +916,38 @@ class Labeller():
             is_not_match = user_input in ['n', '0']
             print('in update')
             if is_match:
+                
+                if (self.pairs) and (self.pairs[-1][0] == self.idx):
+                    self.pairs.pop()
                 self.pairs.append((self.idx, ref_id))
     
-                self._update_query_summaries_on_match(ref_id)
+                self._update_query_summaries(ref_id)
                 self.num_rows_labelled += 1
                 self.next_row = True
             if is_not_match:
                 self.pairs_not_match[self.idx].append(ref_id)
                 
+                if (not self.pairs) or (self.pairs[-1][0] != self.idx):
+                    self.pairs.append((self.idx, None))
+                
 #            if False:
-            if (len(self.sorted_keys) < MIN_NUM_KEYS) \
-                or((self.num_rows_labelled+1) % EXPAND_FREQ==0):
+            # TODO: num_rows_labelled is not good since it can not change on new label
+            try:
+                self.last_expanded
+            except:
+                self.last_expanded = None
+            if ((len(self.sorted_keys) < MIN_NUM_KEYS) \
+                or((self.num_rows_labelled+1) % EXPAND_FREQ==0)) \
+                and (self.last_expanded != self.idx):
                 self.sorted_keys = _expand_by_boost(self.sorted_keys)
-                self.re_score_history()                
+                self.re_score_history()    
+                self.last_expanded = self.idx
     
         
     def _update_query_metrics(self):
         self.query_metrics = calc_query_metrics(self.query_summaries, t_p=self.t_p, t_r=self.t_r)
 
-    def _update_query_summaries_on_match(self, ref_id):
+    def _update_query_summaries(self, matching_ref_id):
         '''
         Assuming res_id is the Elasticsearch id of the matching refential,
         update the summaries
@@ -942,9 +956,8 @@ class Labeller():
         print('in update / in is_match')
         # Update individual and aggregated summaries
         for key, response in self.full_responses.items():
-            self.query_summaries[key].append([self.idx, analyze_hits(response['hits']['hits'], ref_id)])
+            self.query_summaries[key].append([self.idx, analyze_hits(response['hits']['hits'], matching_ref_id)])
         self._update_query_metrics()
-        
         
     def re_score_history(self):
         '''Use this if updated must or must_not'''
@@ -964,7 +977,7 @@ class Labeller():
                                                           self.must, self.must_not, 
                                                           self.num_results_labelling)
             self.full_responses = {all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
-            self._update_query_summaries_on_match(pair[1])
+            self._update_query_summaries(pair[1])
 
         self._sort_keys()
 

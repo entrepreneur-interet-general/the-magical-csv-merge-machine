@@ -6,6 +6,14 @@ Created on Mon Aug 28 19:27:30 2017
 @author: m75380
 """
 import copy
+import os
+
+curdir = os.path.dirname(os.path.realpath(__file__))
+os.chdir(curdir)
+
+city_keep_file_path = 'es_city_keep.txt'
+city_syn_file_path = 'es_city_synonyms.txt'
+
 
 tokenizers = {
     "integers": {
@@ -30,6 +38,18 @@ filters = {
         "type": "edgeNGram",
         "min_gram": 3,
         "max_gram": 30
+    },
+    
+    "my_city_keep" : {
+        "type" : "keep",
+        "keep_words" : ["one", "two", "three"]
+        # "keep_words_path" : city_keep_file_path
+    },
+    
+    "my_city_synonym" : {
+        "type" : "synonym", 
+        # "synonyms_path" : city_syn_file_path,
+        "tokenizer" : "whitespace"  # TODO: whitespace? 
     }
 }
 
@@ -43,6 +63,10 @@ analyzers = {
     "end_n_grams": {
         'tokenizer': 'keyword',
         "filter": ["reverse", "my_edgeNGram", "reverse"]
+    },
+    'city': {
+        "tokenizer": "whitespace", # TODO: problem with spaces in words
+        "filter": ["my_city_keep", "my_city_synonym"]
     }
 }
 

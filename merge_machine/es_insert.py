@@ -80,7 +80,7 @@ if __name__ == '__main__':
         'SIREN': {},
         'NIC': {},
         'L1_NORMALISEE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
         },
         'L4_NORMALISEE': {
             'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
@@ -98,14 +98,14 @@ if __name__ == '__main__':
             'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
         },
         'LIBCOM': {
-            'french', 'whitespace', 'end_n_grams', 'n_grams'
+            'french', 'whitespace', 'end_n_grams', 'n_grams', 'city'
         },
         'CEDEX': {},
         'ENSEIGNE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
         },
         'NOMEN_LONG': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
         },
         #Keyword only 'LIBNATETAB': {},
         'LIBAPET': {},
@@ -118,7 +118,7 @@ if __name__ == '__main__':
     # Index in Elasticsearch 
     #==============================================================================
     testing = True
-    new_index = False
+    new_index = True
     do_indexing = True
     chunksize = 2000
     
@@ -134,7 +134,7 @@ if __name__ == '__main__':
     
     
     if testing:
-        table_name = '123vivalalgerie'
+        table_name = '123vivalalgerie4'
     else:
         table_name = '123vivalalgerie3'
     

@@ -557,7 +557,7 @@ class ESReferential(UserNormalizer):
     #        self.metadata[columns_to_index] = self.columns_to_index
         
     def gen_default_columns_to_index(self):
-        default_analyzers = {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'}
+        default_analyzers = {'french', 'whitespace', 'integers', 'city', 'n_grams'} # TODO: removed end_ngrams
         column_tracker = self.metadata['column_tracker']
         columns_to_index = {col: default_analyzers if col in column_tracker['selected'] \
                             else {} for col in column_tracker['original']}   
