@@ -61,7 +61,7 @@ class Admin():
         '''Returns a list of all project_ids'''
         _check_project_type(project_type)
         if os.path.isdir(self.path_to(project_type)):
-            return set(os.listdir(self.path_to(project_type)))
+            return set(filter(lambda x: x[0]!='.', os.listdir(self.path_to(project_type))))
         return {}
     
     def list_projects_by_time(self, project_type, 
