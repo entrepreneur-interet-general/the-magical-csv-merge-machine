@@ -36,7 +36,8 @@ class AbstractProject():
                  project_id=None, 
                  create_new=False, 
                  description=None,
-                 display_name=None):
+                 display_name=None,
+                 public=False):
         
         if (project_id is None) and (not create_new):
             raise Exception('Set create_new to True or specify project_id')
@@ -59,7 +60,9 @@ class AbstractProject():
                 os.makedirs(path_to_proj)
             
             # Create metadata
-            self.metadata = self._create_metadata(description=description, display_name=display_name)
+            self.metadata = self._create_metadata(description=description, 
+                                                  display_name=display_name, 
+                                                  public=public)
             self._write_metadata()
         else:
             self.project_id = project_id
@@ -110,11 +113,12 @@ class AbstractProject():
         project_id = h.hexdigest()
         return project_id
 
-    def _create_metadata(self, description=None, display_name=None):
+    def _create_metadata(self, description=None, display_name=None, public=False):
         '''Core metadatas'''
         metadata = dict()
         metadata['description'] = description
         metadata['display_name'] = display_name
+        metadata['public'] = public
         metadata['log'] = {}
         metadata['project_id'] = self.project_id
         metadata['timestamp'] = time.time()

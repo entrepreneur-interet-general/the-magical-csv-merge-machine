@@ -301,9 +301,9 @@ def new_project(project_type):
         raise Exception('Public projects should have a description')
 
     if project_type == 'normalize':
-        proj = UserNormalizer(create_new=True, description=description, display_name=display_name)
+        proj = UserNormalizer(create_new=True, description=description, display_name=display_name, public=public)
     else:
-        proj = UserLinker(create_new=True, description=description, display_name=display_name)
+        proj = UserLinker(create_new=True, description=description, display_name=display_name, public=public)
 
     
     return jsonify(error=False, 
