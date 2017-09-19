@@ -1363,6 +1363,10 @@ class CustomTelephoneMatcher(TypeMatcher):
 			score = score_phone_number(z)
 			if score > 0: self.register_full_match(c, self.t, score, normalize_phone_number(z))
 
+# Various regexes for strict type matchers
+PAT_EMAIL = "[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
+PAT_URL = "(https?|ftp)://[^\s/$.?#].[^\s]*"
+
 # Person-name matcher-normalizer code
 
 PRENOM_LEXICON = file_to_set('prenom')
@@ -1802,10 +1806,8 @@ def generate_value_matchers(lvl = 1):
 			g = 1, ignoreCase = True, partial = True, neg = True)
 
 	# Web stuff: Email, URL
-	PAT_EMAIL = "[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
 	if lvl >= 0: 
 		yield RegexMatcher(F_EMAIL, PAT_EMAIL)
-	PAT_URL = "@^(https?|ftp)://[^\s/$.?#].[^\s]*$@iS"
 	if lvl >= 0: 
 		yield RegexMatcher(F_URL, PAT_URL)
 
