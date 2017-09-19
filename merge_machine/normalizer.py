@@ -346,6 +346,8 @@ class Normalizer(AbstractDataProject):
         
         # write data and log
         config_dict['nrows'] = self.write_data()
+        
+        self.metadata['files'][file_name]['nrows'] = config_dict['nrows']
 
         self.upload_config_data(config_dict, 'INIT', 'infered_config.json')
 
