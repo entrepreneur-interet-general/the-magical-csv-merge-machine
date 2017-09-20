@@ -480,7 +480,7 @@ if __name__ == '__main__':
                         help='Path to directory containing test data')
     parser.add_argument('--keep', 
                         action='store_true',
-                        help='Use this flag to NOT delete projects after testing')   
+                        help='Use this flag to NOT delete projects after testing')
     parser.add_argument('--source', default=None, help='ID of source to skip pipeline')
     parser.add_argument('--ref', default=None, help='ID of ref to skip pipeline')
     args = parser.parse_args()

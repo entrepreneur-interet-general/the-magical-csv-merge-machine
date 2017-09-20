@@ -69,6 +69,7 @@ for i, row in enumerate(res):
 
 # Generate synonym file for ES
 file_path_syn = os.path.join(elasticsearch_resource_dir, 'es_city_synonyms.txt')
+file_path_country = os.path.join(elasticsearch_resource_dir, 'es_city_synonyms.txt')
 file_path_keep = os.path.join(elasticsearch_resource_dir, 'es_city_keep.txt')
 with open(file_path_syn, 'w') as w_syn, \
      open(file_path_keep, 'w') as w_keep:

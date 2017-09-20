@@ -487,9 +487,9 @@ def es_linker(source, params):
     # Perform matching on non-exact pairs (not labelled)
     if source_indexes:
         rows = (x[1] for x in source.iterrows() if x[0] not in exact_source_indexes)
-        all_search_templates, full_responses = perform_queries(table_name, [query_template], rows, must, must_not, num_results=1)
+        all_search_templates, full_responses = perform_queries(table_name, [query_template], rows, must, must_not, num_results=2)
         full_responses = [full_responses[i] for i in range(len(full_responses))] # Don't use items to preserve order
-        
+    
         matches_in_ref = pd.DataFrame([f_r['hits']['hits'][0]['_source'] \
                                    if bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold) \
                                    else {} \
@@ -499,8 +499,16 @@ def es_linker(source, params):
                                 if bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold) \
                                 else np.nan \
                                 for f_r in full_responses], index=matches_in_ref.index)
+
+        confidence_gap = pd.Series([f_r['hits']['hits'][0]['_score'] - f_r['hits']['hits'][1]['_score']
+                                if (len(f_r['hits']['hits']) >= 2) and (f_r['hits']['max_score'] >= threshold) \
+                                else np.nan \
+                                for f_r in full_responses], index=matches_in_ref.index)
+
         matches_in_ref.columns = [x + '__REF' for x in matches_in_ref.columns]
         matches_in_ref['__CONFIDENCE'] = confidence    
+        matches_in_ref['__GAP'] = confidence_gap
+        matches_in_ref['__GAP_RATIO'] = confidence_gap / confidence
     else:
         matches_in_ref = pd.DataFrame()
     
