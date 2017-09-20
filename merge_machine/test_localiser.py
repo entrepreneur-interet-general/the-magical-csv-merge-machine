@@ -11,6 +11,12 @@ https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-populat
 
 Valid match if no token on one of both sides
 
+Baariis,Bahliz,Gorad Paryzh,Lungsod ng Paris,
+Lutece,Lutetia,Lutetia Parisorum,Lutèce,PAR,Pa-ri,
+Paarys,Palika,Paname,Pantruche,Paraeis,Paras,Pari,P
+aries,Parigge,Pariggi,Parighji,Parigi,Pariis,Pariisi,Pariizu,Pariižu,Parij,Parijs,Paris,Parisi,Parixe,Pariz,Parize,Parizh,Parizh osh,Parizh',Parizo,Parizs,Pariž,Parys,Paryz,Paryzius,Paryż,Paryžius,Paräis,París,Paríž,Parîs,Parĩ,Parī,Parīze,Paříž,Páras,Párizs,Ville-Lumiere,Ville-Lumière,ba li,barys,pairisa,pali,pari,paris,parys,paryzh,perisa,pryz,pyaris,pyarisa,pyrs,Παρίσι,Горад Парыж,Париж,Париж ош,Парижь,Париз,Парис,Паріж,Փարիզ,פאריז,פריז,باريس,پارىژ,پاريس,پاریس,پیرس,ܦܐܪܝܣ,पॅरिस,पेरिस,पैरिस,প্যারিস,ਪੈਰਿਸ,પૅરિસ,பாரிஸ்,పారిస్,ಪ್ಯಾರಿಸ್,പാരിസ്,ปารีส,ཕ་རི།,ပါရီမြို့,პარიზი,ፓሪስ,ប៉ារីស,パリ,巴黎,파리
+
+
 """
 from collections import defaultdict
 import json
@@ -18,6 +24,7 @@ import os
 
 import requests
 
+elasticsearch_resource_dir = '/etc/elasticsearch'
 file_path = os.path.join('resource', 'es_linker', 'geonames-all-cities-with-a-population-1000.json')
 
 with open(file_path) as f:
@@ -30,6 +37,7 @@ cities = set()
 countries = set()
 cities_to_countries = defaultdict(set)
 cities_to_cities = defaultdict(set)
+name_to_alternates = defaultdict(set)
 city_hashes = defaultdict(set)
 for i, row in enumerate(res):
     if i%10000 == 0:
@@ -44,27 +52,50 @@ for i, row in enumerate(res):
         no_alternate_count += 1
         
     if 'country' in my_row:
+        
+        if alternates:
+            name_to_alternates[name].update(alternates)
+        
         country = my_row['country']
         
         cities.update([name] + alternates)
         countries.add(country)
         for city in [name] + alternates:
             cities_to_countries[city].add(country)
-            cities_to_cities[city].update([name] + alternates)
+            city_hashes[city].update([name] + alternates)
             city_hashes[city].add(name)
     else:
         no_country_count += 1
 
 # Generate synonym file for ES
-file_path_syn = os.path.join('resource', 'es_linker', 'es_city_synonyms.txt')
-file_path_keep = os.path.join('resource', 'es_linker', 'es_city_keep.txt')
+file_path_syn = os.path.join(elasticsearch_resource_dir, 'es_city_synonyms.txt')
+file_path_keep = os.path.join(elasticsearch_resource_dir, 'es_city_keep.txt')
 with open(file_path_syn, 'w') as w_syn, \
      open(file_path_keep, 'w') as w_keep:
-    for key, values in city_hashes.items():
+    for i, (name, alternates) in enumerate(name_to_alternates.items()):
         # sea biscuit, sea biscit => seabiscuit
-        string = key + ' => ' + ', '.join(values) + '\n'
-        w_syn.write(string)
-        w_keep.write(key + '\n')
+#        if values and ((len(values)>=2) or (list(values)[0] != key)):
+        if name in alternates:
+            alternates.remove(name)
+        if alternates:
+            if i == 0:
+                string = ''
+            else:
+                string = '\n'
+            string += ', '.join(alternates) + ' => ' + name
+            # string = key + ', ' + ', '.join(values) + '\n'
+            w_syn.write(string)
+        w_keep.write(name + '\n')
+        for alternate in alternates:
+            w_keep.write(alternate + '\n')
+        
+        
+        
+        
+        
+        
+        
+        
         
         
 assert False

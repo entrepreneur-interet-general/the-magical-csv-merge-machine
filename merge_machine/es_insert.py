@@ -127,10 +127,15 @@ if __name__ == '__main__':
     ref_sep = ';'
     ref_encoding = 'windows-1252'
     
+    if testing:
+        nrows = 10000
+    else:
+        nrows = 10**10
+    
     ref_gen = pd.read_csv(os.path.join('local_test_data', 'sirene', ref_file_name), 
                       sep=ref_sep, encoding=ref_encoding,
                       usecols=columns_to_index.keys(),
-                      dtype=str, chunksize=chunksize, nrows=10**50) 
+                      dtype=str, chunksize=chunksize, nrows=nrows) 
     
     
     if testing:
@@ -138,7 +143,7 @@ if __name__ == '__main__':
     else:
         table_name = '123vivalalgerie3'
     
-    es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
+    es = Elasticsearch(timeout=60, max_retries=10, retry_on_timeout=True)
     
     # https://www.elastic.co/guide/en/elasticsearch/reference/1.4/analysis-edgengram-tokenizer.html
     

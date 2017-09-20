@@ -8,12 +8,13 @@ Created on Mon Aug 28 19:27:30 2017
 import copy
 import os
 
-curdir = os.path.dirname(os.path.realpath(__file__))
-os.chdir(curdir)
+#curdir = os.path.dirname(os.path.realpath(__file__))
+#os.chdir(curdir)
 
+#city_keep_file_path = os.path.join(curdir, 'resource', 'es_linker', 'es_city_keep.txt')
+#city_syn_file_path = os.path.join(curdir, 'resource', 'es_linker', 'es_city_synonyms.txt')
 city_keep_file_path = 'es_city_keep.txt'
 city_syn_file_path = 'es_city_synonyms.txt'
-
 
 tokenizers = {
     "integers": {
@@ -42,14 +43,21 @@ filters = {
     
     "my_city_keep" : {
         "type" : "keep",
-        "keep_words" : ["one", "two", "three"]
-        # "keep_words_path" : city_keep_file_path
+        "keep_words_case": True, # Lower the words
+        # "keep_words" : ["one", "two", "three"]
+        "keep_words_path" : city_keep_file_path
     },
-    
     "my_city_synonym" : {
         "type" : "synonym", 
-        # "synonyms_path" : city_syn_file_path,
+        "expand": False,    
+        "ignore_case": True,
+        # "synonyms" : ["paris, lutece => paname"],
+        "synonyms_path" : city_syn_file_path,
         "tokenizer" : "whitespace"  # TODO: whitespace? 
+    },
+    "my_length": {
+        "type" : "length",
+        "min": 4
     }
 }
 
@@ -66,7 +74,7 @@ analyzers = {
     },
     'city': {
         "tokenizer": "whitespace", # TODO: problem with spaces in words
-        "filter": ["my_city_keep", "my_city_synonym"]
+        "filter": ["my_city_keep", "my_city_synonym", "my_length"] # TODO: shingle ?
     }
 }
 
