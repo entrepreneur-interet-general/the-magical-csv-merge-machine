@@ -59,6 +59,7 @@ class Normalizer(AbstractDataProject):
         metadata['files'] = dict() # Contains single file metadata
         metadata['has_mini'] = False
         metadata['log'] = {}
+        metadata['project_type'] = 'normalize'
         return metadata   
     
     def __repr__(self):
