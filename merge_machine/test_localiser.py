@@ -23,7 +23,6 @@ import json
 import os
 
 
-
 elasticsearch_resource_dir = '/etc/elasticsearch'
 file_path = os.path.join('resource', 'es_linker', 'geonames-all-cities-with-a-population-1000.json')
 
