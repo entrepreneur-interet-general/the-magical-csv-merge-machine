@@ -125,7 +125,7 @@ from worker import conn, VALID_QUEUES
 
 from admin import Admin
 from my_json_encoder import MyEncoder
-from normalizer import ESReferential, UserNormalizer, MINI_PREFIX
+from normalizer import ESNormalizer, UserNormalizer, MINI_PREFIX
 from linker import UserLinker
 
 #==============================================================================
@@ -237,7 +237,7 @@ def _init_project(project_type,
                           display_name=display_name, 
                           description=description)
     else:
-        proj = UserNormalizer(project_id=project_id, 
+        proj = ESNormalizer(project_id=project_id, 
                               create_new=create_new, 
                               display_name=display_name, 
                               description=description)
@@ -321,7 +321,7 @@ def delete_project(project_type, project_id):
     _check_project_type(project_type)
     # TODO: replace by _init_project
     if project_type == 'normalize':
-        proj = ESReferential(project_id=project_id)
+        proj = ESNormalizer(project_id=project_id)
     else:
         proj = UserLinker(project_id=project_id)
     proj.delete_project()
@@ -936,7 +936,41 @@ def web_terminate_labeller_load(message_received):
     except:
         logging.warning('Could not delete paths for project: {0}'.format(project_id))
             
+# =============================================================================
+# ES FETCH
+# =============================================================================
 
+@app.route('/api/es_fetch_by_id/<project_type>/<project_id>', methods=['GET', 'POST'])
+@cross_origin()
+def es_fetch_by_id(project_type, project_id):
+    '''
+    Fetch result from the existing ES index project_id
+    https://www.elastic.co/guide/en/elasticsearch/guide/current/pagination.html
+    
+    GET:
+        - project_type
+        - project_id
+    POST:
+        - data_params: None
+        - module_params:
+            - (size): size of sample
+            - (from): where to start
+    
+    '''
+    
+    _, module_params = _parse_request()
+    
+    if module_params is None:
+        module_params = {}
+    size = module_params.get('size', 10)
+    from_ = module_params.get('from', 0)
+    
+    proj = _init_project(project_type=project_type, project_id=project_id)  
+    
+    res = proj.fetch_by_id(size, from_)
+    
+    return jsonify(res)
+    
 
 #==============================================================================
 # SCHEDULER

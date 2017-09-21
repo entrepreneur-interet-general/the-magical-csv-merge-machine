@@ -11,7 +11,7 @@ import time
 
 from elasticsearch import client, Elasticsearch
 from linker import UserLinker
-from normalizer import ESReferential
+from normalizer import ESNormalizer
 
 from CONFIG import LINK_DATA_PATH, NORMALIZE_DATA_PATH
 
@@ -47,7 +47,7 @@ class Admin():
                 except:
                     print('here', id_)
             else:
-                proj = ESReferential(id_)
+                proj = ESNormalizer(id_)
             if proj.metadata.get('public', False):
                 list_of_metadatas.append(proj.metadata)
         return list_of_metadatas
@@ -97,7 +97,7 @@ class Admin():
             raise Exception('No project found with the following ID: {0}'.format(project_id))
             
         if project_type == 'normalize':
-            proj = ESReferential(project_id)
+            proj = ESNormalizer(project_id)
         elif project_type == 'link':
             proj = UserLinker(project_id)
             

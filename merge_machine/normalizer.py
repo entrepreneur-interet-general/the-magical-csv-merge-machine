@@ -509,7 +509,7 @@ class UserNormalizer(Normalizer):
         return self._path_to(NORMALIZE_DATA_PATH, module_name, file_name)
 
 
-class ESReferential(UserNormalizer):
+class ESNormalizer(UserNormalizer):
     es_insert_chunksize = 100
     es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
     ic = client.IndicesClient(es)
@@ -518,9 +518,25 @@ class ESReferential(UserNormalizer):
         super().__init__(*argv, **kwargs)
         self.index_name = self.project_id
     
+    def fetch_by_id(self, size=5, from_=0):
+        '''For an indexed table'''
+        
+        ids = range(from_, from_+size)
+        
+        bulk = ''
+        for id_ in ids:
+            bulk += json.dumps({"index" : self.index_name}) + '\n'
+            bulk += json.dumps({"query" : {"match" : {"_id": id_}}, "size": 1}) + '\n'
+            
+        res = self.es.msearch(bulk)
+        return res
+        
+    
     def create_index(self, ref_path, columns_to_index, force=False):
         '''
-        # TODO: write doc
+        INPUT:
+            - ref_path: path to the file to index
+            - columns_to_index
         '''
         testing = True      
         
@@ -557,10 +573,13 @@ class ESReferential(UserNormalizer):
     #    def add_columns_to_index(self, columns_to_index):
     #        self.metadata[columns_to_index] = self.columns_to_index
         
-    def gen_default_columns_to_index(self):
-        default_analyzers = {'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'}
+    def gen_default_columns_to_index(self, for_linking=True):
+        if for_linking:
+            analyzers = {'french', 'whitespace', 'integers', 'city', 'n_grams'} # TODO: removed end_ngrams
+        else:
+            analyzers = {}
         column_tracker = self.metadata['column_tracker']
-        columns_to_index = {col: default_analyzers if col in column_tracker['selected'] \
+        columns_to_index = {col: analyzers if col in column_tracker['selected'] \
                             else {} for col in column_tracker['original']}   
         return columns_to_index
         
