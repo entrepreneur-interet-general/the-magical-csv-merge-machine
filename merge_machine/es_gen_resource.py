@@ -16,12 +16,17 @@ Lutece,Lutetia,Lutetia Parisorum,Lutèce,PAR,Pa-ri,
 Paarys,Palika,Paname,Pantruche,Paraeis,Paras,Pari,P
 aries,Parigge,Pariggi,Parighji,Parigi,Pariis,Pariisi,Pariizu,Pariižu,Parij,Parijs,Paris,Parisi,Parixe,Pariz,Parize,Parizh,Parizh osh,Parizh',Parizo,Parizs,Pariž,Parys,Paryz,Paryzius,Paryż,Paryžius,Paräis,París,Paríž,Parîs,Parĩ,Parī,Parīze,Paříž,Páras,Párizs,Ville-Lumiere,Ville-Lumière,ba li,barys,pairisa,pali,pari,paris,parys,paryzh,perisa,pryz,pyaris,pyarisa,pyrs,Παρίσι,Горад Парыж,Париж,Париж ош,Парижь,Париз,Парис,Паріж,Փարիզ,פאריז,פריז,باريس,پارىژ,پاريس,پاریس,پیرس,ܦܐܪܝܣ,पॅरिस,पेरिस,पैरिस,প্যারিস,ਪੈਰਿਸ,પૅરિસ,பாரிஸ்,పారిస్,ಪ್ಯಾರಿಸ್,പാരിസ്,ปารีส,ཕ་རི།,ပါရီမြို့,პარიზი,ፓሪስ,ប៉ារីស,パリ,巴黎,파리
 
-
 """
 from collections import defaultdict
 import json
 import os
 
+curdir = os.path.dirname(os.path.realpath(__file__))
+os.chdir(curdir)
+
+# =============================================================================
+# Generate Resource For localiser analyzer
+# =============================================================================
 
 elasticsearch_resource_dir = '/etc/elasticsearch'
 file_path = os.path.join('resource', 'es_linker', 'geonames-all-cities-with-a-population-1000.json')

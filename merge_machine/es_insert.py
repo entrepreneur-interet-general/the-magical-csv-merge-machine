@@ -8,6 +8,7 @@ Created on Tue Aug 29 13:15:15 2017
 Deals with inserting a table in Elasticsearch
 
 """
+from distutils.version import LooseVersion
 import json
 import os
 import time
@@ -18,6 +19,10 @@ import pandas as pd
 from es_config import gen_index_settings
 
 es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
+es_version = es.info()['version']['number']
+
+if LooseVersion(es_version) < LooseVersion('5.6.1'):
+    raise RuntimeError('ES Version is too old. Upgrade to 5.6.1 or newer.')
 
 def pre_process_tab(tab):
     ''' Clean tab before insertion '''
