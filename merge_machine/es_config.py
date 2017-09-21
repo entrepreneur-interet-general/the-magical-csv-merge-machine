@@ -16,6 +16,7 @@ import os
 city_keep_file_path = 'es_city_keep.txt'
 city_syn_file_path = 'es_city_synonyms.txt'
 
+
 tokenizers = {
     "integers": {
         "type": "pattern",

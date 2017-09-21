@@ -158,7 +158,12 @@ if __name__ == '__main__':
         if ic.exists(table_name):
             ic.delete(table_name)
         index_settings = gen_index_settings(columns_to_index)
-        ic.create(table_name, body=json.dumps(index_settings))  
+        try:
+            ic.create(table_name, body=json.dumps(index_settings))  
+        except Exception as e:
+            new_message = e.__str__() + '\n\n--> ES resource is not available. ' \
+                            'Run es_gen_resource.py (in sudo) for this to work'
+            raise Exception(new_message)
     
     if do_indexing:
         index(ref_gen, table_name, testing)
