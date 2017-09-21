@@ -45,7 +45,7 @@ class Admin():
                 try:
                     proj = UserLinker(id_)
                 except:
-                    print('here', id_)
+                    print('Could not load', id_)
             else:
                 proj = ESNormalizer(id_)
             if proj.metadata.get('public', False):
@@ -116,6 +116,7 @@ class Admin():
     def delete_index(self, index_name):
         es = Elasticsearch()
         ic = client.IndicesClient(es)
+        print('Deleting index {0}'.format(index_name))
         return ic.delete(index_name)
 
     def delete_indices(self, index_names):
@@ -143,6 +144,10 @@ if __name__ == '__main__':
     admin.remove_project_by_time('link', 
                                  action='created', 
                                  when='before', 
-                                 hours_from_now=24*30)
-            
+                                 hours_from_now=24*7)
+    admin.remove_project_by_time('normalize', 
+                                 action='created', 
+                                 when='before', 
+                                 hours_from_now=24*7)            
+    admin.delete_unused_indices()
     

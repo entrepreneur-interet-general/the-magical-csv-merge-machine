@@ -16,7 +16,6 @@ import os
 city_keep_file_path = 'es_city_keep.txt'
 city_syn_file_path = 'es_city_synonyms.txt'
 
-
 tokenizers = {
     "integers": {
         "type": "pattern",
@@ -32,6 +31,10 @@ tokenizers = {
             "letter",
             "digit"
         ]
+    },
+    "my_standard": { #standard-ish except for "-"
+        "type": "pattern",
+        "pattern": '|'.join(["\'", '\"', '\(', '\)', '_', ',', '\.', ';'])
     }
 }
 
@@ -54,7 +57,7 @@ filters = {
         "ignore_case": True,
         # "synonyms" : ["paris, lutece => paname"],
         "synonyms_path" : city_syn_file_path,
-        "tokenizer" : "whitespace"  # TODO: whitespace? 
+        "tokenizer" : "my_standard"  # TODO: whitespace? 
     },
     "my_length": {
         "type" : "length",
@@ -74,7 +77,7 @@ analyzers = {
         "filter": ["reverse", "my_edgeNGram", "reverse"]
     },
     'city': {
-        "tokenizer": "whitespace", # TODO: problem with spaces in words
+        "tokenizer": "my_standard", # TODO: problem with spaces in words
         "filter": ["my_city_keep", "my_city_synonym", "my_length"] # TODO: shingle ?
     }
 }

@@ -75,7 +75,7 @@ for i, row in enumerate(res):
 file_path_syn = os.path.join(elasticsearch_resource_dir, 'es_city_synonyms.txt')
 file_path_keep = os.path.join(elasticsearch_resource_dir, 'es_city_keep.txt')
 with open(file_path_syn, 'w') as w_syn, \
-     open(file_path_keep, 'w') as w_keep:
+     open(file_path_keep, 'w') as w_keep:   
     for i, (name, alternates) in enumerate(name_to_alternates.items()):
         # sea biscuit, sea biscit => seabiscuit
         if name in alternates:
@@ -93,6 +93,15 @@ with open(file_path_syn, 'w') as w_syn, \
   
 file_path_country = os.path.join(elasticsearch_resource_dir, 'es_city_synonyms.txt')      
     
+# =============================================================================
+# 
+# =============================================================================
+
+['lycée', 'collège', 'université', 'département', 'académie', 'école', 'institut', 'laboratoire', 'centre']
+
+['agence', 'association', 'fédération']
+
+
 #import requests
 #url = 'https://raw.githubusercontent.com/David-Haim/CountriesToCitiesJSON/master/countriesToCities.json'
 #
