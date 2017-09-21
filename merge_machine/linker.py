@@ -101,6 +101,7 @@ class Linker(AbstractDataProject):
     def _create_metadata(self, description=None, display_name=None, public=False):
         metadata = super()._create_metadata(description=description, display_name=display_name, public=public)
         metadata['files'] = {'source': None, 'ref': None} # {'source': {public: False, project_id: "ABC123", file_name: "source.csv.csv"}, 'ref': None}
+        metadata['project_type'] = 'link'        
         return metadata   
 
     def add_col_matches(self, column_matches):
