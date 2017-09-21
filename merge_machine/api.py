@@ -952,10 +952,12 @@ def es_fetch_by_id(project_type, project_id):
         - project_id
     POST:
         - data_params: None
-        - module_params: how to transform the data (see spectific module docs)
-        
+        - module_params:
+            - (size): size of sample
+            - (from): where to start
     
     '''
+    
     _, module_params = _parse_request()
     
     if module_params is None:

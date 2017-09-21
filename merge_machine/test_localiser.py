@@ -22,10 +22,15 @@ from collections import defaultdict
 import json
 import os
 
-import requests
+
 
 elasticsearch_resource_dir = '/etc/elasticsearch'
 file_path = os.path.join('resource', 'es_linker', 'geonames-all-cities-with-a-population-1000.json')
+
+# Check that resource is available
+if not os.path.isfile(file_path):
+    url = 'https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000%40public/export'
+    raise Exception('Missing resource: Download the file from:\n{0}\and place it in:\n{1}'.format(url, file_path))
 
 with open(file_path) as f:
     res = json.load(f)
@@ -33,18 +38,16 @@ with open(file_path) as f:
 no_country_count = 0
 no_alternate_count = 0
 
-cities = set()
 countries = set()
 cities_to_countries = defaultdict(set)
-cities_to_cities = defaultdict(set)
 name_to_alternates = defaultdict(set)
-city_hashes = defaultdict(set)
 for i, row in enumerate(res):
     if i%10000 == 0:
         print('Did {0}/{1}'.format(i, len(res)))
         
     my_row = row['fields']
     name = my_row['name']
+    
     if 'alternate_names' in my_row:
         alternates = my_row['alternate_names'].split(',')
     else:
@@ -57,25 +60,20 @@ for i, row in enumerate(res):
             name_to_alternates[name].update(alternates)
         
         country = my_row['country']
-        
-        cities.update([name] + alternates)
+
         countries.add(country)
         for city in [name] + alternates:
             cities_to_countries[city].add(country)
-            city_hashes[city].update([name] + alternates)
-            city_hashes[city].add(name)
     else:
         no_country_count += 1
 
-# Generate synonym file for ES
+# Generate synonym and cities to keep and write to ES dir (needs sudo rights)
 file_path_syn = os.path.join(elasticsearch_resource_dir, 'es_city_synonyms.txt')
-file_path_country = os.path.join(elasticsearch_resource_dir, 'es_city_synonyms.txt')
 file_path_keep = os.path.join(elasticsearch_resource_dir, 'es_city_keep.txt')
 with open(file_path_syn, 'w') as w_syn, \
      open(file_path_keep, 'w') as w_keep:
     for i, (name, alternates) in enumerate(name_to_alternates.items()):
         # sea biscuit, sea biscit => seabiscuit
-#        if values and ((len(values)>=2) or (list(values)[0] != key)):
         if name in alternates:
             alternates.remove(name)
         if alternates:
@@ -84,37 +82,28 @@ with open(file_path_syn, 'w') as w_syn, \
             else:
                 string = '\n'
             string += ', '.join(alternates) + ' => ' + name
-            # string = key + ', ' + ', '.join(values) + '\n'
             w_syn.write(string)
         w_keep.write(name + '\n')
         for alternate in alternates:
             w_keep.write(alternate + '\n')
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-assert False
-
-url = 'https://raw.githubusercontent.com/David-Haim/CountriesToCitiesJSON/master/countriesToCities.json'
-
-try:
-    country_to_cities
-except:
-    country_to_cities = json.loads(requests.get(url).content.decode('utf-8'))
-
-all_cities = set()
-city_to_countries = defaultdict(list)
-for country, cities in country_to_cities.items():
+  
+file_path_country = os.path.join(elasticsearch_resource_dir, 'es_city_synonyms.txt')      
     
-    if country != '':
-        all_cities.update(cities)
-        for city in set(cities):
-            city_to_countries[city].append(country)
-    
-    
+#import requests
+#url = 'https://raw.githubusercontent.com/David-Haim/CountriesToCitiesJSON/master/countriesToCities.json'
+#
+#try:
+#    country_to_cities
+#except:
+#    country_to_cities = json.loads(requests.get(url).content.decode('utf-8'))
+#
+#all_cities = set()
+#city_to_countries = defaultdict(list)
+#for country, cities in country_to_cities.items():
+#    
+#    if country != '':
+#        all_cities.update(cities)
+#        for city in set(cities):
+#            city_to_countries[city].append(country)
+#    
+#    
