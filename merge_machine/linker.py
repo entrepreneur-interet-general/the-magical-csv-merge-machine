@@ -16,7 +16,7 @@ from abstract_data_project import AbstractDataProject
 #from dedupe_linker import format_for_dedupe, current_load_gazetteer
 from es_match import Labeller as ESLabeller
 #from labeller import Labeller, DummyLabeller
-from normalizer import ESReferential, UserNormalizer
+from normalizer import ESNormalizer, UserNormalizer
 # from restrict_reference import perform_restriction
 
 from CONFIG import LINK_DATA_PATH
@@ -82,7 +82,7 @@ class Linker(AbstractDataProject):
         
         if file_role == 'ref':
             try:
-                self.ref = ESReferential(self.metadata['files']['ref']['project_id'])
+                self.ref = ESNormalizer(self.metadata['files']['ref']['project_id'])
             except:
                 self.ref = None            
             #raise Exception('Normalizer project with id {0} could not be found'.format(project_id))
@@ -215,7 +215,7 @@ class Linker(AbstractDataProject):
         if public:
             raise DeprecationWarning
         else:
-            proj = ESReferential(project_id)
+            proj = ESNormalizer(project_id)
             
         #        if file_name not in proj.metadata['files']:
         #            raise Exception('File {0} could not be found in project {1} \
@@ -275,7 +275,7 @@ class Linker(AbstractDataProject):
             return self.dedupe_linker(data_params, module_params)
 
     def es_linker(self, module_params):
-        module_params['index_name'] = ESReferential(self.ref.project_id).index_name
+        module_params['index_name'] = ESNormalizer(self.ref.project_id).index_name
         
         self.source.load_data(*self.source.get_last_written())
         self.mem_data = self.source.mem_data
@@ -504,7 +504,7 @@ class Linker(AbstractDataProject):
 
     def create_es_index_ref(self, columns_to_index, force=False):
         
-        self.ref = ESReferential(self.ref.project_id)
+        self.ref = ESNormalizer(self.ref.project_id)
         
         # TODO: Doesn't seem safe..
         (module_name, file_name) = proj.get_last_written(file_name=self.metadata['files']['ref']['file_name'])
@@ -632,7 +632,7 @@ if __name__ == '__main__':
         # Index
         proj.load_project_to_merge('ref')
 
-        ref = ESReferential(proj.ref.project_id)
+        ref = ESNormalizer(proj.ref.project_id)
         
         # ref_path, columns_to_index, force=False)
         ref_path = ref.path_to_last_written()

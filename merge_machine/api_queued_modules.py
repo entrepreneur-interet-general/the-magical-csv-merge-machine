@@ -13,7 +13,7 @@ import os
 curdir = os.path.dirname(os.path.realpath(__file__))
 os.chdir(curdir)
 
-from normalizer import UserNormalizer, ESReferential
+from normalizer import UserNormalizer, ESNormalizer
 from linker import UserLinker
     
     
@@ -242,6 +242,7 @@ def _create_es_index(project_id, data_params, module_params):
                         }
         - module_params: {
                             columns_to_index: 
+                            for_linking: 
                             force: force recreation of index even if existant
                         }
     '''
@@ -252,9 +253,13 @@ def _create_es_index(project_id, data_params, module_params):
     
     columns_to_index = module_params.get('columns_to_index')
     force = module_params.get('force', False)
+    for_linking = module_params.get('for_linking', True)
+    
+    if (not for_linking) and (columns_to_index is not None):
+        raise ValueError('columns_to_index and for_linking cannot be not None and False')
     
     proj = UserLinker(project_id)
-    proj.ref = ESReferential(proj.ref.project_id)
+    proj.ref = ESNormalizer(proj.ref.project_id)
 
     if data_params is None:
         module_name = proj.metadata['files']['ref']['module_name']
@@ -265,7 +270,7 @@ def _create_es_index(project_id, data_params, module_params):
     
     # Default columns_to_index
     if columns_to_index is None:
-        columns_to_index = proj.ref.gen_default_columns_to_index()
+        columns_to_index = proj.ref.gen_default_columns_to_index(for_linking)
     
     file_path = proj.ref.path_to(module_name, file_name)
     proj.ref.create_index(file_path, columns_to_index, force)

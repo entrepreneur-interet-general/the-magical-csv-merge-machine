@@ -167,6 +167,7 @@ def _gen_body(query_template, row, must={}, must_not={}, num_results=3):
                           for s_q_t in query_template if (s_q_t[0] == must_or_should) \
                                       and isinstance(s_q_t[2], str)
                         ] \
+    
                         + [
                           {'multi_match': {
                                   'fields': [col + s_q_t[3] for col in s_q_t[2]], 
@@ -178,13 +179,14 @@ def _gen_body(query_template, row, must={}, must_not={}, num_results=3):
                                       and (isinstance(s_q_t[2], tuple) or isinstance(s_q_t[2], list))
                         ] \
                 for must_or_should in ['must', 'should']
-                        },
-                        **{
-                           'must_not': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' OR '.join(values)}}
-                                     } for field, values in must_not.items()],
-                           'filter': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' AND '.join(values)}} # TODO: french?
-                                     } for field, values in must.items()],
-                        })               
+                },
+    
+                    **{
+                       'must_not': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' OR '.join(values)}}
+                                 } for field, values in must_not.items()],
+                       'filter': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' AND '.join(values)}} # TODO: french?
+                                 } for field, values in must.items()],
+                    })               
                   }
            }
     return body
@@ -363,8 +365,8 @@ def _gen_bulk(table_name, search_templates, must, must_not, num_results, chunk_s
     OUTPUT:
         - bulk_body: string containing queries formated for ES
         - queries: list of queries
-    
     '''
+    
     queries = []
     bulk_body = ''
     i = 0

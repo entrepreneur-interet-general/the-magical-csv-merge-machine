@@ -98,6 +98,18 @@ def _gen_index_settings(index_settings_template, columns_to_index):
     Creates the dict to pass to index creation based on the columns_to_index
     
     NB: the default analyzer is keyword
+    
+    INPUT:
+        - columns_to_index. For:
+            {
+            "Name": {
+                    'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
+                    }, 
+            "City": {
+                    'french', 'whitespace', 'integers'
+                    },
+            "ID": {}
+            }
     '''
     index_settings = copy.deepcopy(index_settings_template)
     
