@@ -1882,10 +1882,7 @@ def generate_value_matchers(lvl = 1):
 		yield RegexMatcher(F_ACADEMIE, "acad.mie", ignoreCase = True)
 		yield LabelMatcher(F_ACADEMIE, academy_labels, MATCH_MODE_EXACT, stopWords = ['académie'])    # SIES/APB
 		yield TokenizedMatcher(F_ACADEMIE, academy_labels, distinctCount = 3)
-	if lvl >= 0: 
-		yield VocabMatcher(F_ETAB_NOTSUP, file_to_set('etab_1er_2nd_degres.vocab'), ignoreCase = True, partial = False)
-		yield VocabMatcher(F_ETAB_ENSSUP, file_to_set('etab_enssup.vocab'), ignoreCase = True, partial = False)
-	if lvl >= 1:
+	if lvl >= 2:
 		lycees_synMap = {
 			'Lycée général et technologique' : 'Lycée',
 			'Lycée polyvalent' : 'Lycée',
@@ -1895,11 +1892,15 @@ def generate_value_matchers(lvl = 1):
 		lycees_stopWords = ['privé', 'privée', 'public', 'publique']
 		yield LabelMatcher(F_ETAB_NOTSUP, file_to_set('etab_1er_2nd_degres'), MATCH_MODE_EXACT, 
 			stopWords = STOP_WORDS + lycees_stopWords, synMap = lycees_synMap)
-	if lvl >= 0: 
+	else:
+		yield VocabMatcher(F_ETAB_NOTSUP, file_to_set('etab_1er_2nd_degres.vocab'), ignoreCase = True, partial = False)
+	if lvl >= 2:
+		yield TokenizedMatcher(F_ETAB_ENSSUP, file_to_set('etab_enssup'), maxTokens = 6)
+	elif lvl >= 1:
 		yield VocabMatcher(F_ETAB_ENSSUP, file_to_set('etab_enssup.vocab'), ignoreCase = True, partial = True, 
 			matcher = VariantExpander('etab_enssup.syn', targetType = F_ETAB_ENSSUP, keepContext = False, domainType = F_MESR))
-	if lvl >= 1:
-		yield TokenizedMatcher(F_ETAB_ENSSUP, file_to_set('etab_enssup'), maxTokens = 6)
+	else:
+		yield VocabMatcher(F_ETAB_ENSSUP, file_to_set('etab_enssup.vocab'), ignoreCase = True, partial = False)
 	yield SubtypeMatcher(F_ETAB, [F_ETAB_NOTSUP, F_ETAB_ENSSUP])
 	if lvl >= 1: 
 		yield LabelMatcher(F_APB_MENTION, file_to_set('mention_licence_sise'), MATCH_MODE_EXACT)
