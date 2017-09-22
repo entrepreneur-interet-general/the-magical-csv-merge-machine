@@ -97,9 +97,18 @@ file_path_country = os.path.join(elasticsearch_resource_dir, 'es_city_synonyms.t
 # 
 # =============================================================================
 
-['lycée', 'collège', 'université', 'département', 'académie', 'école', 'institut', 'laboratoire', 'centre']
+[['lycée', 'lyc', 'préparatoire', 'prépa', 'cpge'], 
+ ['collège'], 
+ ['université', 'iut'],
+ ['école'], 
+ ['maternelle'],
+ ['primaire'], 
+ ['laboratoire', 'labo'], 
+ ['institut', 'département']]
 
-['agence', 'association', 'fédération']
+[['agence', 'département'], 
+ ['association', 'groupement'], 
+ ['fédération']]
 
 
 #import requests
