@@ -395,6 +395,7 @@ F_ARTICLE_CONTENT = u'Contenu d\'article'
 F_PUBLI_ID = u'ID publication'
 F_DOI = u'DOI'
 
+F_CORPS_GRADE = u'Corps et Grades'
 F_MESR = u'Entité MESR'
 F_NNS = u'Numéro National de Structure'
 F_UAI = u'UAI'
@@ -470,6 +471,7 @@ TYPE_TAGS = {
 	F_ETAB: [u'Enseignement'],
 	F_ETAB_NOTSUP: [u'Primaire', u'Secondaire', u'Lycée', u'Collège'],
 	F_ETAB_ENSSUP: [u'Enseignement supérieur'],
+	F_CORPS_GRADE: [u'Corps', u'Grade', u'Fonction publique'],
 	F_PHYTO: [u'Agro'],
 	F_AGRO: [u'Agro'],
 	F_MEDICAL_SPEC: [u'Médecine'],
@@ -1857,6 +1859,10 @@ def generate_value_matchers(lvl = 1):
 	yield SubtypeMatcher(F_DATE, [F_YEAR])
 	yield SubtypeMatcher(F_STRUCTURED_TYPE, [F_DATE, F_URL, F_EMAIL, F_PHONE])
 
+	# Fonction publique
+	if lvl >= 0: 
+		yield LabelMatcher(F_CORPS_GRADE, file_to_set('n_corps.col'), MATCH_MODE_EXACT)
+
 	# MESR Domain
 
 	## Recherche
@@ -1954,8 +1960,6 @@ def generate_value_matchers(lvl = 1):
 	elif lvl >= 0: 
 		yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT, stopWords = STOP_WORDS_CITY, synMap = { 'st': 'saint' })
 		yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
-
-
 
 	if lvl >= 2:
 		yield TokenizedMatcher(F_DPT, file_to_set('departement'), distinctCount = 7)
