@@ -582,6 +582,8 @@ class StdnumMatcher(TypeMatcher):
 		if self.validator(nv):
 			nv0 = self.normalizer(nv)
 			self.register_full_match(c, self.t, 100, nv0)
+		else:
+			raise TypeError('{} stdnum matcher did not validate "{}"'.format(self, c))
 
 # Regex-based matcher-normalizer class
 
@@ -1354,14 +1356,20 @@ class CustomTelephoneMatcher(TypeMatcher):
 		self.partial = partial
 	@timed
 	def match(self, c):
+		matched = False
 		if partial:
 			for match in phonenumbers.PhoneNumberMatcher(c.value, 'FR'):
 				# original string is in match.raw_string
 				self.register_partial_match(c, self.t, 100, normalize_phone_number(match.number), (match.start, match.end))
+				matched = True
 		else:
 			z = phonenumbers.parse(c.value, 'FR')
 			score = score_phone_number(z)
-			if score > 0: self.register_full_match(c, self.t, score, normalize_phone_number(z))
+			if score > 0: 
+				self.register_full_match(c, self.t, score, normalize_phone_number(z))
+				matched = True
+		if not matched:
+			raise TypeError('Value "{}" did not match as phone number'.format(c.value))
 
 # Various regexes for strict type matchers
 PAT_EMAIL = "[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
@@ -2011,7 +2019,7 @@ def generate_value_matchers(lvl = 1):
 			matcher = VariantExpander('org_rnsr.syn', targetType = F_RD_STRUCT, keepContext = True, domainType = F_RD_DOMAIN))
 
 	# Spot acronyms on-the-fly
-	if lvl >= 1: 
+	if lvl >= 2: 
 		yield AcronymMatcher()
 
 def all_data_types():
