@@ -483,7 +483,8 @@ def es_linker(source, params):
     threshold = params['thresh']
     exact_pairs = params.get('exact_pairs', [])
     
-    exact_source_indexes = [x[0] for x in exact_pairs]
+    exact_source_indexes = [x[0] for x in exact_pairs if x[1] is not None]
+    exact_ref_indexes = [x[1] for x in exact_pairs if x[1] is not None]
     source_indexes = (x[0] for x in source.iterrows() if x [0] not in exact_source_indexes)    
     
     # Perform matching on non-exact pairs (not labelled)
@@ -515,9 +516,11 @@ def es_linker(source, params):
         matches_in_ref = pd.DataFrame()
     
     # Perform matching exact (labelled) pairs
-    if exact_source_indexes:
-        exact_ref_indexes = [x[1] for x in exact_pairs]
-        full_responses = [es.get(table_name, ref_idx) for ref_idx in exact_ref_indexes]
+    if exact_ref_indexes:
+        try:
+            full_responses = [es.get(table_name, ref_idx) for ref_idx in exact_ref_indexes]
+        except:
+            import pdb; pdb.set_trace()
         exact_matches_in_ref = pd.DataFrame([f_r['_source'] for f_r in full_responses], 
                                             index=exact_source_indexes)
         exact_matches_in_ref.columns = [x + '__REF' for x in exact_matches_in_ref.columns]
