@@ -575,7 +575,7 @@ class ESNormalizer(UserNormalizer):
         
     def gen_default_columns_to_index(self, for_linking=True):
         if for_linking:
-            analyzers = {'french', 'whitespace', 'integers', 'city', 'n_grams'} # TODO: removed end_ngrams
+            analyzers = {'my_french', 'standard', 'whitespace', 'integers', 'city', 'organization', 'n_grams'} # TODO: removed end_ngrams
         else:
             analyzers = {}
         column_tracker = self.metadata['column_tracker']

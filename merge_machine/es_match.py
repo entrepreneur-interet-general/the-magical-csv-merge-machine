@@ -429,6 +429,7 @@ def perform_queries(table_name, all_query_templates, rows, must, must_not, num_r
         i += 1
         
         if i >= 10:
+            import pdb; pdb.set_trace()
             raise Exception('Problem with elasticsearch: could not perform all queries in 10 trials')
             
     return og_search_templates, full_responses

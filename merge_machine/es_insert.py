@@ -7,6 +7,8 @@ Created on Tue Aug 29 13:15:15 2017
 
 Deals with inserting a table in Elasticsearch
 
+TODO: look into missing document
+
 """
 from distutils.version import LooseVersion
 import json
@@ -85,7 +87,7 @@ if __name__ == '__main__':
         'SIREN': {},
         'NIC': {},
         'L1_NORMALISEE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
+            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city', 'organization'
         },
         'L4_NORMALISEE': {
             'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'

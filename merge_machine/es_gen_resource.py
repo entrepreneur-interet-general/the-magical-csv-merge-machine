@@ -71,33 +71,38 @@ for i, row in enumerate(res):
     else:
         no_country_count += 1
 
+def write_keep_syn(name_alt_gen, file_path_keep, file_path_syn):
+    with open(file_path_syn, 'w') as w_syn, \
+         open(file_path_keep, 'w') as w_keep:
+        for name, alternates in name_alt_gen:
+            # sea biscuit, sea biscit => seabiscuit
+            if name in alternates:
+                alternates = set(alternates)
+                alternates.remove(name)
+            if alternates:
+                string = ', '.join(alternates) + ' => ' + name + '\n'
+                w_syn.write(string)
+            w_keep.write(name + '\n')
+            for alternate in alternates:
+                w_keep.write(alternate + '\n')
+
 # Generate synonym and cities to keep and write to ES dir (needs sudo rights)
-file_path_syn = os.path.join(elasticsearch_resource_dir, 'es_city_synonyms.txt')
 file_path_keep = os.path.join(elasticsearch_resource_dir, 'es_city_keep.txt')
-with open(file_path_syn, 'w') as w_syn, \
-     open(file_path_keep, 'w') as w_keep:   
-    for i, (name, alternates) in enumerate(name_to_alternates.items()):
-        # sea biscuit, sea biscit => seabiscuit
-        if name in alternates:
-            alternates.remove(name)
-        if alternates:
-            if i == 0:
-                string = ''
-            else:
-                string = '\n'
-            string += ', '.join(alternates) + ' => ' + name
-            w_syn.write(string)
-        w_keep.write(name + '\n')
-        for alternate in alternates:
-            w_keep.write(alternate + '\n')
+file_path_syn = os.path.join(elasticsearch_resource_dir, 'es_city_synonyms.txt')
+
+name_alt_gen = name_to_alternates.items()
+write_keep_syn(name_alt_gen, file_path_keep, file_path_syn)
+
   
 file_path_country = os.path.join(elasticsearch_resource_dir, 'es_city_synonyms.txt')      
     
 # =============================================================================
 # 
 # =============================================================================
+file_path_keep = os.path.join(elasticsearch_resource_dir, 'es_organization_keep.txt') 
+file_path_syn = os.path.join(elasticsearch_resource_dir, 'es_organization_synonyms.txt')
 
-[['lycée', 'lyc', 'préparatoire', 'prépa', 'cpge'], 
+org_data = [['lycée', 'lyc', 'préparatoire', 'prépa', 'cpge'], 
  ['collège'], 
  ['université', 'iut'],
  ['école'], 
@@ -105,6 +110,11 @@ file_path_country = os.path.join(elasticsearch_resource_dir, 'es_city_synonyms.t
  ['primaire'], 
  ['laboratoire', 'labo'], 
  ['institut', 'département']]
+
+write_keep_syn(zip([x[0] for x in org_data], org_data), file_path_keep, file_path_syn)
+    
+
+
 
 [['agence', 'département'], 
  ['association', 'groupement'], 

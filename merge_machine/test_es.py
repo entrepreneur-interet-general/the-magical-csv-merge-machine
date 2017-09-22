@@ -99,32 +99,32 @@ if test_num in [0,1,2]:
         'SIREN': {},
         'NIC': {},
         'L1_NORMALISEE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'my_organization'
         },
         'L4_NORMALISEE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
         },
         'L6_NORMALISEE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
         },
         'L1_DECLAREE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
         },
         'L4_DECLAREE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
         },
         'L6_DECLAREE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
         },
         'LIBCOM': {
-            'french', 'whitespace', 'end_n_grams', 'n_grams'
+            'my_french', 'whitespace', 'end_n_grams', 'n_grams', 'my_city'
         },
         'CEDEX': {},
         'ENSEIGNE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
         },
         'NOMEN_LONG': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
         },
         #Keyword only 'LIBNATETAB': {},
         'LIBAPET': {},
