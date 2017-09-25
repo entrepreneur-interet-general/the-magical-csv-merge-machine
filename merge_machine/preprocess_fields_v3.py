@@ -395,6 +395,7 @@ F_ARTICLE_CONTENT = u'Contenu d\'article'
 F_PUBLI_ID = u'ID publication'
 F_DOI = u'DOI'
 
+F_CORPS_GRADE = u'Corps et Grades'
 F_MESR = u'Entité MESR'
 F_NNS = u'Numéro National de Structure'
 F_UAI = u'UAI'
@@ -470,6 +471,7 @@ TYPE_TAGS = {
 	F_ETAB: [u'Enseignement'],
 	F_ETAB_NOTSUP: [u'Primaire', u'Secondaire', u'Lycée', u'Collège'],
 	F_ETAB_ENSSUP: [u'Enseignement supérieur'],
+	F_CORPS_GRADE: [u'Corps', u'Grade', u'Fonction publique'],
 	F_PHYTO: [u'Agro'],
 	F_AGRO: [u'Agro'],
 	F_MEDICAL_SPEC: [u'Médecine'],
@@ -505,10 +507,12 @@ class TypeMatcher(object):
 		self.update_diversity(hit)
 	@timed
 	def match_all_field_values(self, f):
-		error_count = 0
-		fatal_count = 0
+		error_values = Counter()
+		fatal_values = Counter()
 		values_seen = 0
 		for vc in f.cells:
+			error_count = sum(error_values.values())
+			fatal_count = sum(fatal_values.values())
 			if values_seen >= 100 and (error_count + fatal_count) * 100 > values_seen * MAX_ERROR_RATE:
 				logging.warning('{}: bailing out after {} total matching errors'.format(self, error_count + fatal_count))
 				break
@@ -516,30 +520,41 @@ class TypeMatcher(object):
 				logging.warning('{}: bailing out after {} fatal matching errors'.format(self, fatal_count))
 				break
 			values_seen += 1
+			v = vc.value
+			if v in fatal_values:
+				fatal_values[v] += 1
+				continue
+			elif v in error_values:
+				error_values[v] += 1
+				continue
 			try :
 				self.match(vc)
 			# Handling non-fatal errors
 			except ValueError as ve:
 				logging.warning('{}: value error for "{}": {}'.format(self, vc.value, ve))
-				if FAIL_FAST_MODE: fatal_count += 1
-				else: error_count += 1
+				if FAIL_FAST_MODE: 
+					fatal_values[v] += 1
+				else: 
+					error_values[v] += 1
 			except OverflowError as oe:
 				logging.error('{} : overflow error (e.g. while parsing date) for "{}": {}'.format(self, vc.value, oe))
-				if FAIL_FAST_MODE: fatal_count += 1
-				else: error_count += 1
+				if FAIL_FAST_MODE: 
+					fatal_values[v] += 1
+				else: 
+					error_values[v] += 1
 			# Handling fatal errors
 			except RuntimeError as rte:
 				logging.warning('{}: runtime error for "{}": {}'.format(self, vc.value, rte))
-				fatal_count += 1
+				fatal_values[v] += 1
 			except TypeError as te:
 				logging.warning('{}: type or parsing error for "{}": {}'.format(self, vc.value, te))
-				fatal_count += 1
+				fatal_values[v] += 1
 			except UnicodeDecodeError as ude:
 				logging.error('{} : unicode error while parsing input value "{}": {}'.format(self, vc.value, ude))
-				fatal_count += 1
+				fatal_values[v] += 1
 			except urllib.error.URLError as ue:
 				logging.warning('{}: request rejected for "{}": {}'.format(self, vc.value, ue))
-				fatal_count += 1
+				fatal_values[v] += 1
 	def update_diversity(self, hit):
 		self.diversion |= set(hit if isinstance(hit, list) else [hit])
 	def check_diversity(self, cells):
@@ -582,6 +597,8 @@ class StdnumMatcher(TypeMatcher):
 		if self.validator(nv):
 			nv0 = self.normalizer(nv)
 			self.register_full_match(c, self.t, 100, nv0)
+		else:
+			raise TypeError('{} stdnum matcher did not validate "{}"'.format(self, c))
 
 # Regex-based matcher-normalizer class
 
@@ -1354,14 +1371,20 @@ class CustomTelephoneMatcher(TypeMatcher):
 		self.partial = partial
 	@timed
 	def match(self, c):
+		matched = False
 		if partial:
 			for match in phonenumbers.PhoneNumberMatcher(c.value, 'FR'):
 				# original string is in match.raw_string
 				self.register_partial_match(c, self.t, 100, normalize_phone_number(match.number), (match.start, match.end))
+				matched = True
 		else:
 			z = phonenumbers.parse(c.value, 'FR')
 			score = score_phone_number(z)
-			if score > 0: self.register_full_match(c, self.t, score, normalize_phone_number(z))
+			if score > 0: 
+				self.register_full_match(c, self.t, score, normalize_phone_number(z))
+				matched = True
+		if not matched:
+			raise TypeError('Value "{}" did not match as phone number'.format(c.value))
 
 # Various regexes for strict type matchers
 PAT_EMAIL = "[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
@@ -1593,7 +1616,7 @@ class FrenchAddressMatcher(LabelMatcher):
 	@timed
 	def match(self, c):
 		v = c.value_to_match()
-		if len(v) < 1: return
+		if len(v) < 4: return
 		response = urllib.request.urlopen("http://api-adresse.data.gouv.fr/search/?q=" + urllib.parse.quote_plus(v))
 		resp = response.read().decode('utf-8')
 		data = json.loads(resp)
@@ -1836,6 +1859,10 @@ def generate_value_matchers(lvl = 1):
 	yield SubtypeMatcher(F_DATE, [F_YEAR])
 	yield SubtypeMatcher(F_STRUCTURED_TYPE, [F_DATE, F_URL, F_EMAIL, F_PHONE])
 
+	# Fonction publique
+	if lvl >= 0: 
+		yield LabelMatcher(F_CORPS_GRADE, file_to_set('n_corps.col'), MATCH_MODE_EXACT)
+
 	# MESR Domain
 
 	## Recherche
@@ -1934,8 +1961,6 @@ def generate_value_matchers(lvl = 1):
 		yield LabelMatcher(F_CITY, COMMUNE_LEXICON, MATCH_MODE_EXACT, stopWords = STOP_WORDS_CITY, synMap = { 'st': 'saint' })
 		yield RegexMatcher(F_CITY, "(commune|ville) +de+ ([A-Za-z /\-]+)", g = 1, ignoreCase = True, partial = True)
 
-
-
 	if lvl >= 2:
 		yield TokenizedMatcher(F_DPT, file_to_set('departement'), distinctCount = 7)
 		yield TokenizedMatcher(F_REGION, file_to_set('region'), distinctCount = 3)
@@ -2011,7 +2036,7 @@ def generate_value_matchers(lvl = 1):
 			matcher = VariantExpander('org_rnsr.syn', targetType = F_RD_STRUCT, keepContext = True, domainType = F_RD_DOMAIN))
 
 	# Spot acronyms on-the-fly
-	if lvl >= 1: 
+	if lvl >= 2: 
 		yield AcronymMatcher()
 
 def all_data_types():

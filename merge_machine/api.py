@@ -125,8 +125,8 @@ from worker import conn, VALID_QUEUES
 
 from admin import Admin
 from my_json_encoder import MyEncoder
-from normalizer import ESNormalizer, UserNormalizer, MINI_PREFIX
-from linker import UserLinker
+from normalizer import ESNormalizer, ESNormalizer, MINI_PREFIX
+from linker import ESLinker
 
 #==============================================================================
 # INITIATE APPLICATION
@@ -232,7 +232,7 @@ def _init_project(project_type,
     _check_project_type(project_type)
     
     if project_type == 'link':
-        proj = UserLinker(project_id=project_id, 
+        proj = ESLinker(project_id=project_id, 
                           create_new=create_new, 
                           display_name=display_name, 
                           description=description)
@@ -301,9 +301,9 @@ def new_project(project_type):
         raise Exception('Public projects should have a description')
 
     if project_type == 'normalize':
-        proj = UserNormalizer(create_new=True, description=description, display_name=display_name, public=public)
+        proj = ESNormalizer(create_new=True, description=description, display_name=display_name, public=public)
     else:
-        proj = UserLinker(create_new=True, description=description, display_name=display_name, public=public)
+        proj = ESLinker(create_new=True, description=description, display_name=display_name, public=public)
 
     
     return jsonify(error=False, 
@@ -323,7 +323,7 @@ def delete_project(project_type, project_id):
     if project_type == 'normalize':
         proj = ESNormalizer(project_id=project_id)
     else:
-        proj = UserLinker(project_id=project_id)
+        proj = ESLinker(project_id=project_id)
     proj.delete_project()
     return jsonify(error=False)
 
@@ -625,7 +625,7 @@ def add_selected_columns(project_id):
         
     """
     selected_columns = request.json['columns']
-    proj = UserNormalizer(project_id=project_id)
+    proj = ESNormalizer(project_id=project_id)
     proj.add_selected_columns(selected_columns)    
     return jsonify(error=False)
 
@@ -652,7 +652,7 @@ def upload(project_id):
             - randomize
     '''
     # Load project
-    proj = UserNormalizer(project_id=project_id) 
+    proj = ESNormalizer(project_id=project_id) 
     _, module_params = _parse_request()   
     if module_params is None:
         module_params = {}
@@ -722,7 +722,7 @@ def make_mini(project_id):
                         }
     '''
     data_params, module_params = _parse_request()   
-    proj = UserNormalizer(project_id=project_id)
+    proj = ESNormalizer(project_id=project_id)
     
     proj.load_data(data_params['module_name'], data_params['file_name'])
     proj.make_mini(module_params)
@@ -750,7 +750,7 @@ def select_file(project_id):
         - file_role: "ref" or "source". Role of the normalized file for linking
         - project_id: ID of the "normalize" project to use for linking
     '''
-    proj = UserLinker(project_id)
+    proj = ESLinker(project_id)
     params = request.json
     proj.add_selected_project(file_role=params['file_role'], 
                            public=params.get('public', False),
@@ -764,7 +764,7 @@ def add_column_matches(project_id):
     """
     Add pairs of columns to compare for linking.
     
-    wrapper around UserLinker.add_col_matches
+    wrapper around ESLinker.add_col_matches
     
     GET: 
         - project_id: ID for the "link" project
@@ -773,7 +773,7 @@ def add_column_matches(project_id):
         - column_matches: [list object] column matches (see doc in original function)
     """
     column_matches = request.json['column_matches']
-    proj = UserLinker(project_id=project_id)
+    proj = ESLinker(project_id=project_id)
     proj.add_col_matches(column_matches)
     return jsonify(error=False)
     
@@ -785,7 +785,7 @@ def add_column_certain_matches(project_id):
     Specify certain column matches (exact match on a subset of columns equivalent 
     to entity identity). This is used to test performances.
     
-    wrapper around UserLinker.add_col_certain_matches
+    wrapper around ESLinker.add_col_certain_matches
     
     GET:
         - project_id: ID for "link" project
@@ -795,7 +795,7 @@ def add_column_certain_matches(project_id):
     
     '''
     column_matches = request.json['column_certain_matches']
-    proj = UserLinker(project_id=project_id)
+    proj = ESLinker(project_id=project_id)
     proj.add_col_certain_matches(column_matches)
     return jsonify(error=False)
 
@@ -809,14 +809,14 @@ def add_columns_to_return(project_id, file_role):
     
     # TODO: shouldn't this be for normalize also ?
     
-    wrapper around UserLinker.add_cols_to_return
+    wrapper around ESLinker.add_cols_to_return
     
     GET:
         project_id: ID for "link" project
         file_role: "ref" or "source"
     '''
     columns_to_return = request.json
-    proj = UserLinker(project_id=project_id)
+    proj = ESLinker(project_id=project_id)
     proj.add_cols_to_return(file_role, columns_to_return)    
     return jsonify(error=False)
 
@@ -833,7 +833,7 @@ def load_labeller(message_received):
     
     # TODO: put variables in memory
     # TODO: remove from memory at the end
-    proj = UserLinker(project_id=project_id)
+    proj = ESLinker(project_id=project_id)
     paths = proj._gen_paths_es() 
     
     # Create flask labeller memory if necessary and add current labeller
@@ -901,7 +901,7 @@ def complete_training(message_received):
     message_received = json.loads(message_received)
     logging.info(message_received)
     project_id = message_received['project_id']
-    proj = UserLinker(project_id)
+    proj = ESLinker(project_id)
 
     logging.info('Writing train')
     learned_settings = flask._app_ctx_stack.labeller_mem[project_id]['labeller'].export_best_params()

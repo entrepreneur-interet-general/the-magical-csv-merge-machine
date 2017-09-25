@@ -24,18 +24,19 @@ METHODS:
 """
 from collections import defaultdict
 import copy
-import csv
 import gc
+import json
 import logging
 from itertools import tee
 import os
 import time
 
+from elasticsearch import Elasticsearch, client
 import numpy as np
 import pandas as pd
 
 from abstract_project import AbstractProject, NOT_IMPLEMENTED_MESSAGE
-
+import es_insert
 
 MINI_PREFIX = 'MINI__'
 
@@ -642,3 +643,84 @@ class AbstractDataProject(AbstractProject):
 #        run_info['end_timestamp'] = log['end_timestamp']
         
         return log, run_info
+    
+class ESAbstractDataProject(AbstractDataProject):
+    es_insert_chunksize = 100
+    es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
+    ic = client.IndicesClient(es)
+
+    def __init__(self, *argv, **kwargs):
+        super().__init__(*argv, **kwargs)
+        self.index_name = self.project_id
+    
+    def fetch_by_id(self, size=5, from_=0):
+        '''For an indexed table'''
+        
+        ids = range(from_, from_+size)
+        
+        bulk = ''
+        for id_ in ids:
+            bulk += json.dumps({"index" : self.index_name}) + '\n'
+            bulk += json.dumps({"query" : {"match" : {"_id": id_}}, "size": 1}) + '\n'
+            
+        res = self.es.msearch(bulk)
+        return res
+        
+    
+    def create_index(self, ref_path, columns_to_index, force=False):
+        '''
+        INPUT:
+            - ref_path: path to the file to index
+            - columns_to_index
+        '''
+        testing = True      
+        
+        ref_gen = pd.read_csv(ref_path, 
+                          usecols=columns_to_index.keys(),
+                          dtype=str, chunksize=self.es_insert_chunksize)
+        
+       
+        if self.has_index() and force:
+            self.ic.delete(self.index_name)
+            
+            
+        
+        if not self.ic.exists(self.index_name):
+            log = self._init_active_log('INIT', 'transform')
+            
+            index_settings = es_insert.gen_index_settings(columns_to_index)
+            self.ic.create(self.index_name, body=json.dumps(index_settings))  
+            es_insert.index(ref_gen, self.index_name, testing)
+        
+            log = self._end_active_log(log, error=False)
+        self._write_log_buffer(written=False)
+    
+    def delete_index(self):
+        return self.ic.delete(self.index_name)
+        
+    def has_index(self):
+        return self.ic.exists(self.index_name)     
+    
+    def index_is_complete(self):
+        pass
+        #TODO: Check if thing is thinged
+        
+    #    def add_columns_to_index(self, columns_to_index):
+    #        self.metadata[columns_to_index] = self.columns_to_index
+        
+    def gen_default_columns_to_index(self, for_linking=True):
+        if for_linking:
+            analyzers = {'french', 'whitespace', 'integers', 'city', 'n_grams'} # TODO: removed end_ngrams
+        else:
+            analyzers = {}
+        column_tracker = self.metadata['column_tracker']
+        columns_to_index = {col: analyzers if col in column_tracker['selected'] \
+                            else {} for col in column_tracker['original']}   
+        return columns_to_index
+        
+    
+    def delete_project(self):
+        '''Deletes entire folder containing the project'''
+        if self.has_index():
+            self.delete_index()
+        super().delete_project()
