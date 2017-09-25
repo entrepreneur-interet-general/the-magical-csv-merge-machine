@@ -260,7 +260,7 @@ def _create_es_index(project_id, data_params, module_params):
 
 
     # TODO: dirty fix for linking and normalization
-    try:    
+    if for_linking:    
         proj_link = ESLinker(project_id)
         proj = ESNormalizer(proj_link.ref.project_id)
         if data_params is None:
@@ -269,8 +269,9 @@ def _create_es_index(project_id, data_params, module_params):
         else:
             module_name = data_params['module_name']
             file_name = data_params['file_name']
-    except:
-        proj = ESNormalizer(project_id)
+            
+    else:
+        proj = ESLinker(project_id)
         if data_params is None:
             module_name, file_name = proj.get_last_written()
         else:
