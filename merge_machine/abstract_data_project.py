@@ -152,6 +152,11 @@ class AbstractDataProject(AbstractProject):
             self._write_metadata()
 
 
+    def _get_header(self, module_name, file_name):
+        #TODO: this is a cheap fix for a specific use. DO NOT USE
+        file_path = self.path_to(module_name, file_name)
+        return list(pd.read_csv(file_path, encoding='utf-8').columns)
+
     def upload_init_data(self, file, file_name, user_given_name=None):
         raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
 
@@ -709,14 +714,22 @@ class ESAbstractDataProject(AbstractDataProject):
     #    def add_columns_to_index(self, columns_to_index):
     #        self.metadata[columns_to_index] = self.columns_to_index
         
-    def gen_default_columns_to_index(self, for_linking=True):
+    def gen_default_columns_to_index(self, for_linking=True, columns_to_index=None):
         if for_linking:
             analyzers = {'french', 'whitespace', 'integers', 'city', 'n_grams'} # TODO: removed end_ngrams
         else:
             analyzers = {}
-        column_tracker = self.metadata['column_tracker']
-        columns_to_index = {col: analyzers if col in column_tracker['selected'] \
-                            else {} for col in column_tracker['original']}   
+        
+        if (not for_linking) and (columns_to_index is None):
+            raise ValueError('if NOT for_linking, you should specify the columns_to_index')
+            
+        # TODO: cheap fix
+        if for_linking and (columns_to_index is None):
+            column_tracker = self.metadata['column_tracker']
+            columns_to_index = {col: analyzers if col in column_tracker['selected'] \
+                                else {} for col in column_tracker['original']}
+            
+        
         return columns_to_index
         
     

@@ -448,6 +448,25 @@ def link_pipeline(params):
     url_to_append = '/queue/result/{0}'.format(job_id)
     resp = wait_get_resp(url_to_append, max_wait=600)
     
+    # =============================================================================
+    # Index result of linking     
+    # =============================================================================
+    url_to_append = '/api/schedule/create_es_index/{0}/'.format(project_id)
+    body = {
+            'module_params': {'columns_to_index_is_none': None,
+                              'for_linking': False,
+                              'force': False}
+            }
+    resp = post_resp(url_to_append, body)
+    job_id = resp['job_id']
+
+    #==============================================================================
+    # --> Wait for job result
+    #==============================================================================
+    url_to_append = '/queue/result/{0}'.format(job_id)
+    resp = wait_get_resp(url_to_append, max_wait=10000)
+    
+    
     #==============================================================================
     # --> Analyze results
     #==============================================================================
@@ -547,5 +566,8 @@ if __name__ == '__main__':
 
 
    
-    
+     
+    print('source_project_id:', source_project_id)
+    print('ref_project_id:', ref_project_id)
+    print('link_project_id:', link_project_id)   
     

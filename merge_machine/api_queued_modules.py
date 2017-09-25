@@ -270,17 +270,23 @@ def _create_es_index(project_id, data_params, module_params):
             module_name = data_params['module_name']
             file_name = data_params['file_name']
             
+        
+        # Default columns_to_index
+        if columns_to_index is None:
+            columns_to_index = proj.gen_default_columns_to_index(for_linking)
+            
     else:
         proj = ESLinker(project_id)
         if data_params is None:
             module_name, file_name = proj.get_last_written()
         else:
             module_name = data_params['module_name']
-            file_name = data_params['file_name']        
+            file_name = data_params['file_name']    
+            
+        if columns_to_index is None:
+            columns_to_index = {col: {} for col in proj._get_header(module_name, file_name)}
 
-    # Default columns_to_index
-    if columns_to_index is None:
-        columns_to_index = proj.gen_default_columns_to_index(for_linking)
+
         
     file_path = proj.path_to(module_name, file_name)
     proj.create_index(file_path, columns_to_index, force)
