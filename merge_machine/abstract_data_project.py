@@ -683,9 +683,8 @@ class ESAbstractDataProject(AbstractDataProject):
         if self.has_index() and force:
             self.ic.delete(self.index_name)
             
-            
-        
-        if not self.ic.exists(self.index_name):
+        if not self.has_index():
+            logging.info('Creating new index')
             log = self._init_active_log('INIT', 'transform')
             
             index_settings = es_insert.gen_index_settings(columns_to_index)
@@ -693,6 +692,8 @@ class ESAbstractDataProject(AbstractDataProject):
             es_insert.index(ref_gen, self.index_name, testing)
         
             log = self._end_active_log(log, error=False)
+        else:
+            logging.info('Index already exists')
         self._write_log_buffer(written=False)
     
     def delete_index(self):
