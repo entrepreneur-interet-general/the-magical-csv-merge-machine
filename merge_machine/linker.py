@@ -20,10 +20,11 @@ from normalizer import ESNormalizer
 # from restrict_reference import perform_restriction
 
 from CONFIG import LINK_DATA_PATH
-from MODULES import LINK_MODULES, LINK_MODULE_ORDER_log
+from MODULES import LINK_MODULES, LINK_MODULE_ORDER, LINK_MODULE_ORDER_log
 
 class Linker(ESAbstractDataProject):
     MODULES = LINK_MODULES
+    MODULE_ORDER = LINK_MODULE_ORDER
     MODULE_ORDER_log = LINK_MODULE_ORDER_log
     
     def __init__(self, 
