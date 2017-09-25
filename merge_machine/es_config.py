@@ -87,21 +87,21 @@ filters = {
         "keep_words_case": True,
         "keep_words_path": organization_keep_file_path      
     },
-            
+
     "my_org_stop":{
         "type" : "stop",
         "ignore_case": True,
         "stopwords_path": organization_keep_file_path      
     },
-            
+
     "my_org_synonym" : {
         "type" : "synonym", 
         "expand": False,    
         "ignore_case": True,
         "synonyms_path" : organization_syn_file_path,
         "tokenizer" : "my_standard"  # TODO: whitespace? 
-    },         
-            
+    },   
+
 # =============================================================================
 # City filters
 # =============================================================================
@@ -110,13 +110,13 @@ filters = {
         "keep_words_case": True, # Lower the words
         "keep_words_path" : city_keep_file_path
     },
-
+            
     "my_city_stop":{
         "type" : "stop",
         "ignore_case": True,
         "stopwords_path": city_keep_file_path      
-    },          
-            
+    },
+      
     "my_city_synonym" : {
         "type" : "synonym", 
         "expand": False,    

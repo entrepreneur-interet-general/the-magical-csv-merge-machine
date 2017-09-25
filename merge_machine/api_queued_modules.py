@@ -251,6 +251,7 @@ def _create_es_index(project_id, data_params, module_params):
     if module_params is None:
         module_params = {}
     
+    print(module_params)    
     columns_to_index = module_params.get('columns_to_index')
     force = module_params.get('force', False)
     for_linking = module_params.get('for_linking', True)

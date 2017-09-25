@@ -6,6 +6,7 @@ Created on Fri Apr 21 19:39:45 2017
 @author: leo
 
 """
+import csv
 import io
 import itertools
 import json
@@ -183,6 +184,7 @@ class Normalizer(AbstractDataProject):
                 break
        
         else:
+            import pdb; pdb.set_trace()
             raise Exception('Separator and/or Encoding not detected. Try uploading' \
                           + ' a csv with "," as separator with utf-8 encoding')                
 
@@ -197,7 +199,7 @@ class Normalizer(AbstractDataProject):
          
             tab_next = pd.read_csv(file, 
                                  sep=best_sep, 
-                                 encoding=encoding,     
+                                 encoding=encoding,
                                  dtype=str,
                                  header=None,
                                  chunksize=self.CHUNKSIZE)
@@ -545,12 +547,14 @@ class ESNormalizer(UserNormalizer):
                           dtype=str, chunksize=self.es_insert_chunksize)
         
        
+        print('INDEX NAME is:', self.index_name)
+        print('force:', force)
+        print('has_index:', self.has_index())
         if self.has_index() and force:
+            print('Deleting!')
             self.ic.delete(self.index_name)
             
-            
-        
-        if not self.ic.exists(self.index_name):
+        if not self.has_index():
             log = self._init_active_log('INIT', 'transform')
             
             index_settings = es_insert.gen_index_settings(columns_to_index)
@@ -575,7 +579,8 @@ class ESNormalizer(UserNormalizer):
         
     def gen_default_columns_to_index(self, for_linking=True):
         if for_linking:
-            analyzers = {'my_french', 'standard', 'whitespace', 'integers', 'city', 'organization', 'n_grams'} # TODO: removed end_ngrams
+            analyzers = {'french', 'my_french', 'standard', 'whitespace', 
+                         'integers', 'city', 'organization', 'n_grams'} # TODO: removed end_ngrams
         else:
             analyzers = {}
         column_tracker = self.metadata['column_tracker']
