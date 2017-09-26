@@ -524,17 +524,14 @@ def es_linker(source, params):
         matches_in_ref['__GAP_RATIO'] = confidence_gap / confidence
     else:
         matches_in_ref = pd.DataFrame()
-    
+        
     # Perform matching exact (labelled) pairs
     if exact_ref_indexes:
-        try:
-            full_responses = [es.get(table_name, ref_idx) for ref_idx in exact_ref_indexes]
-        except:
-            import pdb; pdb.set_trace()
+        full_responses = [es.get(table_name, ref_idx) for ref_idx in exact_ref_indexes]
         exact_matches_in_ref = pd.DataFrame([f_r['_source'] for f_r in full_responses], 
                                             index=exact_source_indexes)
         exact_matches_in_ref.columns = [x + '__REF' for x in exact_matches_in_ref.columns]
-        matches_in_ref['__ID_REF'] = exact_ref_indexes
+        exact_matches_in_ref['__ID_REF'] = exact_ref_indexes
         exact_matches_in_ref['__CONFIDENCE'] = 999
     else:
         exact_matches_in_ref = pd.DataFrame()

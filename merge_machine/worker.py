@@ -16,8 +16,8 @@ from rq import Worker, Queue, Connection
 import api_queued_modules
 
 from admin import Admin
-from normalizer import UserNormalizer
-from linker import UserLinker
+from normalizer import ESNormalizer
+from linker import ESLinker
 
 
 VALID_QUEUES = ['high', 'low']

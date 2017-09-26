@@ -10,7 +10,7 @@ import os
 import time
 
 from elasticsearch import client, Elasticsearch
-from linker import UserLinker
+from linker import ESLinker
 from normalizer import ESNormalizer
 
 from CONFIG import LINK_DATA_PATH, NORMALIZE_DATA_PATH
@@ -43,7 +43,7 @@ class Admin():
         for id_ in list_of_ids:
             if project_type == 'link':
                 try:
-                    proj = UserLinker(id_)
+                    proj = ESLinker(id_)
                 except:
                     print('Could not load', id_)
             else:
@@ -99,7 +99,7 @@ class Admin():
         if project_type == 'normalize':
             proj = ESNormalizer(project_id)
         elif project_type == 'link':
-            proj = UserLinker(project_id)
+            proj = ESLinker(project_id)
             
         proj.delete_project()
         print('Deleted project:', project_type, project_id)
@@ -125,7 +125,7 @@ class Admin():
             res.append(self.delete_index(index_name))
         return res
     
-    def delete_unused_indices(self, exclude={'123vivalalgerie', '123vivalalgerie3'}):
+    def delete_unused_indices(self, exclude={'123vivalalgerie', '123vivalalgerie4'}):
         '''
         Delete ES indices whose name are not present among the normalisation
         projects names.
@@ -148,6 +148,6 @@ if __name__ == '__main__':
     admin.remove_project_by_time('normalize', 
                                  action='created', 
                                  when='before', 
-                                 hours_from_now=24*7)            
+                                 hours_from_now=24*21)            
     admin.delete_unused_indices()
     

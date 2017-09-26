@@ -12,18 +12,19 @@ import pickle
 
 import pandas as pd
 
-from abstract_data_project import AbstractDataProject
+from abstract_data_project import ESAbstractDataProject
 #from dedupe_linker import format_for_dedupe, current_load_gazetteer
 from es_match import Labeller as ESLabeller
 #from labeller import Labeller, DummyLabeller
-from normalizer import ESNormalizer, UserNormalizer
+from normalizer import ESNormalizer
 # from restrict_reference import perform_restriction
 
 from CONFIG import LINK_DATA_PATH
-from MODULES import LINK_MODULES, LINK_MODULE_ORDER_log
+from MODULES import LINK_MODULES, LINK_MODULE_ORDER, LINK_MODULE_ORDER_log
 
-class Linker(AbstractDataProject):
+class Linker(ESAbstractDataProject):
     MODULES = LINK_MODULES
+    MODULE_ORDER = LINK_MODULE_ORDER
     MODULE_ORDER_log = LINK_MODULE_ORDER_log
     
     def __init__(self, 
@@ -76,7 +77,7 @@ class Linker(AbstractDataProject):
         
         if file_role == 'source':
             try:
-                self.source = UserNormalizer(self.metadata['files']['source']['project_id'])
+                self.source = ESNormalizer(self.metadata['files']['source']['project_id'])
             except:
                 self.source = None
         
@@ -588,7 +589,7 @@ class Linker(AbstractDataProject):
 #        self.run_info_buffer[(module_name, self.mem_data_info['file_name'])] = run_info
 #        return 
 
-class UserLinker(Linker):
+class ESLinker(Linker):
     def path_to(self, module_name='', file_name=''):
         return self._path_to(LINK_DATA_PATH, module_name, file_name)
     
@@ -601,7 +602,7 @@ if __name__ == '__main__':
     ref_file_name = 'ref.csv'
     
     # Create source
-    proj = UserNormalizer(None, create_new=True)
+    proj = ESNormalizer(None, create_new=True)
     source_proj_id = proj.project_id
     
     # Upload files to normalize
@@ -610,7 +611,7 @@ if __name__ == '__main__':
         proj.upload_init_data(f, source_file_name, source_user_given_name)
 
     # Create ref
-    proj = UserNormalizer(None, create_new=True)
+    proj = ESNormalizer(None, create_new=True)
     ref_proj_id = proj.project_id
     
     # Upload files to normalize

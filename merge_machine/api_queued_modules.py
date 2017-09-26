@@ -13,15 +13,15 @@ import os
 curdir = os.path.dirname(os.path.realpath(__file__))
 os.chdir(curdir)
 
-from normalizer import UserNormalizer, ESNormalizer
-from linker import UserLinker
+from normalizer import ESNormalizer
+from linker import ESLinker
     
     
 def _infer_mvs(project_id, data_params, module_params):
     '''
     Runs the infer_mvs module
     
-    wrapper around UserNormalizer.infer ?
+    wrapper around ESNormalizer.infer ?
     
     ARGUMENTS (GET):
         project_id: ID for "normalize" project
@@ -34,7 +34,7 @@ def _infer_mvs(project_id, data_params, module_params):
         - module_params: none
     
     '''
-    proj = UserNormalizer(project_id=project_id)
+    proj = ESNormalizer(project_id=project_id)
     proj.load_data(data_params['module_name'], data_params['file_name'])    
     result = proj.infer('infer_mvs', module_params)
         
@@ -57,7 +57,7 @@ def _replace_mvs(project_id, data_params, module_params):
                 }
         - module_params: same as result of infer_mvs
     '''
-    proj = UserNormalizer(project_id=project_id)
+    proj = ESNormalizer(project_id=project_id)
 
     proj.load_data(data_params['module_name'], data_params['file_name'])
     
@@ -71,7 +71,7 @@ def _infer_types(project_id, data_params, module_params):
     '''
     Runs the infer_types module
     
-    wrapper around UserNormalizer.infer ?
+    wrapper around ESNormalizer.infer ?
     
     ARGUMENTS (GET):
         project_id: ID for "normalize" project
@@ -84,7 +84,7 @@ def _infer_types(project_id, data_params, module_params):
         - module_params: none
     
     '''
-    proj = UserNormalizer(project_id=project_id)
+    proj = ESNormalizer(project_id=project_id)
     proj.load_data(data_params['module_name'], data_params['file_name'])    
     result = proj.infer('infer_types', module_params)
         
@@ -107,7 +107,7 @@ def _recode_types(project_id, data_params, module_params):
                 }
         - module_params: same as result of infer_mvs
     '''
-    proj = UserNormalizer(project_id=project_id)
+    proj = ESNormalizer(project_id=project_id)
 
     proj.load_data(data_params['module_name'], data_params['file_name'])
     
@@ -142,7 +142,7 @@ def _es_linker(project_id, data_params, module_params):
     '''
     # Problem: what project are we talking about? what ID? 
     
-    proj = UserLinker(project_id)
+    proj = ESLinker(project_id)
     _, run_info = proj.linker('es_linker', None, module_params)
     proj.write_data()
 
@@ -165,7 +165,7 @@ def _concat_with_init(project_id, data_params, *argv):
                 
         - module_params: none
     '''
-    proj = UserNormalizer(project_id=project_id)
+    proj = ESNormalizer(project_id=project_id)
 
     # TODO: not clean
     if data_params is None:
@@ -198,7 +198,7 @@ def _run_all_transforms(project_id, data_params, *argv):
                     "file_name": file to use for transform (module_name is 'INIT')
                 }
     '''
-    proj = UserNormalizer(project_id=project_id)
+    proj = ESNormalizer(project_id=project_id)
 
     file_name = data_params['file_name']
 
@@ -222,7 +222,7 @@ def _create_dedupe_labeller(project_id, *argv):
     '''
     
     # TODO: data input in gen_dedupe_labeller ?
-    proj = UserLinker(project_id=project_id)
+    proj = ESLinker(project_id=project_id)
     labeller = proj._gen_dedupe_labeller()
     proj.write_labeller('dedupe_linker', labeller)
     return
@@ -258,23 +258,39 @@ def _create_es_index(project_id, data_params, module_params):
     
     if (not for_linking) and (columns_to_index is not None):
         raise ValueError('columns_to_index and for_linking cannot be not None and False')
-    
-    proj = UserLinker(project_id)
-    proj.ref = ESNormalizer(proj.ref.project_id)
 
-    if data_params is None:
-        module_name = proj.metadata['files']['ref']['module_name']
-        file_name = proj.metadata['files']['ref']['file_name']
+
+    # TODO: dirty fix for linking and normalization
+    if for_linking:    
+        proj_link = ESLinker(project_id)
+        proj = ESNormalizer(proj_link.ref.project_id)
+        if data_params is None:
+            module_name = proj_link.metadata['files']['ref']['module_name']
+            file_name = proj_link.metadata['files']['ref']['file_name']
+        else:
+            module_name = data_params['module_name']
+            file_name = data_params['file_name']
+            
+        
+        # Default columns_to_index
+        if columns_to_index is None:
+            columns_to_index = proj.gen_default_columns_to_index(for_linking)
+            
     else:
-        module_name = data_params['module_name']
-        file_name = data_params['file_name']
-    
-    # Default columns_to_index
-    if columns_to_index is None:
-        columns_to_index = proj.ref.gen_default_columns_to_index(for_linking)
-    
-    file_path = proj.ref.path_to(module_name, file_name)
-    proj.ref.create_index(file_path, columns_to_index, force)
+        proj = ESLinker(project_id)
+        if data_params is None:
+            module_name, file_name = proj.get_last_written()
+        else:
+            module_name = data_params['module_name']
+            file_name = data_params['file_name']    
+            
+        if columns_to_index is None:
+            columns_to_index = {col: {} for col in proj._get_header(module_name, file_name)}
+
+
+        
+    file_path = proj.path_to(module_name, file_name)
+    proj.create_index(file_path, columns_to_index, force)
     return
 
 
@@ -289,7 +305,7 @@ def _create_es_labeller(project_id, *argv):
         - data_params: none
         - module_params: none
     '''
-    proj = UserLinker(project_id=project_id)
+    proj = ESLinker(project_id=project_id)
     labeller = proj._gen_es_labeller()
     proj.write_labeller('es_linker', labeller)
     return
@@ -309,7 +325,7 @@ def _infer_restriction(project_id, _, module_params):
     if module_params is None:
         module_params = dict()
     
-    proj = UserLinker(project_id=project_id)
+    proj = ESLinker(project_id=project_id)
     training = proj.read_config_data('dedupe_linker', 'training.json')
     if not training:
         raise Exception('No training file was found in this project')
@@ -333,7 +349,7 @@ def _perform_restriction(project_id, _, module_params):
         - data_params: none
         - module_params: same as result of infer_mvs
     '''
-    proj = UserLinker(project_id=project_id)
+    proj = ESLinker(project_id=project_id)
     
     run_info = proj.perform_restriction(module_params)
     
@@ -356,7 +372,7 @@ def _dedupe_linker(project_id, *argv):
     # Todo: deprecate
     '''  
     
-    proj = UserLinker(project_id=project_id) # Ref and source are loaded by default
+    proj = ESLinker(project_id=project_id) # Ref and source are loaded by default
     
     paths = proj._gen_paths_dedupe()
     
@@ -389,7 +405,7 @@ def _link_results_analyzer(project_id, data_params, *argv):
     '''
     Runs the link results analyzer module
     
-    wrapper around UserNormalizer.infer ?
+    wrapper around ESNormalizer.infer ?
     
     ARGUMENTS (GET):
         project_id: ID for "normalize" project
@@ -400,7 +416,7 @@ def _link_results_analyzer(project_id, data_params, *argv):
                 "file_name": file to fetch
                 }    
     '''
-    proj = UserLinker(project_id=project_id)
+    proj = ESLinker(project_id=project_id)
     proj.load_data(data_params['module_name'], data_params['file_name'])    
     result = proj.infer('link_results_analyzer', {})
     
