@@ -490,14 +490,14 @@ def es_linker(source, params):
     source_indexes = [x[0] for x in source.iterrows() if x [0] not in exact_source_indexes]
     
     def _is_match(f_r, threshold):
-        bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold)
+        return bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold)
     
     # Perform matching on non-exact pairs (not labelled)
     if source_indexes:
         rows = (x[1] for x in source.iterrows() if x[0] in source_indexes)
         all_search_templates, full_responses = perform_queries(table_name, [query_template], rows, must, must_not, num_results=2)
         full_responses = [full_responses[i] for i in range(len(full_responses))] # Don't use items to preserve order
-    
+
         # TODO: remove threshold condition
         matches_in_ref = pd.DataFrame([f_r['hits']['hits'][0]['_source'] \
                                    if _is_match(f_r, threshold) \
@@ -515,7 +515,7 @@ def es_linker(source, params):
                                 for f_r in full_responses], index=matches_in_ref.index)
         
         confidence_gap = pd.Series([f_r['hits']['hits'][0]['_score'] - f_r['hits']['hits'][1]['_score']
-                                if _is_match(f_r, threshold) \
+                                if (len(f_r['hits']['hits']) >= 2) and _is_match(f_r, threshold) \
                                 else np.nan \
                                 for f_r in full_responses], index=matches_in_ref.index)
 
@@ -1007,7 +1007,8 @@ class Labeller():
                                                           [self.source.loc[pair[0]]], 
                                                           self.must, self.must_not, 
                                                           self.num_results_labelling)
-            self.full_responses = {all_search_templates[idx][1][0]: values for idx, values in self.full_responses.items()}
+            self.full_responses = {all_search_templates[idx][1][0]: values \
+                                   for idx, values in self.full_responses.items()}
             self._update_query_summaries(pair[1])
 
         self._sort_keys()
