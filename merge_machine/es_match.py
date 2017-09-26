@@ -483,20 +483,22 @@ def es_linker(source, params):
     must_not = params.get('must_not', {})
     threshold = params['thresh']
     exact_pairs = params.get('exact_pairs', [])
+    non_matching_pairs = params.get('non_matching_pairs', [])
     
     exact_source_indexes = [x[0] for x in exact_pairs if x[1] is not None]
     exact_ref_indexes = [x[1] for x in exact_pairs if x[1] is not None]
-    source_indexes = (x[0] for x in source.iterrows() if x [0] not in exact_source_indexes)    
+    source_indexes = [x[0] for x in source.iterrows() if x [0] not in exact_source_indexes]
     
     def _is_match(f_r, threshold):
         bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold)
     
     # Perform matching on non-exact pairs (not labelled)
     if source_indexes:
-        rows = (x[1] for x in source.iterrows() if x[0] not in exact_source_indexes)
+        rows = (x[1] for x in source.iterrows() if x[0] in source_indexes)
         all_search_templates, full_responses = perform_queries(table_name, [query_template], rows, must, must_not, num_results=2)
         full_responses = [full_responses[i] for i in range(len(full_responses))] # Don't use items to preserve order
     
+        # TODO: remove threshold condition
         matches_in_ref = pd.DataFrame([f_r['hits']['hits'][0]['_source'] \
                                    if _is_match(f_r, threshold) \
                                    else {} \
@@ -511,7 +513,7 @@ def es_linker(source, params):
                                 if _is_match(f_r, threshold) \
                                 else np.nan \
                                 for f_r in full_responses], index=matches_in_ref.index)
-
+        
         confidence_gap = pd.Series([f_r['hits']['hits'][0]['_score'] - f_r['hits']['hits'][1]['_score']
                                 if _is_match(f_r, threshold) \
                                 else np.nan \
@@ -522,6 +524,14 @@ def es_linker(source, params):
         matches_in_ref['__CONFIDENCE'] = confidence    
         matches_in_ref['__GAP'] = confidence_gap
         matches_in_ref['__GAP_RATIO'] = confidence_gap / confidence
+        
+
+            # Put confidence to zero for user labelled negative pairs
+        sel = [x in non_matching_pairs for x in zip(source_indexes, matches_in_ref.__ID_REF)]
+        for col in ['__CONFIDENCE', '__GAP', '__GAP_RATIO']:
+            matches_in_ref.loc[sel, '__CONFIDENCE'] = 0    
+
+        
     else:
         matches_in_ref = pd.DataFrame()
         
@@ -1019,6 +1029,7 @@ class Labeller():
         params['must_not'] = self.must_not
         params['thresh'] = 0 # self.threshold #TODO: fix this
         params['exact_pairs'] = self.pairs
+        params['non_matching_pairs'] = self.pairs_not_match
         return params
     
     def write_training(self, file_path):        
