@@ -400,7 +400,7 @@ class AbstractDataProject(AbstractProject):
         
         # Only create file if it is larger than sample size
         if part_tab.shape[0] > sample_size:            
-            self.log.info('Running make_mini')
+            logging.info('Running make_mini')
             self.clean_after('INIT', new_file_name) # TODO: check module_name for clean_after
             
             # Initiate log
@@ -637,7 +637,7 @@ class AbstractDataProject(AbstractProject):
 
         # TODO: catch module errors and add to log
         # Run module on pandas DataFrame 
-        self.log.info('Running transform: {0}'.format(module_name))
+        logging.info('Running transform: {0}'.format(module_name))
         self.mem_data = (self.run_transform_module(module_name, data, params) \
                                                  for data in self.mem_data)
         self.mem_data_info['module_name'] = module_name
