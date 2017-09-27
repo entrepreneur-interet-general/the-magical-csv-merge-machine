@@ -1110,9 +1110,6 @@ def cancel_job(job_id):
                        message='job_id could not be found', 
                        completed=False), 404
     
-
-
-
 @app.route('/queue/num_jobs/<job_id>', methods=['GET'])
 def count_jobs_in_queue_before(job_id):
     '''
@@ -1120,7 +1117,6 @@ def count_jobs_in_queue_before(job_id):
     
     GET:
         - job_id: as returned by schedule_job
-    
     '''
     job_ids = q.job_ids
     if job_id in job_ids:
@@ -1146,7 +1142,7 @@ def list_public_project_ids(project_type):
     
     '''
     admin = Admin()
-    list_of_project_ids = admin.list_project_ids(project_type, public_only=True)
+    list_of_project_ids = admin.list_project_ids(project_type, project_access='public')
     return jsonify(list_of_project_ids)
 
 @app.route('/api/public_projects/<project_type>', methods=['GET'])
@@ -1155,7 +1151,7 @@ def list_public_projects(project_type):
     
     '''
     admin = Admin()
-    list_of_projects = admin.list_projects(project_type, public_only=True)
+    list_of_projects = admin.list_projects(project_type, project_access='public')
     return jsonify(list_of_projects)
 
 if __name__ == '__main__':
