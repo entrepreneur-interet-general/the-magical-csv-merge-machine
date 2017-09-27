@@ -19,6 +19,11 @@ def _check_project_type(project_type):
     if project_type not in ['link', 'normalize']:
         raise Exception('project_type should be link or normalize')
 
+def _check_project_access(project_access):
+    if project_access not in ['all', 'public', 'private']:
+        raise Exception('project_access should be all, public, or private')
+
+
 class Admin():
     def __init__(self):
         self.normalize_project_ids = self.list_projects('normalize')
@@ -34,26 +39,36 @@ class Admin():
             data_path = NORMALIZE_DATA_PATH
         return os.path.join(data_path, project_id)
 
-    def list_projects(self, project_type, public_only=False):
+    def list_projects(self, project_type, project_access='all'):
         '''Returns a list of project_metadatas'''
         _check_project_type(project_type)
+        _check_project_access(project_access)
         
         list_of_ids = self.list_dirs(project_type)
         list_of_metadatas = []
-        for id_ in list_of_ids:
-            if project_type == 'link':
-                try:
+        
+        for id_ in list_of_ids:            
+            
+            try:
+                if project_type == 'link':
                     proj = ESLinker(id_)
-                except:
-                    print('Could not load', id_)
-            else:
-                proj = ESNormalizer(id_)
-            if proj.metadata.get('public', False):
-                list_of_metadatas.append(proj.metadata)
+                else:
+                    proj = ESNormalizer(id_)
+                could_load = True
+            except:
+                could_load = False
+                print('Could not load {0}: {1}'.format(project_type, id_))
+
+            if could_load:
+                if project_access != 'all':
+                    if proj.metadata.get('public', False) == (project_access == 'public'):
+                        list_of_metadatas.append(proj.metadata)                
+                else:
+                    list_of_metadatas.append(proj.metadata)
         return list_of_metadatas
 
-    def list_project_ids(self, project_type, public_only=False):
-        list_of_metadata = self.list_projects(project_type, public_only)
+    def list_project_ids(self, project_type, project_access='all'):
+        list_of_metadata = self.list_projects(project_type, project_access)
         return {x['project_id'] for x in list_of_metadata}
         
 
@@ -65,7 +80,7 @@ class Admin():
         return {}
     
     def list_projects_by_time(self, project_type, 
-                                      public_only=False, 
+                                      project_access='all', 
                                       action='created', 
                                       when='before', 
                                       hours_from_now=24*7):
@@ -76,13 +91,14 @@ class Admin():
             when: 'before' or 'after' (both are inclusive, but proba of equality is very slim)
             hours_from_now: how many hours before current time are we looking at
         '''
-        list_of_metadata = self.list_projects(project_type, public_only)
+        list_of_metadata = self.list_projects(project_type, project_access)
            
         field = {'created': 'timestamp', 'last_used': 'last_timestamp'}[action]
         mult = {'before': 1, 'after': -1}[when]
         now  = time.time()
-        return filter(lambda m: mult*(now - m[field]) >= mult*hours_from_now*3600, \
-                      list_of_metadata)
+        to_return = list(filter(lambda m: mult*(now - m[field]) >= mult*hours_from_now*3600, \
+                      list_of_metadata))
+        return to_return
         
     def remove_project_by_time(self, project_type, **kwargs):
         '''Same keywords as list_projects_by_time'''
@@ -142,12 +158,14 @@ class Admin():
 if __name__ == '__main__':
     admin = Admin()
     admin.remove_project_by_time('link', 
+                                 project_access='public',
                                  action='created', 
                                  when='before', 
                                  hours_from_now=24*7)
     admin.remove_project_by_time('normalize', 
+                                 project_access='public',
                                  action='created', 
                                  when='before', 
-                                 hours_from_now=24*21)            
+                                 hours_from_now=24*7)            
     admin.delete_unused_indices()
     
