@@ -57,7 +57,24 @@ def get_resp(url_to_append):
         #        _print(url_to_append,  parsed_resp)
         return parsed_resp
     else: 
-        raise Exception('Problem:\n', resp)
+        try:
+            source_project_id
+        except:
+            source_project_id = None
+        
+        try:
+            ref_project_id
+        except:
+            ref_project_id = None
+        
+        try:
+            link_project_id
+        except:
+            link_project_id = None
+        raise Exception('source: {0}\n'.format(source_project_id) \
+                       + 'ref: {0}\n'.format(ref_project_id) \
+                       + 'link: {0}\n'.format(link_project_id) \
+                       + 'Problem:\n', resp)
 
 @my_print
 def post_resp(url_to_append, body, **kwargs):
@@ -330,8 +347,8 @@ def link_pipeline(params):
     # =============================================================================
     url_to_append = '/api/schedule/create_es_index/{0}/'.format(project_id)
     body = {
-            'module_params': {'columns_to_index_is_none': None,
-                              'force': False}
+            'module_params': {'columns_to_index': params.get('columns_to_index_ref', None),
+                              'force': True}
             }
     resp = post_resp(url_to_append, body)
     job_id = resp['job_id']
@@ -451,20 +468,20 @@ def link_pipeline(params):
     # =============================================================================
     # Index result of linking     
     # =============================================================================
-    url_to_append = '/api/schedule/create_es_index/{0}/'.format(project_id)
-    body = {
-            'module_params': {'columns_to_index_is_none': None,
-                              'for_linking': False,
-                              'force': False}
-            }
-    resp = post_resp(url_to_append, body)
-    job_id = resp['job_id']
-
-    #==============================================================================
-    # --> Wait for job result
-    #==============================================================================
-    url_to_append = '/queue/result/{0}'.format(job_id)
-    resp = wait_get_resp(url_to_append, max_wait=10000)
+    #    url_to_append = '/api/schedule/create_es_index/{0}/'.format(project_id)
+    #    body = {
+    #            'module_params': {'columns_to_index_is_none': None,
+    #                              'for_linking': False,
+    #                              'force': True}
+    #            }
+    #    resp = post_resp(url_to_append, body)
+    #    job_id = resp['job_id']
+    #
+    #    #==============================================================================
+    #    # --> Wait for job result
+    #    #==============================================================================
+    #    url_to_append = '/queue/result/{0}'.format(job_id)
+    #    resp = wait_get_resp(url_to_append, max_wait=10000)
     
     
     #==============================================================================
@@ -570,4 +587,7 @@ if __name__ == '__main__':
     print('source_project_id:', source_project_id)
     print('ref_project_id:', ref_project_id)
     print('link_project_id:', link_project_id)   
+    
+    sh_com = 'testapi --dir {0} --source {1} --ref {2} --keep'.format(args.dir, source_project_id, ref_project_id)
+    print('Re-run link with:\n', sh_com)
     

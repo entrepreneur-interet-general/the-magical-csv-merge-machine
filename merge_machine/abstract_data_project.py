@@ -381,7 +381,6 @@ class AbstractDataProject(AbstractProject):
             - params:
                 sample_size: #TODO: what is this?
                 randomize: chose elements randomly #TODO: how does this work ?
-                
         '''
         # TODO: Change current 
         # TODO: Current for normalize ?        
@@ -464,7 +463,6 @@ class AbstractDataProject(AbstractProject):
         for log in self.log_buffer:
             file_name = log['file_name']
             module_name = log['module_name']
-            
             #            if file_name not in self.metadata['log']:
             #                raise ValueError('file name {0} was not initialized in log'.format(file_name))
             #            if module_name in self.metadata['log'][file_name]:
@@ -653,7 +651,7 @@ class AbstractDataProject(AbstractProject):
     
 class ESAbstractDataProject(AbstractDataProject):
     es_insert_chunksize = 100
-    es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
+    es = Elasticsearch(timeout=60, max_retries=10, retry_on_timeout=True)
     ic = client.IndicesClient(es)
 
     def __init__(self, *argv, **kwargs):
@@ -680,6 +678,9 @@ class ESAbstractDataProject(AbstractDataProject):
             - ref_path: path to the file to index
             - columns_to_index
         '''
+        #        import http
+        #        http.client._MAXHEADERS = 1000
+        
         testing = True      
         
         ref_gen = pd.read_csv(ref_path, 
@@ -696,7 +697,10 @@ class ESAbstractDataProject(AbstractDataProject):
             
             index_settings = es_insert.gen_index_settings(columns_to_index)
             
+            logging.warning('Creating index')
+            logging.warning(index_settings)
             self.ic.create(self.index_name, body=json.dumps(index_settings))    
+            logging.warning('Inserting in index')
             es_insert.index(ref_gen, self.index_name, testing)
         
             log = self._end_active_log(log, error=False)
@@ -723,15 +727,24 @@ class ESAbstractDataProject(AbstractDataProject):
         else:
             analyzers = {}
         
+        # If columns_to_index is already dict
+        if isinstance(columns_to_index, dict):
+            return columns_to_index            
+        
+        # If arguments are not valid 
         if (not for_linking) and (columns_to_index is None):
             raise ValueError('if NOT for_linking, you should specify the columns_to_index')
-            
-        # TODO: cheap fix
+        
+        # If a list of columns to analyze is passed
+        if isinstance(columns_to_index, list):
+            columns_to_index = {col: analyzers for col in columns_to_index}
+        
+        # If columns_to_index is None (and project is link), fetch from 
+        # TODO: cheap fix, move to linker
         if for_linking and (columns_to_index is None):
             column_tracker = self.metadata['column_tracker']
             columns_to_index = {col: analyzers if col in column_tracker['selected'] \
                                 else {} for col in column_tracker['original']}
-            
         
         return columns_to_index
         

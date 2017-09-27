@@ -57,50 +57,50 @@ filters = {
 # =============================================================================
 # French re-implement
 # =============================================================================
-    "french_elision": {
-      "type":         "elision",
-      "articles_case": True,
-      "articles": [
-          "l", "m", "t", "qu", "n", "s",
-          "j", "d", "c", "jusqu", "quoiqu",
-          "lorsqu", "puisqu"
-        ]
-    },
-    "french_stop": {
-      "type":       "stop",
-      "stopwords":  "_french_" 
-    },
-    "french_keywords": {
-      "type":       "keyword_marker",
-      "keywords":   ["Exemple"] 
-    },
-    "french_stemmer": {
-      "type":       "stemmer",
-      "language":   "light_french"
-    },
+#    "french_elision": {
+#      "type":         "elision",
+#      "articles_case": True,
+#      "articles": [
+#          "l", "m", "t", "qu", "n", "s",
+#          "j", "d", "c", "jusqu", "quoiqu",
+#          "lorsqu", "puisqu"
+#        ]
+#    },
+#    "french_stop": {
+#      "type":       "stop",
+#      "stopwords":  "_french_" 
+#    },
+#    "french_keywords": {
+#      "type":       "keyword_marker",
+#      "keywords":   ["Exemple"] 
+#    },
+#    "french_stemmer": {
+#      "type":       "stemmer",
+#      "language":   "light_french"
+#    },
                 
 # =============================================================================
 #   Organization filters    
 # =============================================================================
-    "my_org_keep":{
-        "type" : "keep",
-        "keep_words_case": True,
-        "keep_words_path": organization_keep_file_path      
-    },
-
-    "my_org_stop":{
-        "type" : "stop",
-        "ignore_case": True,
-        "stopwords_path": organization_keep_file_path      
-    },
-
-    "my_org_synonym" : {
-        "type" : "synonym", 
-        "expand": False,    
-        "ignore_case": True,
-        "synonyms_path" : organization_syn_file_path,
-        "tokenizer" : "my_standard"  # TODO: whitespace? 
-    },   
+#    "my_org_keep":{
+#        "type" : "keep",
+#        "keep_words_case": True,
+#        "keep_words_path": organization_keep_file_path      
+#    },
+#
+#    "my_org_stop":{
+#        "type" : "stop",
+#        "ignore_case": True,
+#        "stopwords_path": organization_keep_file_path      
+#    },
+#
+#    "my_org_synonym" : {
+#        "type" : "synonym", 
+#        "expand": False,    
+#        "ignore_case": True,
+#        "synonyms_path" : organization_syn_file_path,
+#        "tokenizer" : "my_standard"  # TODO: whitespace? 
+#    },   
 
 # =============================================================================
 # City filters
@@ -141,25 +141,25 @@ analyzers = {
     'city': {
         "tokenizer": "standard", # TODO: problem with spaces in words
         "filter": ["my_city_keep", "my_city_synonym", "my_length"] # TODO: shingle ?
-    },
-    'organization': {
-        "tokenizer": "standard",
-        "filter": ["my_org_keep", "my_org_synonym"]
-    },
+    } #,
+#    'organization': {
+#        "tokenizer": "standard",
+#        "filter": ["my_org_keep", "my_org_synonym"]
+#    },
     
-    'my_french': {
-        'tokenizer': 'standard',
-        "filter": [
-            "my_city_stop",
-            "my_org_stop",
-            "lowercase",
-            
-            "french_elision",
-            "french_stop",
-            "french_keywords",
-            "french_stemmer"
-          ]
-    }
+#    'my_french': {
+#        'tokenizer': 'standard',
+#        "filter": [
+#            "my_city_stop",
+#            "my_org_stop",
+#            "lowercase",
+#            
+#            "french_elision",
+#            "french_stop",
+#            "french_keywords",
+#            "french_stemmer"
+#          ]
+#    }
 }
 
 index_settings_template = {

@@ -249,8 +249,7 @@ def calc_query_metrics(query_summaries, t_p=0.95, t_r=0.3):
             
     OUTPUT:
         - query_metrics: aggregated metrics for each query in query_summaries
-    '''
-    
+    '''    
     query_metrics = dict()
     for key, summaries in query_summaries.items():
         thresh, precision, recall, ratio = compute_threshold([x[1] for x in summaries], t_p=0.95, t_r=0.3) #TODO: change name in compute_threshold
@@ -429,7 +428,6 @@ def perform_queries(table_name, all_query_templates, rows, must, must_not, num_r
         i += 1
         
         if i >= 10:
-            import pdb; pdb.set_trace()
             raise Exception('Problem with elasticsearch: could not perform all queries in 10 trials')
             
     return og_search_templates, full_responses
@@ -485,6 +483,8 @@ def es_linker(source, params):
     exact_pairs = params.get('exact_pairs', [])
     non_matching_pairs = params.get('non_matching_pairs', [])
     
+
+    
     exact_source_indexes = [x[0] for x in exact_pairs if x[1] is not None]
     exact_ref_indexes = [x[1] for x in exact_pairs if x[1] is not None]
     source_indexes = [x[0] for x in source.iterrows() if x [0] not in exact_source_indexes]
@@ -495,6 +495,7 @@ def es_linker(source, params):
     # Perform matching on non-exact pairs (not labelled)
     if source_indexes:
         rows = (x[1] for x in source.iterrows() if x[0] in source_indexes)
+    
         all_search_templates, full_responses = perform_queries(table_name, [query_template], rows, must, must_not, num_results=2)
         full_responses = [full_responses[i] for i in range(len(full_responses))] # Don't use items to preserve order
 
@@ -524,13 +525,11 @@ def es_linker(source, params):
         matches_in_ref['__CONFIDENCE'] = confidence    
         matches_in_ref['__GAP'] = confidence_gap
         matches_in_ref['__GAP_RATIO'] = confidence_gap / confidence
-        
 
-            # Put confidence to zero for user labelled negative pairs
+        # Put confidence to zero for user labelled negative pairs
         sel = [x in non_matching_pairs for x in zip(source_indexes, matches_in_ref.__ID_REF)]
         for col in ['__CONFIDENCE', '__GAP', '__GAP_RATIO']:
             matches_in_ref.loc[sel, '__CONFIDENCE'] = 0    
-
         
     else:
         matches_in_ref = pd.DataFrame()

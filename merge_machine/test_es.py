@@ -248,18 +248,6 @@ for num_rows_labelled, idx in enumerate(random.sample(list(source.index), num_sa
     # Make user label data until the match is found
     found, res = gen_label(full_responses, sorted_keys, row, num_results_labelling, num_rows_labelled)
 
-
-
-
-
-
-
-
-
-    
-
-        #        import pdb
-        #        pdb.set_trace()
         
 # TODO: thresholder
 

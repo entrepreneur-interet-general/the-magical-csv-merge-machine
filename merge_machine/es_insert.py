@@ -153,8 +153,7 @@ if __name__ == '__main__':
     es = Elasticsearch(timeout=60, max_retries=10, retry_on_timeout=True)
     
     # https://www.elastic.co/guide/en/elasticsearch/reference/1.4/analysis-edgengram-tokenizer.html
-    
-    
+
     if new_index:
         ic = client.IndicesClient(es)
         if ic.exists(table_name):
