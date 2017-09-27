@@ -142,6 +142,7 @@ class AbstractDataProject(AbstractProject):
             file_path = self.path_to(iter_module_name, file_name)
             try:
                 os.remove(file_path)
+                logging.warning('clean_after: Removed {0}'.format(file_path))
             except FileNotFoundError:
                 pass
             
@@ -693,7 +694,8 @@ class ESAbstractDataProject(AbstractDataProject):
             log = self._init_active_log('INIT', 'transform')
             
             index_settings = es_insert.gen_index_settings(columns_to_index)
-            self.ic.create(self.index_name, body=json.dumps(index_settings))  
+            
+            self.ic.create(self.index_name, body=json.dumps(index_settings))    
             es_insert.index(ref_gen, self.index_name, testing)
         
             log = self._end_active_log(log, error=False)
