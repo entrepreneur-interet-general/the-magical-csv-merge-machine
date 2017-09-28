@@ -144,11 +144,8 @@ class Linker(ESAbstractDataProject):
         '''Adds the learned es configuration'''
         
         print('trying to upload', learned_settings)
-        try:
-            self.upload_config_data(learned_settings, 'es_linker', 'learned_settings.json')
-        except:
-            import pdb;
-            pdb.set_trace()
+        
+        self.upload_config_data(learned_settings, 'es_linker', 'learned_settings.json')
         
         for file_name in self.metadata['log']:
             self.metadata['log'][file_name]['upload_es_train']['completed'] = True   
