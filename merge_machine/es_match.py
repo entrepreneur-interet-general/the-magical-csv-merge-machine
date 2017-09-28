@@ -1028,7 +1028,7 @@ class Labeller():
         params['must'] = self.must
         params['must_not'] = self.must_not
         params['thresh'] = 0 # self.threshold #TODO: fix this
-        params['best_threshold'] = self.threshold
+        params['best_thresh'] = self.threshold
         params['exact_pairs'] = self.pairs
         params['non_matching_pairs'] = [(key, val) for key, values in self.pairs_not_match.items() for val in values]
         return params
