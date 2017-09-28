@@ -24,3 +24,8 @@ class MyEncoder(JSONEncoder):
             return list(obj)
         else:
             return super(MyEncoder, self).default(obj)
+        
+        
+if __name__ == '__main__':
+    enc = MyEncoder()
+    print(enc.encode({np.int64(1):2}))

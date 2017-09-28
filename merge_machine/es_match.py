@@ -1029,7 +1029,7 @@ class Labeller():
         params['must_not'] = self.must_not
         params['thresh'] = 0 # self.threshold #TODO: fix this
         params['exact_pairs'] = self.pairs
-        params['non_matching_pairs'] = self.pairs_not_match
+        params['non_matching_pairs'] = [(key, val) for key, values in self.pairs_not_match.items() for val in values]
         return params
     
     def write_training(self, file_path):        

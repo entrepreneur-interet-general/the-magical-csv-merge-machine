@@ -161,11 +161,11 @@ if __name__ == '__main__':
                                  project_access='public',
                                  action='created', 
                                  when='before', 
-                                 hours_from_now=24*7)
+                                 hours_from_now=24*0)
     admin.remove_project_by_time('normalize', 
                                  project_access='public',
                                  action='created', 
                                  when='before', 
-                                 hours_from_now=24*7)            
+                                 hours_from_now=24*0)            
     admin.delete_unused_indices()
     

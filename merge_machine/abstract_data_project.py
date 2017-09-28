@@ -21,6 +21,11 @@ METHODS:
     - clear_memory(self)
     - infer(self, module_name, params)
 
+
+https://www.elastic.co/guide/en/elasticsearch/reference/current/vm-max-map-count.html
+https://www.elastic.co/guide/en/elasticsearch/guide/current/heap-sizing.html
+# ES can fail, try increasing heap size in jvm config file: /etc/elasticsearch/jvm.options
+
 """
 from collections import defaultdict
 import copy
