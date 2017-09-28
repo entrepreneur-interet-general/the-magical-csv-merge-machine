@@ -121,16 +121,18 @@ class Linker(ESAbstractDataProject):
         self.upload_config_data(column_matches, 'es_linker', 'column_matches.json')
         
         # Select these columns for normalization in source and ref
-        try:
-            source_cols = list(set(y for x in column_matches for y in x['source']))
-            self.source.add_selected_columns(source_cols)
-    
-            ref_cols = list(set(y for x in column_matches for y in x['ref']))
-            self.ref.add_selected_columns(ref_cols)
-            
-        except Exception as e:
-            self.upload_config_data({}, 'es_linker', 'column_matches.json')
-            raise Exception(e)
+        
+        # TODO: removed auto selection of columns in normalize project: what are the implications
+        #        try:
+        #            source_cols = list(set(y for x in column_matches for y in x['source']))
+        #            self.source.add_selected_columns(source_cols)
+        #    
+        #            ref_cols = list(set(y for x in column_matches for y in x['ref']))
+        #            self.ref.add_selected_columns(ref_cols)
+        #            
+        #        except Exception as e:
+        #            self.upload_config_data({}, 'es_linker', 'column_matches.json')
+        #            raise Exception(e)
         
         # TODO: this will cover add_certain_col_matches
         # Add to log
