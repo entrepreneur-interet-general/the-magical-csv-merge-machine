@@ -411,6 +411,7 @@ def download(project_type, project_id):
             - file_name
         module_params:
             - file_type: ['csv' or 'xls']
+            - zip: False (returns a zipped version)
     
     '''
     project_id = secure_filename(project_id)
@@ -420,6 +421,16 @@ def download(project_type, project_id):
     
     if data_params is None:
         data_params = {}
+    if module_params is None:
+        module_params = {}
+    file_type = module_params.get('file_type', 'csv')
+    zip_ = module_params.get('zip', False)
+    
+    if file_type != 'csv':
+        raise NotImplementedError('file_type can only be csv')
+
+    if zip_:
+        raise NotImplementedError('zip has to be false')
         
     file_role = data_params.get('file_role')
     module_name = data_params.get('module_name')
@@ -458,12 +469,16 @@ def download(project_type, project_id):
     file_path = proj.path_to(module_name, file_name)
 
     # Zip this file and send the zipped file
-    zip_file_name = new_file_name + '.zip'
-    zip_file_path = proj.path_to(module_name, zip_file_name)
-    with open(file_path, 'rb') as f_in, gzip.open(zip_file_path, 'wb') as f_out:
-        shutil.copyfileobj(f_in, f_out)        
+    if zip_:
+        zip_file_name = new_file_name + '.zip'
+        zip_file_path = proj.path_to(module_name, zip_file_name)
+        with open(file_path, 'rb') as f_in, gzip.open(zip_file_path, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)    
     
-    return send_file(zip_file_path, as_attachment=True, attachment_filename=zip_file_name)
+        return send_file(zip_file_path, as_attachment=True, attachment_filename=zip_file_name)
+
+    else:
+        return send_file(file_path, as_attachment=True, attachment_filename=new_file_name)
 
 
 # TODO: get this from MODULES ?
