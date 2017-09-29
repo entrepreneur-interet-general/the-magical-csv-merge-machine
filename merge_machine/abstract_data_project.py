@@ -520,7 +520,6 @@ class AbstractDataProject(AbstractProject):
         self._write_log_buffer(True)
         self._write_run_info_buffer()
 
-
         if nrows == 0:
             raise Exception('No data was written, make sure you loaded data before'
                            + ' calling write_data')

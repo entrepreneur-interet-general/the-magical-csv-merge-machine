@@ -893,14 +893,15 @@ def web_get_answer(message_received):
 
 @socketio.on('update_filters', namespace='/')
 def update_musts(message_received):
-    try:
-        # If object received is string
+    # If object received is string
+    if isinstance(message_received, str):
         message_received = json.loads(message_received)
-    except:
-        # If object received is dict
-        pass
+    else:
+        assert isinstance(message_received, dict)
     
-    logging.info(message_received)
+    print('here ok')
+    print('update_musts got:', message_received)
+    logging.info('update_musts got:', message_received)
     project_id = message_received['project_id']
     must = message_received['must']    
     must_not = message_received['must_not'] 
