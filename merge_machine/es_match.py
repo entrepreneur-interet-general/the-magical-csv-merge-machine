@@ -865,6 +865,8 @@ class Labeller():
         ref_item = self._new_label()
         
         if ref_item is None:
+            self.source_item = None
+            self.ref_item = None
             return None, None
         
         source_item = {'_id': self.idx, 
