@@ -229,7 +229,12 @@ def compute_threshold(summaries, t_p=0.95, t_r=0.3):
     # Find best index for threshold
     idx = max(num_summaries - rolling_ratio[::-1].argmax() - 1, min(6, num_summaries-1))
     
-    thresh = sorted_summaries[idx]['_score_first']
+    # TODO: added if
+    if idx == len(sorted_summaries) - 1:
+        thresh = 0.0001
+    else:
+        thresh = sorted_summaries[idx]['_score_first']
+    
     precision = rolling_precision[idx]
     recall = rolling_recall[idx]
     ratio = rolling_ratio[idx]
@@ -787,20 +792,20 @@ class Labeller():
         
         ids_done = []
         num_keys = len(sorted_keys)
-        for i, key in enumerate(sorted_keys):
+        for i, key in enumerate(sorted_keys):                
+            results = full_responses[key]['hits']['hits']
+            
+            if len(results):
+                print('\nkey (ex {0}/{1}): {2}'.format(i, num_keys, key))
+                print('Num hits for this key: ', len(results)) 
+            else:
+                print('\nkey ({0}/{1}) has no results...'.format(i, num_keys))
+                
             try:
                 print('precision: ', self.query_metrics[key]['precision'])
                 print('recall: ', self.query_metrics[key]['recall'])
             except:
-                print('no precision/recall to display...')
-                
-            results = full_responses[key]['hits']['hits']
-            
-            if len(results):
-                print('\nkey ({0}/{1}): {2}'.format(i, num_keys, key))
-                print('Num hits for this key: ', len(results)) 
-            else:
-                print('\nkey ({0}/{1}) has no results...'.format(i, num_keys))
+                print('no precision/recall to display...')                
                 
             for res in results[:num_results]:
                 min_score = self.query_metrics.get(key, {}).get('thresh', 0)/1.5
@@ -852,7 +857,15 @@ class Labeller():
             print('LEN OF FULL_RESPONSES (number of queries):', len(self.full_responses))
             # import pdb; pdb.set_trace()
             self._sort_keys()
-                            
+            
+            print('BEST 10 KEYS:')
+            for key in self.sorted_keys[:10]:
+                print('\n', key)
+                metrics = self.query_metrics.get(key, {})
+                print(' > precision:', metrics.get('precision')) 
+                print(' > recall:', metrics.get('recall'))
+                print(' > ratio:', metrics.get('ratio'))
+                
             self.label_row_gen = self._new_label_for_row(self.full_responses, 
                                                     self.sorted_keys, 
                                                     self.num_results_labelling)
