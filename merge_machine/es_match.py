@@ -691,7 +691,6 @@ class Labeller():
             sorted_keys_2 = sorted(self.full_responses.keys(), key=lambda x: \
                                    self.full_responses[x]['hits'].get('max_score') or 0, reverse=True)
             
-            
             d_q = self._default_query()
             self.sorted_keys =  [d_q] \
                         + [x for x in list(itertools.chain(*zip(sorted_keys_1, sorted_keys_2))) if x != d_q]
@@ -700,12 +699,19 @@ class Labeller():
             # Sort by ratio but label by precision ?
             self.sorted_keys = sorted(self.full_responses.keys(), key=lambda x: self.query_metrics[x]['precision'], reverse=True)
             
+            
+            l1 = len(self.sorted_keys)
             # Remove queries if precision is too low (thresh depends on number of labels)
             self.sorted_keys = list(filter(lambda x: self.query_metrics[x]['precision'] \
                                       >= self._min_precision(), self.sorted_keys))
+            l2 = len(self.sorted_keys)
+            print('min_precision: removed {0} queries; {1} left'.format(l1-l2, l2))
             
-            self.sorted_keys  = self.sorted_keys[:self._max_num_keys()]
-
+            # Remove queries according to max number of keys
+            self.sorted_keys = self.sorted_keys[:self._max_num_keys()]
+            l3 = len(self.sorted_keys)
+            print('max_num_keys: removed {0} queries; {1} left'.format(l2-l3, l3))
+                
     def previous(self):
         '''Return to pseudo-previous state.'''
         print('self.next_row:', self.next_row)
@@ -722,8 +728,6 @@ class Labeller():
             raise RuntimeError('Already at start of row')
         
         self.num_rows_proposed_ref[self.idx] = 0 
-          
-        
         # after update
         if self.pairs and self.pairs[-1][0] == self.idx:
             self.num_rows_labelled -= 1
@@ -764,7 +768,7 @@ class Labeller():
         print('self.next_row:', self.next_row)
 
         
-    def _new_label_row(self, full_responses, sorted_keys, num_results):
+    def _new_label_for_row(self, full_responses, sorted_keys, num_results):
         '''
         User labelling going through potential results (order given by sorted_keys) 
         looking for a match. This goes through all keys and all results (up to
@@ -797,6 +801,7 @@ class Labeller():
                 print('Num hits for this key: ', len(results)) 
             else:
                 print('\nkey ({0}/{1}) has no results...'.format(i, num_keys))
+                
             for res in results[:num_results]:
                 min_score = self.query_metrics.get(key, {}).get('thresh', 0)/1.5
                 if res['_id'] not in ids_done \
@@ -844,11 +849,11 @@ class Labeller():
             print('\n' + '*'*40+'\n', 'in new_label / in self.next_row / len sorted_keys: {0} / row_idx: {1}'.format(len(self.sorted_keys), self.idx))
             all_search_templates, tmp_full_responses = perform_queries(self.ref_table_name, self.sorted_keys, [row], self.must, self.must_not, self.num_results_labelling)
             self.full_responses = {all_search_templates[i][1][0]: values for i, values in tmp_full_responses.items()}
-            print('LEN OF FULL_RESPONSES:', len(self.full_responses))
+            print('LEN OF FULL_RESPONSES (number of queries):', len(self.full_responses))
             # import pdb; pdb.set_trace()
             self._sort_keys()
                             
-            self.label_row_gen = self._new_label_row(self.full_responses, 
+            self.label_row_gen = self._new_label_for_row(self.full_responses, 
                                                     self.sorted_keys, 
                                                     self.num_results_labelling)
         
@@ -865,8 +870,8 @@ class Labeller():
         ref_item = self._new_label()
         
         if ref_item is None:
-            self.source_item = None
-            self.ref_item = None
+            #            self.source_item = None
+            #            self.ref_item = None
             return None, None
         
         source_item = {'_id': self.idx, 

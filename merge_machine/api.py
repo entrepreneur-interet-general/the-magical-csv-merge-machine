@@ -319,6 +319,7 @@ def delete_project(project_type, project_id):
         - project_id
     """
     _check_project_type(project_type)
+    
     # TODO: replace by _init_project
     if project_type == 'normalize':
         proj = ESNormalizer(project_id=project_id)

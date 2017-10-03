@@ -143,11 +143,10 @@ class AbstractDataProject(AbstractProject):
         for iter_module_name in self.MODULE_ORDER_log[start_idx:]:            
             # module_log = self.metadata['log'][file_name]
             # TODO: check skipped, written instead of try except            
-            
-            file_path = self.path_to(iter_module_name, file_name)
             try:
-                os.remove(file_path)
-                logging.warning('clean_after: Removed {0}'.format(file_path))
+                self._remove(iter_module_name, file_name)   
+                # os.remove(file_path)
+                logging.warning('clean_after: Removed {0} / {1}'.format(iter_module_name, file_name))
             except FileNotFoundError:
                 pass
             

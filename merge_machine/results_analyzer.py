@@ -25,12 +25,19 @@ def link_results_analyzer(tab, params={}):
                         this is the result of a dedupe merge?')
     
     col_matches = params.get('col_matches', {})
+    thresh = params.get('thresh', 0)
     
     metrics = dict()
+
+    tab.loc[:, '__CONFIDENCE'] = tab.__CONFIDENCE.astype(float)
 
     # Compute metrics
     metrics['perc_match'] = tab.__CONFIDENCE.notnull().mean() * 100
     metrics['num_match'] = int(tab.__CONFIDENCE.notnull().sum())
+    
+    # 
+    metrics['perc_match_thresh'] = (tab.__CONFIDENCE >= thresh).mean() * 100
+    metrics['num_match_thresh'] = int((tab.__CONFIDENCE >= thresh).sum())
     
     metrics['num_verif_samples'] = 0
     if col_matches:

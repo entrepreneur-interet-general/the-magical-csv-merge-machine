@@ -13,11 +13,9 @@ import pickle
 import pandas as pd
 
 from abstract_data_project import ESAbstractDataProject
-#from dedupe_linker import format_for_dedupe, current_load_gazetteer
 from es_match import Labeller as ESLabeller
-#from labeller import Labeller, DummyLabeller
 from normalizer import ESNormalizer
-# from restrict_reference import perform_restriction
+from results_analyzer import link_results_analyzer
 
 from CONFIG import LINK_DATA_PATH
 from MODULES import LINK_MODULES, LINK_MODULE_ORDER, LINK_MODULE_ORDER_log
@@ -507,6 +505,38 @@ class Linker(ESAbstractDataProject):
         # TODO: Add pre-load for 3 first queries
     
         return labeller
+    
+    
+
+
+    def analyze_results(self, params={}):
+        # Check that memory is loaded (if necessary)
+        self._check_mem_data()
+        
+        module_name = 'link_results_analyzer'
+        
+        # Initiate log
+        log = self._init_active_log(module_name, 'infer')
+        
+        agg_results = defaultdict(int) 
+        for data in self.mem_data:
+            infered_params = link_results_analyzer(data, params)
+            
+            agg_results['num_match'] += infered_params['num_match']
+            agg_results['num_match_thresh'] += infered_params['num_match_thresh']
+
+        # Write result of inference
+        module_to_write_to = self.MODULES['infer'][module_name]['write_to']
+
+        self.upload_config_data(agg_results, module_to_write_to, 'infered_config.json')
+        
+        # Update log buffer
+        self._end_active_log(log, error=False)  
+        
+        return infered_params
+    
+    
+    
 
     def create_es_index_ref(self, columns_to_index, force=False):
         

@@ -33,11 +33,11 @@ NOT_IMPLEMENTED_MESSAGE = 'NOT IMPLEMENTED in abstract class'
 class AbstractProject():
 
     def __init__(self, 
-                 project_id=None, 
-                 create_new=False, 
-                 description=None,
-                 display_name=None,
-                 public=False):
+                     project_id=None, 
+                     create_new=False, 
+                     description=None,
+                     display_name=None,
+                     public=False):
         
         if (project_id is None) and (not create_new):
             raise Exception('Set create_new to True or specify project_id')
@@ -46,10 +46,7 @@ class AbstractProject():
             
         if create_new: 
             # Generate project id if none is passed
-            if project_id is None:
-                self.project_id = self._gen_id()
-            else:
-                self.project_id = project_id
+            self.project_id = self._gen_id()
             
             path_to_proj = self.path_to()
             if os.path.isdir(path_to_proj):
@@ -64,6 +61,7 @@ class AbstractProject():
                                                   display_name=display_name, 
                                                   public=public)
             self._write_metadata()
+            
         else:
             self.project_id = project_id
             try:
@@ -140,7 +138,7 @@ class AbstractProject():
         return os.path.abspath(path)    
         
     def upload_config_data(self, config_dict, module_name, file_name):
-        '''Will write config file'''
+        '''Will write json config file'''
         
         if config_dict is None:
             return
@@ -164,29 +162,30 @@ class AbstractProject():
         if os.path.isfile(file_path):
             config = json.loads(open(file_path).read())
         else: 
-            config = {}
+            config = dict()
         return config               
     
+
+    def _write_metadata(self):
+        self.metadata['last_timestamp'] = time.time()
+        self.upload_config_data(self.metadata, 
+                                module_name='', 
+                                file_name='metadata.json')
+
     def read_metadata(self):
         '''Wrapper around read_config_data'''
         metadata = self.read_config_data(module_name='', file_name='metadata.json')
         assert metadata['project_id'] == self.project_id
         return metadata
     
-    def _write_metadata(self):
-        self.metadata['last_timestamp'] = time.time()
-        self.upload_config_data(self.metadata, 
-                                module_name='', 
-                                file_name='metadata.json')
-        
-    def remove(self, module_name='', file_name=''):
-        '''Removes a file from the project'''
+    def _remove(self, module_name='', file_name=''):
+        '''Removes a file from the project''' # TODO: private method
         file_path = self.path_to(module_name, file_name)
         
         if os.path.isfile(file_path):
             os.remove(file_path)
         else:
-            raise Exception('{0} (in: {1}) could not be found in \
+            raise FileNotFoundError('{0} (in: {1}) could not be found in \
                             project'.format(file_name, module_name))
 
     def delete_project(self):
@@ -194,14 +193,5 @@ class AbstractProject():
         path_to_proj = self.path_to()
         shutil.rmtree(path_to_proj)
     
-    
-    def add_info(self, info):
-        '''
-        Creates or replaces the "info" field in metadata with the input data
-        
-        INPUT:
-            - info: data to add 
-        '''
-        self.metadata['info'] = info
 
 

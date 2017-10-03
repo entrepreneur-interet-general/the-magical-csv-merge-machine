@@ -46,6 +46,26 @@ def my_print(func):
         
         return resp
     return wrapper
+
+def my_error_print():
+    try:
+        source_project_id
+    except:
+        source_project_id = None
+    
+    try:
+        ref_project_id
+    except:
+        ref_project_id = None
+    
+    try:
+        link_project_id
+    except:
+        link_project_id = None
+    raise Exception('source: {0}\n'.format(source_project_id) \
+                   + 'ref: {0}\n'.format(ref_project_id) \
+                   + 'link: {0}'.format(link_project_id))
+    
     
 @my_print
 def get_resp(url_to_append):
@@ -57,24 +77,9 @@ def get_resp(url_to_append):
         #        _print(url_to_append,  parsed_resp)
         return parsed_resp
     else: 
-        try:
-            source_project_id
-        except:
-            source_project_id = None
-        
-        try:
-            ref_project_id
-        except:
-            ref_project_id = None
-        
-        try:
-            link_project_id
-        except:
-            link_project_id = None
-        raise Exception('source: {0}\n'.format(source_project_id) \
-                       + 'ref: {0}\n'.format(ref_project_id) \
-                       + 'link: {0}\n'.format(link_project_id) \
-                       + 'Problem:\n', resp)
+        my_error_print()
+        raise Exception('Problem:\n', resp)
+
 
 @my_print
 def post_resp(url_to_append, body, **kwargs):
@@ -86,6 +91,7 @@ def post_resp(url_to_append, body, **kwargs):
         #        _print(url_to_append, parsed_resp)
         return parsed_resp
     else: 
+        my_error_print()
         raise Exception('Problem:\n', resp)
 
 @my_print
@@ -96,6 +102,7 @@ def post_download(url_to_append, body, **kwargs):
     if resp.ok:
         return resp
     else: 
+        my_error_print()
         raise Exception('Problem:\n', resp)    
 
 def wait_get_resp(url_to_append, max_wait=30):
@@ -107,6 +114,7 @@ def wait_get_resp(url_to_append, max_wait=30):
         if resp.ok:
             parsed_resp = json.loads(resp.content.decode())
         else: 
+            my_error_print()
             raise Exception('Problem:\n', resp)
             
         if parsed_resp['completed']:
@@ -581,9 +589,6 @@ if __name__ == '__main__':
     url_to_append = '/api/public_project_ids/link'
     resp = get_resp(url_to_append)
 
-
-   
-     
     print('source_project_id:', source_project_id)
     print('ref_project_id:', ref_project_id)
     print('link_project_id:', link_project_id)   
