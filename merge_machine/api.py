@@ -261,6 +261,16 @@ def method_not_allowed(error):
     return jsonify(error=True, message=error.description), 404
 
 
+def socket_error_wrapper(func):
+    def func_wrapper(*argv, **kwarg):
+        try:
+            func(*argv, **kwarg)
+        except Exception as e:
+            print('Exception in socket:', e)
+            to_send = {'error': True, 'error_message': e.__str__()}
+            encoder = MyEncoder()
+            emit('message', encoder.encode(to_send))
+    return func_wrapper
 #==============================================================================
 # API
 #==============================================================================
@@ -842,6 +852,7 @@ def add_columns_to_return(project_id, file_role):
 # =============================================================================
     
 @socketio.on('load_labeller', namespace='/')
+@socket_error_wrapper
 def load_labeller(message_received):
     '''Loads labeller. Necessary to have a separate call to preload page'''
     message_received = json.loads(message_received)
@@ -869,6 +880,7 @@ def load_labeller(message_received):
 
 
 @socketio.on('answer', namespace='/')
+@socket_error_wrapper
 def web_get_answer(message_received):
     # TODO: avoid multiple click (front)
     # TODO: add safeguards  if not enough train (front)
@@ -893,6 +905,7 @@ def web_get_answer(message_received):
     emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=message_to_display)))
 
 @socketio.on('update_filters', namespace='/')
+@socket_error_wrapper
 def update_musts(message_received):
     # If object received is string
     if isinstance(message_received, str):
@@ -913,6 +926,7 @@ def update_musts(message_received):
     emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message='')))
 
 @socketio.on('complete_training', namespace='/')
+@socket_error_wrapper
 def complete_training(message_received):
     '''Writes the data in the labeller and deletes the labeller'''
     message_received = json.loads(message_received)
@@ -938,6 +952,7 @@ def complete_training(message_received):
     emit('wrote_labeller', {'error': False})
     
 @socketio.on('terminate', namespace='/')
+@socket_error_wrapper
 def web_terminate_labeller_load(message_received):
     '''Clear memory in application for selected project'''
     message_received = json.loads(message_received)
