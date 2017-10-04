@@ -23,7 +23,7 @@ chunksize = 3000
 file_len = 10*10**6
 
 
-test_num = 3
+test_num = 2
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
     match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},
