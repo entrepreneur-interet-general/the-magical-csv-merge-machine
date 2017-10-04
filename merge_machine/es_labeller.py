@@ -43,7 +43,7 @@ class CompoundQueryTemplate():
         assert self.musts
         
         self.core = self._core()
-        self.core_parents = self._core_parents()
+        self.parent_cores = self._parent_cores()
 
     def _core(self):
         '''Same as in SingleQueryTemplate'''
@@ -52,12 +52,15 @@ class CompoundQueryTemplate():
             cores.append(must._core())
         return tuple(sorted(res))
 
-    def _core_parents(self):
+    def _parent_cores(self):
         '''Returns the core of all possible parents'''
         if len(self.core) == 1:
             return []
         else:
-            return list(itertools.combinations(self.core, len(self.core) - 1))
+            to_return = []
+            for i in range(1, len(self.core)-1):
+                to_return.extend(list(itertools.combinations(self.core, i)))
+            return to_return
 
         #    def add_returned_hits(self, returned_hits):
         #        self.returned_pairs_hist.append(returned_hits)
@@ -133,24 +136,92 @@ class Labeller():
     '''
     Labeller object that stores previous labels and generates new matches
     for the user to label
+    
+    
     '''
     
     def __init__(self):
         self.labelled_pairs = [] # Flat list of labelled pairs
         self.labels = [] # Flat list of labels
-        
-        self.returned_pairs_hist = [] # History: list of list of pairs proposed (source, ref)
-        self.has_hit_hist = [] # History: Indicates if any pair was returned
-        self.is_match_hist = [] # History: Indicates if the best hit was a match
-        
-        self.precision = None
-        self.recall = None
-        self.score = None
-                
-        
+
+        self._init_queries() # creates self.current_queries
+        self._init_metrics() # creates self.metrics
+        self._init_history() # creates self.history
     
-    def perform_request(self):
-        ''''''
+    def _init_queries(self, ):
+        """Generates initial query templates"""
+        self.current_queries = []
+        
+    def _init_metrics(self):
+        """Generate metrics object"""
+        self.metrics = dict()
+        for query in self.current_queries:
+            self.metrics[query] = {'precision': None,
+                                    'recall': None,
+                                    'score': None}
+    
+    def _init_history(self):
+        """Generate history object"""
+        self.history = dict()
+        for query in self.current_queries:
+            self.history[query] = {
+                                    'returned_pairs': [], # list of list of pairs proposed (source, ref)
+                                    'has_hit': [], # indicates if any pair was returned
+                                    'is_match': [], # indicates if the best hit was a match
+                                    'step': [] # indicates the step at which the pair was added
+                                    }
+        
+    def pruned_batch_request(self, row, queries_to_perform):
+        ''' 
+        Performs a smart batch request, by not searching for templates
+        if restrictions of these templates already did not return any results
+        '''
+        
+        queries_performed = []
+        results = {}
+        
+        core_has_match = dict()
+        
+        sorted_queries = sorted(queries_to_perform, key=lambda x: len(x.core)) # NB: groupby needs sorted 
+        for size, group in itertools.groupby(sorted_queries, key=lambda x: len(x.core)):
+            size_queries = sorted(group, lambda x: x.core)
+            
+            # 1) Fetch first of all unique cores            
+            query_batch = []
+            for core, sub_group in itertools.groupby(size_queries, key=lambda x: x.core):
+                # Only add core if all parents can have results
+                core_queries = list(sub_group)
+                first_query = core_queries[0]
+                if all(core_has_match.get(parent_core, True) for parent_core in first_query.core_parents):
+                    query_batch.append(first_query)        
+                else:
+                    core_has_match[core] = False
+                    
+            # Perform actual queries
+            batch_results = self._batch_request(query_batch, assert False)
+            
+            # Store results
+            results.update(zip(query_batch, batch_results))
+            for query, res in zip(query_batch, batch_results):
+                core_has_match[query.core] = bool(res)
+                
+                
+            # 2) Fetch queries when cores have 
+            query_batch = []
+            for core, sub_group in itertools.groupby(size_queries, key=lambda x: x.core):
+                if core_has_match[core]:
+                    query_batch.extend(list(sub_group))
+ 
+            # Perform actual queries
+            batch_results = self._batch_request(query_batch)
+            
+            # Store results
+            results.update(zip(query_batch, batch_results))
+            
+        # Order responses
+        to_return = [results.get(query, []) for query in queries_to_perform]        
+        return to_return
+            
         
         
     def re_score_history(self):
