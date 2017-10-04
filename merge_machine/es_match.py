@@ -488,8 +488,6 @@ def es_linker(source, params):
     exact_pairs = params.get('exact_pairs', [])
     non_matching_pairs = params.get('non_matching_pairs', [])
     
-
-    
     exact_source_indexes = [x[0] for x in exact_pairs if x[1] is not None]
     exact_ref_indexes = [x[1] for x in exact_pairs if x[1] is not None]
     source_indexes = [x[0] for x in source.iterrows() if x [0] not in exact_source_indexes]
@@ -571,7 +569,7 @@ class Labeller():
                    '.city': ['must', 'should']}
     boost_levels = [1]
     
-    t_p = 0.95
+    t_p = 0.92
     t_r = 0.3
     
     def __init__(self, source, ref_table_name, match_cols, columns_to_index, 
@@ -690,7 +688,7 @@ class Labeller():
         '''
         
         # Sort keys by score or most promising
-        if self.num_rows_labelled <= 2:
+        if self.num_rows_labelled <= 3:
             # Alternate between random and largest score
             sorted_keys_1 = random.sample(list(self.full_responses.keys()), len(self.full_responses.keys()))
             sorted_keys_2 = sorted(self.full_responses.keys(), key=lambda x: \
@@ -698,7 +696,7 @@ class Labeller():
             
             d_q = self._default_query()
             self.sorted_keys =  [d_q] \
-                        + [x for x in list(itertools.chain(*zip(sorted_keys_1, sorted_keys_2))) if x != d_q]
+                        + [x for x in list(itertools.chain(*zip(sorted_keys_2, sorted_keys_1))) if x != d_q]
             # TODO: redundency with first
         else:
             # Sort by ratio but label by precision ?
@@ -845,13 +843,12 @@ class Labeller():
                 self.finished = True
                 return None            
             
-            
             self.num_rows_proposed_source += 1
             self.next_row = False
             
             row = self.source.loc[self.idx]
             
-            print('\n' + '*'*40+'\n', 'in new_label / in self.next_row / len sorted_keys: {0} / row_idx: {1}'.format(len(self.sorted_keys), self.idx))
+            print('\n' + '*'*40 + '\n', 'in new_label / in self.next_row / len sorted_keys: {0} / row_idx: {1}'.format(len(self.sorted_keys), self.idx))
             all_search_templates, tmp_full_responses = perform_queries(self.ref_table_name, self.sorted_keys, [row], self.must, self.must_not, self.num_results_labelling)
             self.full_responses = {all_search_templates[i][1][0]: values for i, values in tmp_full_responses.items()}
             print('LEN OF FULL_RESPONSES (number of queries):', len(self.full_responses))
@@ -948,50 +945,61 @@ class Labeller():
         
         INPUT:
             - user_input: 
-                + "y" or "1" : res_id is a match with self.idx
-                + "n" or "0" : res_id is not a match with self.idx
-                + "u" : uncertain #TODO: is this no ?
-                + "p" : back to previous state
+                + "y" or "1" or "yes": res_id is a match with self.idx
+                + "n" or "0" or "no": res_id is not a match with self.idx
+                + "u" or "uncertain": uncertain #TODO: is this no ?
+                + "f" or "forget_row": uncertain #TODO: is this no ?
+                + "p" or "previous": back to previous state
             - ref_id: Elasticsearch Id of the reference element being labelled
         '''
         MIN_NUM_KEYS = 9 # Number under which to expand
         EXPAND_FREQ = 9
         
-        use_previous = user_input == 'p'
+        yes = user_input in ['y', '1', 'yes']
+        no = user_input in ['n', '0', 'no']
+        uncertain = user_input in ['u', 'uncertain']
+        forget_row = user_input in ['f', 'forget_row']
+        use_previous = user_input in ['p', 'previous']
+        
+        assert yes + no + uncertain + forget_row + use_previous == 1
         
         if use_previous:
             self.previous()
-        else:
-            is_match = user_input in ['y', '1']
-            is_not_match = user_input in ['n', '0']
-            print('in update')
-            if is_match:
-                
-                if (self.pairs) and (self.pairs[-1][0] == self.idx):
-                    self.pairs.pop()
-                self.pairs.append((self.idx, ref_id))
-    
-                self._update_query_summaries(ref_id)
-                self.num_rows_labelled += 1
-                self.next_row = True
-            if is_not_match:
-                self.pairs_not_match[self.idx].append(ref_id)
-                
-                if (not self.pairs) or (self.pairs[-1][0] != self.idx):
-                    self.pairs.append((self.idx, None))
-                
-#            if False:
-            # TODO: num_rows_labelled is not good since it can not change on new label
-            try:
-                self.last_expanded
-            except:
-                self.last_expanded = None
-            if ((len(self.sorted_keys) < MIN_NUM_KEYS) \
-                or((self.num_rows_labelled+1) % EXPAND_FREQ==0)) \
-                and (self.last_expanded != self.idx):
-                self.sorted_keys = _expand_by_boost(self.sorted_keys)
-                self.re_score_history()    
-                self.last_expanded = self.idx
+            return
+
+        print('in update')
+        if yes:
+            if (self.pairs) and (self.pairs[-1][0] == self.idx):
+                self.pairs.pop()
+            self.pairs.append((self.idx, ref_id))
+
+            self._update_query_summaries(ref_id)
+            self.num_rows_labelled += 1
+            self.next_row = True
+        
+        if no:
+            self.pairs_not_match[self.idx].append(ref_id)
+            
+            if (not self.pairs) or (self.pairs[-1][0] != self.idx):
+                self.pairs.append((self.idx, None))
+        
+        if uncertain:
+            raise NotImplementedError('Uncertain is not yet implemented')
+            
+        if forget_row:
+            self.next_row = True
+            
+        # TODO: num_rows_labelled is not good since it can not change on new label
+        try:
+            self.last_expanded
+        except:
+            self.last_expanded = None
+        if ((len(self.sorted_keys) < MIN_NUM_KEYS) \
+            or((self.num_rows_labelled+1) % EXPAND_FREQ==0)) \
+            and (self.last_expanded != self.idx):
+            self.sorted_keys = _expand_by_boost(self.sorted_keys)
+            self.re_score_history()    
+            self.last_expanded = self.idx
     
         
     def _update_query_metrics(self):
@@ -1037,7 +1045,11 @@ class Labeller():
         
     def answer_is_valid(self, user_input):
         '''Check if the user input is valid'''
-        valid_responses = {'y', 'n', 'u', '0', '1', 'p'}
+        valid_responses = {'y', '1', 'yes',
+                           'n', '0', 'no',
+                           'u', 'uncertain', 
+                           'f', 'forget_row',
+                           'p', 'previous'}
         return user_input in valid_responses
 
     def export_best_params(self):

@@ -853,7 +853,7 @@ def add_columns_to_return(project_id, file_role):
     
 @socketio.on('load_labeller', namespace='/')
 @socket_error_wrapper
-def load_labeller(message_received):
+def socket_load_labeller(message_received):
     '''Loads labeller. Necessary to have a separate call to preload page'''
     message_received = json.loads(message_received)
     project_id = message_received['project_id']
@@ -881,7 +881,7 @@ def load_labeller(message_received):
 
 @socketio.on('answer', namespace='/')
 @socket_error_wrapper
-def web_get_answer(message_received):
+def socket_get_answer(message_received):
     # TODO: avoid multiple click (front)
     # TODO: add safeguards  if not enough train (front)
 
@@ -898,6 +898,8 @@ def web_get_answer(message_received):
         # if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].finished:
 
         flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
+    else:
+        raise ValueError('Answer received "{0}" is not valid'.format(user_input))
 #    else:
 #        message_to_display = 'Sent an invalid answer'
         
@@ -906,7 +908,7 @@ def web_get_answer(message_received):
 
 @socketio.on('update_filters', namespace='/')
 @socket_error_wrapper
-def update_musts(message_received):
+def socket_update_musts(message_received):
     # If object received is string
     if isinstance(message_received, str):
         message_received = json.loads(message_received)
@@ -927,7 +929,7 @@ def update_musts(message_received):
 
 @socketio.on('complete_training', namespace='/')
 @socket_error_wrapper
-def complete_training(message_received):
+def socket_complete_training(message_received):
     '''Writes the data in the labeller and deletes the labeller'''
     message_received = json.loads(message_received)
     logging.info(message_received)
@@ -953,7 +955,7 @@ def complete_training(message_received):
     
 @socketio.on('terminate', namespace='/')
 @socket_error_wrapper
-def web_terminate_labeller_load(message_received):
+def socket_terminate_labeller_load(message_received):
     '''Clear memory in application for selected project'''
     message_received = json.loads(message_received)
     project_id = message_received['project_id']
