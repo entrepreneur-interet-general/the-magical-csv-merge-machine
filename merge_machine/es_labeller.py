@@ -10,6 +10,7 @@ Directions:
 """
 
 import itertools
+import random
 
 from elasticsearch import Elasticsearch
 import numpy as np
@@ -63,7 +64,7 @@ class CompoundQueryTemplate():
         cores = []
         for must in self.musts:
             cores.append(must._core())
-        return tuple(sorted(res))
+        return tuple(sorted(cores))
 
     def __hash__(self):
         return hash((q.__hash__() for q in self.musts + self.shoulds))    
@@ -113,14 +114,29 @@ class Labeller():
     Labeller object that stores previous labels and generates new matches
     for the user to label
     
+    0.1) Initiate queries/ metrics/ history
+    0.2) Read first row
     
+    1) Perform queries / update history of hits
+    2) Generate pairs to propose (based on sorted queries)
+    3...) Until row is over: User inputs label
+    4) Update metrics and history 
+    5) Sort queries
+    6) Gen new row and back to 1)
     '''
     
-    def __init__(self, ref_index_name):
-        
+    max_num_samples = 100
+    
+    def __init__(self, source, ref_index_name):
+        '''
+        source: pandas data_frame
+        ref_index_name: name of the Elasticsearch index used as reference
+        '''
+        self.source = source
         self.ref_index_name = ref_index_name
         
-        self.es = Elasticsearch()
+        self.source_row_gen = self._init_row_gen()
+        self.es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
         
         self.labelled_pairs = [] # Flat list of labelled pairs
         self.labels = [] # Flat list of labels
@@ -128,6 +144,9 @@ class Labeller():
         self._init_queries() # creates self.current_queries
         self._init_metrics() # creates self.metrics
         self._init_history() # creates self.history
+        
+        self.current_source_idx = None
+        self.current_ref_idx = None
     
     def _init_queries(self, ):
         """Generates initial query templates"""
@@ -152,13 +171,18 @@ class Labeller():
                                     'step': [] # indicates the step at which the pair was added
                                     }
         
+    def _init_row_gen(self):
+        for idx in random.sample(source.index, self.max_num_samples):
+            yield (idx, self.source.loc[idx, :])
+        
+        
     def _bulk_search(self, queries_to_perform, row):
         # TODO: use self.current_queries instead ?
         NUM_RESULTS = 3
         
         # Transform
         queries_to_perform_tuple = [x.as_tuple() for x in queries_to_perform]
-        search_template, res = _bulk_search(self.es, 
+        search_templates, full_responses = _bulk_search(self.es, 
                                              self.ref_index_names, 
                                              queries_to_perform_tuple, 
                                              [row],
@@ -166,7 +190,8 @@ class Labeller():
                                              self.must_not_filters, 
                                              NUM_RESULTS)
         
-        [(0, (query, row)), ...]; full_responses is {0: res, 1: res, ...}
+        assert [x[1][0] for x in search_templates] == queries_to_perform_tuple
+        return [x['hits']['hits'] for x in full_responses]
         
     def pruned_bulk_search(self, queries_to_perform, row):
         ''' 
@@ -174,9 +199,7 @@ class Labeller():
         if restrictions of these templates already did not return any results
         '''
         
-        queries_performed = []
         results = {}
-        
         core_has_match = dict()
         
         sorted_queries = sorted(queries_to_perform, key=lambda x: len(x.core)) # NB: groupby needs sorted 
@@ -195,7 +218,7 @@ class Labeller():
                     core_has_match[core] = False
                     
             # Perform actual queries
-            bulk_results = self._bulk_request(query_bulk, assert False)
+            bulk_results = self._bulk_search(query_bulk, row)
             
             # Store results
             results.update(zip(query_bulk, bulk_results))
@@ -210,7 +233,7 @@ class Labeller():
                     query_bulk.extend(list(sub_group))
  
             # Perform actual queries
-            bulk_results = self._bulk_search(query_bulk)
+            bulk_results = self._bulk_search(query_bulk, row)
             
             # Store results
             results.update(zip(query_bulk, bulk_results))
@@ -218,11 +241,474 @@ class Labeller():
         # Order responses
         to_return = [results.get(query, []) for query in queries_to_perform]        
         return to_return
-            
+
+
+
+
+
+
+    def _print_pair(self, source_item, ref_item, test_num=0):
+        print('\n***** ref_id: {0} / score: {1} / num_rows_labelled: {2}'.format(ref_item['_id'], ref_item['_score'], self.num_rows_labelled))
+        print('self.first_propoal_for_source_idx:', self.first_propoal_for_source_idx)
+        print('self.num_rows_labelled:', self.num_rows_labelled)
+        print('self.num_rows_proposed_source:', self.num_rows_proposed_source)
+        print('self.num_rows_proposed_ref:', self.num_rows_proposed_ref)
+        match_cols = copy.deepcopy(self.match_cols)
+        for match in match_cols:
+            if isinstance(match['ref'], str):
+                cols = [match['ref']]
+            else:
+                cols = match['ref']
+            for col in cols:
+                if isinstance(match['source'], str):
+                    match['source'] = [match['source']]
+                string = ' '.join([source_item['_source'][col_source] for col_source in match['source']])
+                print('\n{1}   -> [{0}][source]'.format(match['source'], string))
+                print('> {1}   -> [{0}]'.format(col, ref_item['_source'][col]))
         
+    def console_input(self, source_item, ref_item, test_num=0):
+        '''Console input displaying the source_item, ref_item pair'''
+        pass
+
+
+    def _sort_keys(self):
+        '''
+        Update sorted_keys, that determin the order in which samples are shown
+        to the user        
+        '''
+        
+        # Sort keys by score or most promising
+        if self.num_rows_labelled <= 3:
+            # Alternate between random and largest score
+            sorted_keys_1 = random.sample(list(self.full_responses.keys()), len(self.full_responses.keys()))
+            sorted_keys_2 = sorted(self.full_responses.keys(), key=lambda x: \
+                                   self.full_responses[x]['hits'].get('max_score') or 0, reverse=True)
+            
+            d_q = self._default_query()
+            self.sorted_keys =  [d_q] \
+                        + [x for x in list(itertools.chain(*zip(sorted_keys_2, sorted_keys_1))) if x != d_q]
+            # TODO: redundency with first
+        else:
+            # Sort by ratio but label by precision ?
+            self.sorted_keys = sorted(self.full_responses.keys(), key=lambda x: self.query_metrics[x]['precision'], reverse=True)
+            
+            
+            l1 = len(self.sorted_keys)
+            # Remove queries if precision is too low (thresh depends on number of labels)
+            self.sorted_keys = list(filter(lambda x: self.query_metrics[x]['precision'] \
+                                      >= self._min_precision(), self.sorted_keys))
+            l2 = len(self.sorted_keys)
+            print('min_precision: removed {0} queries; {1} left'.format(l1-l2, l2))
+            
+            # Remove queries according to max number of keys
+            self.sorted_keys = self.sorted_keys[:self._max_num_keys()]
+            l3 = len(self.sorted_keys)
+            print('max_num_keys: removed {0} queries; {1} left'.format(l2-l3, l3))
+                
+    def previous(self):
+        '''Return to pseudo-previous state.'''
+        print('self.next_row:', self.next_row)
+        if self.first_propoal_for_source_idx:
+            self._previous_row()
+        else:
+            self._restart_row()        
+    
+    def _restart_row(self):
+        '''Re-initiates labelling for row self.idx'''       
+        if not hasattr(self, 'idx'):
+            raise RuntimeError('No row to restart')
+        if self.next_row:
+            raise RuntimeError('Already at start of row')
+        
+        self.num_rows_proposed_ref[self.idx] = 0 
+        # after update
+        if self.pairs and self.pairs[-1][0] == self.idx:
+            self.num_rows_labelled -= 1
+            self.pairs.pop()
+            
+            for val in self.query_summaries.values():
+                if val and (val[-1][0] == self.idx):
+                    val.pop()
+                    
+        self.num_rows_proposed_source -= 1     
+        self.next_row = True
+        
+        self.row_idxs.append(self.idx)
+        
+        # self.query_summaries = dict()
+        
+            
+    def _previous_row(self):
+        '''Todo this deals with previous '''
+        if not self.pairs:
+            raise RuntimeError('No previous labels')
+        
+        self._restart_row()
+        
+        previous_idx = self.pairs.pop()[0]
+        self.row_idxs.append(previous_idx)
+        self.num_rows_labelled -= 1
+
+        self.num_rows_proposed_ref[previous_idx] = 0
+        self.num_rows_proposed_source -= 1
+        
+        # TODO: remove try, except
+        try:
+            self._update_query_metrics()       
+        except:
+            print('Could not update query_metrics')
+            pass        
+        print('self.next_row:', self.next_row)
+
+        
+    def _new_label_for_row(self, full_responses, sorted_keys, num_results):
+        '''
+        User labelling going through potential results (order given by sorted_keys) 
+        looking for a match. This goes through all keys and all results (up to
+        num_results) and asks the user to label the data. Labelling ends once the 
+        user finds a match for the current row or there is no more potential matches.
+        
+        INPUT:
+            - full_responses: result of "perform_queries" ; {query: response, ...}
+            - sorted_keys: order in which to perform labelling
+            - num_results: how many results to display per search template (1
+                        will display only most probable result for each template)
+            
+        OUTPUT:
+            - res: result of potential match in reference to label
+        '''
+        
+        ids_done = []
+        num_keys = len(sorted_keys)
+        for i, key in enumerate(sorted_keys):                
+            results = full_responses[key]['hits']['hits']
+            
+            if len(results):
+                print('\nkey (ex {0}/{1}): {2}'.format(i, num_keys, key))
+                print('Num hits for this key: ', len(results)) 
+            else:
+                print('\nkey ({0}/{1}) has no results...'.format(i, num_keys))
+                
+            try:
+                print('precision: ', self.query_metrics[key]['precision'])
+                print('recall: ', self.query_metrics[key]['recall'])
+            except:
+                print('no precision/recall to display...')                
+                
+            for res in results[:num_results]:
+                min_score = self.query_metrics.get(key, {}).get('thresh', 0)/1.5
+                if res['_id'] not in ids_done \
+                        and ((res['_score']>=min_score)) \
+                        and res['_id'] not in self.pairs_not_match[self.idx]: #  TODO: not neat
+                    ids_done.append(res['_id'])
+                    yield res
+                else:
+                    print('>>> res not analyzed because:')
+                    if res['_id'] in ids_done: 
+                        print('> res already done for this row')
+                    if res['_score'] < min_score:
+                        print('> score too low ({0} < {1})'.format(res['_score'], min_score))
+                    if res['_id'] in self.pairs_not_match[self.idx]: 
+                        print('> already a NOT match')
+
+    
+    def _new_label(self):
+        '''Return the next potential match in reference to label to label'''
+        # If looking for a new row from source, initiate the generator
+        if not self.sorted_keys:
+            raise ValueError('No keys in self.sorted_keys')
+            
+        self.first_propoal_for_source_idx = False
+        # If on a new row, create the generator for the entire row
+        if self.next_row: # If previous was found: try new row
+            if self.row_idxs:
+                self.idx = self.row_idxs.pop()
+                
+                # Check if row was already done # TODO: will be problem with count
+                if self.idx in (x[0] for x in self.pairs):
+                    return self._new_label() # TODP! chechk this                     
+                
+                self.first_propoal_for_source_idx = True
+            else:
+                self.finished = True
+                return None            
+            
+            self.num_rows_proposed_source += 1
+            self.next_row = False
+            
+            row = self.source.loc[self.idx]
+            
+            print('\n' + '*'*40 + '\n', 'in new_label / in self.next_row / len sorted_keys: {0} / row_idx: {1}'.format(len(self.sorted_keys), self.idx))
+            all_search_templates, tmp_full_responses = perform_queries(self.ref_table_name, self.sorted_keys, [row], self.must, self.must_not, self.num_results_labelling)
+            self.full_responses = {all_search_templates[i][1][0]: values for i, values in tmp_full_responses.items()}
+            print('LEN OF FULL_RESPONSES (number of queries):', len(self.full_responses))
+            # import pdb; pdb.set_trace()
+            self._sort_keys()
+            
+            print('BEST 10 KEYS:')
+            for key in self.sorted_keys[:10]:
+                print('\n', key)
+                metrics = self.query_metrics.get(key, {})
+                print(' > precision:', metrics.get('precision')) 
+                print(' > recall:', metrics.get('recall'))
+                print(' > ratio:', metrics.get('ratio'))
+                
+            self.label_row_gen = self._new_label_for_row(self.full_responses, 
+                                                    self.sorted_keys, 
+                                                    self.num_results_labelling)
+        
+        # Return next option for row or try next row
+        try:
+            self.num_rows_proposed_ref[self.idx] += 1
+            return next(self.label_row_gen)
+        except StopIteration:
+            self.next_row = True
+            return self._new_label()
+        
+    def new_label(self):
+        '''Returns a pair to label'''
+        ref_item = self._new_label()
+        
+        if ref_item is None:
+            #            self.source_item = None
+            #            self.ref_item = None
+            return None, None
+        
+        source_item = {'_id': self.idx, 
+                       '_source': self.source.loc[self.idx].to_dict()}
+        
+        self.source_item = source_item
+        self.ref_item = ref_item
+        return source_item, ref_item
+    
+    def _auto_label_pair(self, source_item, ref_item):
+        '''
+        Try to automatically generate the label for the pair source_item, ref_item
+        '''
+        # TODO: check format of exact match cols
+        source_cols = self.certain_column_matches['source']
+        ref_cols = self.certain_column_matches['ref']
+        
+        # If no values are None, check if concatenation is an exact match
+        if all(source_item['_source'][col] is not None for col in source_cols) \
+                and all(ref_item['_source'][col] is not None for col in ref_cols):
+                    
+            is_match = ''.join(source_item['_source'][col] for col in source_cols) \
+                        == ''.join(ref_item['_source'][col] for col in ref_cols)
+                        
+            if is_match:
+                return 'y'
+            else:
+                return 'n'
+        else:
+            return None
+        
+    def auto_label(self):
+        for i in range(len(self.source)):
+            (source_item, ref_item) = self.new_label()
+            if ref_item is None:
+                break
+            
+            label = self._auto_label_pair(source_item, ref_item)
+            
+            self._print_pair(source_item, ref_item, 0)
+            print('AUTO LABEL: {0}'.format(label))
+            
+            if label is not None:
+                self.update(label, ref_item['_id'])    
+        
+        self.row_idxs = list(idx for idx in random.sample(list(self.source.index), 
+                                                          self.max_num_samples))
+        self.next_row = True
+        
+    def parse_valid_answer(self, user_input):
+        if self.ref_item is not None:
+            ref_id = self.ref_item['_id']
+        else:
+            ref_id = None
+        return self.update(user_input, ref_id)
+
+    def update(self, user_input, ref_id):
+        '''
+        Update query summaries and query_metrics and other variables based 
+        on the user given label and the elasticsearch id of the reference item being labelled
+        
+        INPUT:
+            - user_input: 
+                + "y" or "1" or "yes": res_id is a match with self.idx
+                + "n" or "0" or "no": res_id is not a match with self.idx
+                + "u" or "uncertain": uncertain #TODO: is this no ?
+                + "f" or "forget_row": uncertain #TODO: is this no ?
+                + "p" or "previous": back to previous state
+            - ref_id: Elasticsearch Id of the reference element being labelled
+        '''
+        MIN_NUM_KEYS = 9 # Number under which to expand
+        EXPAND_FREQ = 9
+        
+        yes = user_input in ['y', '1', 'yes']
+        no = user_input in ['n', '0', 'no']
+        uncertain = user_input in ['u', 'uncertain']
+        forget_row = user_input in ['f', 'forget_row']
+        use_previous = user_input in ['p', 'previous']
+        
+        assert yes + no + uncertain + forget_row + use_previous == 1
+        
+        if use_previous:
+            self.previous()
+            return
+
+        print('in update')
+        if yes:
+            if (self.pairs) and (self.pairs[-1][0] == self.idx):
+                self.pairs.pop()
+            self.pairs.append((self.idx, ref_id))
+
+            self._update_query_summaries(ref_id)
+            self.num_rows_labelled += 1
+            self.next_row = True
+        
+        if no:
+            self.pairs_not_match[self.idx].append(ref_id)
+            
+            if (not self.pairs) or (self.pairs[-1][0] != self.idx):
+                self.pairs.append((self.idx, None))
+        
+        if uncertain:
+            raise NotImplementedError('Uncertain is not yet implemented')
+            
+        if forget_row:
+            self.next_row = True
+            
+        # TODO: num_rows_labelled is not good since it can not change on new label
+        try:
+            self.last_expanded
+        except:
+            self.last_expanded = None
+        if ((len(self.sorted_keys) < MIN_NUM_KEYS) \
+            or((self.num_rows_labelled+1) % EXPAND_FREQ==0)) \
+            and (self.last_expanded != self.idx):
+            self.sorted_keys = _expand_by_boost(self.sorted_keys)
+            self.re_score_history()    
+            self.last_expanded = self.idx
+    
+        
+    def _update_query_metrics(self):
+        self.query_metrics = calc_query_metrics(self.query_summaries, t_p=self.t_p, t_r=self.t_r)
+
+    def _update_query_summaries(self, matching_ref_id):
+        '''
+        Assuming res_id is the Elasticsearch id of the matching refential,
+        update the summaries
+        '''
+
+        print('in update / in is_match')
+        # Update individual and aggregated summaries
+        for key, response in self.full_responses.items():
+            self.query_summaries[key].append([self.idx, analyze_hits(response['hits']['hits'], matching_ref_id)])
+        self._update_query_metrics()
         
     def re_score_history(self):
-        '''Use this After a must and or must_not update, '''
+        '''Use this if updated must or must_not'''
+        print('WARNING: Re-Scoring history')
+
+        # Re-initiate query_summaries
+        self.query_summaries = dict()
+        for q_t in self.sorted_keys:
+            self.query_summaries[q_t] = []
         
+        # TODO: temporary sol: put all in bulk
+        for pair in self.pairs:
+            all_search_templates, self.full_responses = perform_queries(
+                                                          self.ref_table_name, 
+                                                          self.sorted_keys, 
+                                                          [self.source.loc[pair[0]]], 
+                                                          self.must, self.must_not, 
+                                                          self.num_results_labelling)
+            self.full_responses = {all_search_templates[idx][1][0]: values \
+                                   for idx, values in self.full_responses.items()}
+            self._update_query_summaries(pair[1])
+
+        self._sort_keys()
+
+        if not self.sorted_keys:
+            raise ValueError('No keys in self.sorted_keys')
+        
+    def answer_is_valid(self, user_input):
+        '''Check if the user input is valid'''
+        valid_responses = {'y', '1', 'yes',
+                           'n', '0', 'no',
+                           'u', 'uncertain', 
+                           'f', 'forget_row',
+                           'p', 'previous'}
+        return user_input in valid_responses
+
+    def export_best_params(self):
+        '''Returns a dictionnary with the best parameters (input for es_linker)'''
+        params = dict()
+        params['index_name'] = self.ref_table_name
+        params['query_template'] = self._best_query_template()
+        params['must'] = self.must
+        params['must_not'] = self.must_not
+        params['thresh'] = 0 # self.threshold #TODO: fix this
+        params['best_thresh'] = self.query_metrics[params['query_template']]['thresh']
+        params['exact_pairs'] = self.pairs
+        params['non_matching_pairs'] = [(key, val) for key, values in self.pairs_not_match.items() for val in values]
+        return params
+    
+    def write_training(self, file_path):        
+        params = self.export_best_params()
+        encoder = MyEncoder()
+        with open(file_path, 'w') as w:
+            w.write(encoder.encode(params))
+    
+    def update_musts(self, must, must_not):
+        if (not isinstance(must, dict)) or (not isinstance(must_not, dict)):
+            raise ValueError('Variables "must" and "must_not" should be dicts' \
+                'with keys being column names and values a list of strings')
+        self.must = must
+        self.must_not = must_not
+        self.re_score_history()
+        
+    def _best_query_template(self):
+        """Return query template with the best score (ratio)"""
+        if self.query_metrics:
+            return sorted(self.query_metrics.keys(), key=lambda x: \
+                          self.query_metrics[x]['ratio'], reverse=True)[0]
+        else:
+            return None
+ 
+    def to_emit(self, message):
+        '''Creates a dict to be sent to the template #TODO: fix this'''
+        dict_to_emit = dict()
+        # Info on pair
+        dict_to_emit['source_item'] = self.source_item
+        dict_to_emit['ref_item'] = self.ref_item
+        
+        # Info on past labelling
+        dict_to_emit['num_proposed_source'] = str(self.num_rows_proposed_source)
+        dict_to_emit['num_proposed_ref'] = str(sum(self.num_rows_proposed_ref.values()))
+        dict_to_emit['num_labelled'] = str(self.num_rows_labelled)
+        dict_to_emit['t_p'] = self.t_p
+        dict_to_emit['t_r'] = self.t_r
+        
+        # Info on current performence
+        b_q_t = self._best_query_template()
+        if b_q_t is not None:
+            dict_to_emit['estimated_precision'] = str(self.query_metrics.get(b_q_t, {}).get('precision'))
+            dict_to_emit['estimated_recall'] = str(self.query_metrics.get(b_q_t, {}).get('recall'))
+            dict_to_emit['best_query_template'] = str(b_q_t)
+        else:
+            dict_to_emit['estimated_precision'] = None
+            dict_to_emit['estimated_recall'] = None
+            dict_to_emit['best_query_template'] = None
+            
+        dict_to_emit['has_previous'] = 'temp_has_previous'# len(self.examples_buffer) >= 1
+        if message:
+            dict_to_emit['_message'] = message
+        return dict_to_emit
+    
+
+        
+
         
         

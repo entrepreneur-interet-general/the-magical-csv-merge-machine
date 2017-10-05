@@ -276,52 +276,6 @@ def _expand_by_boost(all_query_templates):
 #    return False, None    
 
 
-def perform_queries(table_name, all_query_templates, rows, must, must_not, num_results=3):
-    '''
-    Searches for the values in rows with all the search templates in 
-    all_query_templates. Retry on error.
-    
-    INPUT:
-        - all_query_templates: iterator of queries to perform
-        - rows: iterator of pandas.Series containing the rows to match
-        - num_results: max number of results per individual query    
-    '''
-    i = 1
-    full_responses = dict() 
-    og_search_templates = list(enumerate(itertools.product(all_query_templates, rows)))
-    search_templates = list(og_search_templates)        
-    # search_template is [(id, (query, row)), ...]
-    while search_templates:
-        print('At search iteration', i)
-        
-        bulk_body_gen = _gen_bulk(table_name, [x[1] for x in search_templates], 
-                                  must, must_not, num_results)
-        responses = []
-        for bulk_body, _ in bulk_body_gen:
-            responses.extend(es.msearch(bulk_body)['responses']) #, index=table_name)
-            
-        # TODO: add error on query template with no must or should
-        
-        has_error_vect = ['error' in x for x in responses]
-        has_hits_vect = [('error' not in x) and bool(x['hits']['hits']) for x in responses]
-        
-        # Update for valid responses
-        for (s_t, res, has_error) in zip(search_templates, responses, has_error_vect):
-            if not has_error:
-                full_responses[s_t[0]] = res
-    
-        print('Num errors:', sum(has_error_vect))
-        print('Num hits', sum(has_hits_vect))
-        
-        # Limit query to those we couldn't get the first time
-        search_templates = [x for x, y in zip(search_templates, has_error_vect) if y]
-        i += 1
-        
-        if i >= 10:
-            raise Exception('Problem with elasticsearch: could not perform all queries in 10 trials')
-            
-    return og_search_templates, full_responses
-
 #def exact_es_linker(source, params):
 #    table_name = params['index_name']
 #    certain_col_matches = params['certain_col_matches']
