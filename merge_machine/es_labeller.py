@@ -11,7 +11,10 @@ Directions:
 
 import itertools
 
+from elasticsearch import Elasticsearch
 import numpy as np
+
+from es_helpers import _gen_body, _bulk_search
 
 
 class SingleQueryTemplate():
@@ -22,28 +25,38 @@ class SingleQueryTemplate():
         self.ref_col = ref_col
         self.analyzer_suffix = analyzer_suffix
         self.boost = boost
-        
-    def __hash__(self):
-        return (self.bool_lvl, self.source_col, self.ref_col, self.analyzer_suffix, self.boost)
-    
+
     def _core(self):
         '''
         Return the minimal compononent that guarantees equivalence of the claim:
         "this query has results"    
         '''
         return (self.source_col, self.ref_col, self.analyzer_suffix)
+        
+    def __hash__(self):
+        # TODO: join is not clean
+        return hash(self.bool_lvl, '/./'.join(self.source_col), '/./'.join(self.ref_col), self.analyzer_suffix, self.boost)
+    
+    def _as_tuple(self):
+        return (self.bool_lvl, self.source_col, self.ref_col, self.analyzer_suffix, self.boost)
+    
+    #    def __eq__(self, other):
+    #        if not isinstance(other, type(self)):
+    #            return False
+    #        return (self.bool_lvl, self.source_col, self.ref_col, self.analyzer_suffix, self.boost)
 
 
 class CompoundQueryTemplate():
     '''Information regarding a query to be used in the labeller'''
-    def __init__(self, query_templates):        
-        self.musts = [x for x in query_templates if x[0] == 'must']
-        self.shoulds = [x for x in query_templates if x[0] == 'should']
+    def __init__(self, single_query_templates):        
+        self.musts = [x for x in single_query_templates if x[0] == 'must']
+        self.shoulds = [x for x in single_query_templates if x[0] == 'should']
         
         assert self.musts
         
         self.core = self._core()
         self.parent_cores = self._parent_cores()
+
 
     def _core(self):
         '''Same as in SingleQueryTemplate'''
@@ -51,6 +64,9 @@ class CompoundQueryTemplate():
         for must in self.musts:
             cores.append(must._core())
         return tuple(sorted(res))
+
+    def __hash__(self):
+        return hash((q.__hash__() for q in self.musts + self.shoulds))    
 
     def _parent_cores(self):
         '''Returns the core of all possible parents'''
@@ -72,66 +88,26 @@ class CompoundQueryTemplate():
         
     
     
-    def _gen_body(self, row, num_results=3):
-    '''
-    Generate the string to pass to Elastic search for it to execute query
-    
-    INPUT:
-        - query_template: ((bool_lvl, source_col, ref_col, analyzer_suffix, boost), ...)
-        - row: pandas.Series from the source object
-        - must: terms to filter by field (AND: will include ONLY IF ALL are in text)
-        - must_not: terms to exclude by field from search (OR: will exclude if ANY is found)
-        - num_results: Max number of results for the query
-    
-    OUTPUT:
-        - body: the query as string
-    
-    NB: s_q_t: single_query_template
-        source_val = row[s_q_t[1]]
-        key = s_q_t[2] + s_q_t[3]
-        boost = s_q_t[4]
-    '''
-    DEFAULT_MUST_FIELD = '.french'
-    
-    query_template = [_reformat_s_q_t(s_q_t) for s_q_t in query_template]
-    
-    body = {
-          'size': num_results,
-          'query': {
-            'bool': dict({
-               must_or_should: [
-                          {'match': {
-                                  s_q_t[2] + s_q_t[3]: {'query': _remove_words(row[s_q_t[1]].str.cat(sep=' '), must.get(s_q_t[2], [])),
-                                                        'boost': s_q_t[4]}}
-                          } \
-                          for s_q_t in query_template if (s_q_t[0] == must_or_should) \
-                                      and isinstance(s_q_t[2], str)
-                        ] \
-    
-                        + [
-                          {'multi_match': {
-                                  'fields': [col + s_q_t[3] for col in s_q_t[2]], 
-                                  'query': _remove_words(row[s_q_t[1]].str.cat(sep=' '), []),
-                                  'boost': s_q_t[4]
-                                  }
-                          } \
-                          for s_q_t in query_template if (s_q_t[0] == must_or_should) \
-                                      and (isinstance(s_q_t[2], tuple) or isinstance(s_q_t[2], list))
-                        ] \
-                for must_or_should in ['must', 'should']
-                },
-    
-                    **{
-                       'must_not': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' OR '.join(values)}}
-                                 } for field, values in must_not.items()],
-                       'filter': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' AND '.join(values)}} # TODO: french?
-                                 } for field, values in must.items()],
-                    })               
-                  }
-           }
-    return body
+    def _gen_body(self, row, must_filter={}, must_not_filter={}, num_results=3):
+        '''
+        Generate the string to pass to Elastic search for it to execute query
         
-
+        INPUT:
+            - row: pandas.Series from the source object
+            - must: terms to filter by field (AND: will include ONLY IF ALL are in text)
+            - must_not: terms to exclude by field from search (OR: will exclude if ANY is found)
+            - num_results: Max number of results for the query
+        
+        OUTPUT:
+            - body: the query as string
+        '''
+        body = _gen_body(self.must + self.should, row, must_filter, must_not_filter, num_results)
+        return body
+        
+    def _as_tuple(self):
+        tuple(x._as_tuple for x in self.musts + self.shoulds)
+        
+        
 class Labeller():
     '''
     Labeller object that stores previous labels and generates new matches
@@ -140,7 +116,12 @@ class Labeller():
     
     '''
     
-    def __init__(self):
+    def __init__(self, ref_index_name):
+        
+        self.ref_index_name = ref_index_name
+        
+        self.es = Elasticsearch()
+        
         self.labelled_pairs = [] # Flat list of labelled pairs
         self.labels = [] # Flat list of labels
 
@@ -171,9 +152,25 @@ class Labeller():
                                     'step': [] # indicates the step at which the pair was added
                                     }
         
-    def pruned_batch_request(self, row, queries_to_perform):
+    def _bulk_search(self, queries_to_perform, row):
+        # TODO: use self.current_queries instead ?
+        NUM_RESULTS = 3
+        
+        # Transform
+        queries_to_perform_tuple = [x.as_tuple() for x in queries_to_perform]
+        search_template, res = _bulk_search(self.es, 
+                                             self.ref_index_names, 
+                                             queries_to_perform_tuple, 
+                                             [row],
+                                             self.must_filters, 
+                                             self.must_not_filters, 
+                                             NUM_RESULTS)
+        
+        [(0, (query, row)), ...]; full_responses is {0: res, 1: res, ...}
+        
+    def pruned_bulk_search(self, queries_to_perform, row):
         ''' 
-        Performs a smart batch request, by not searching for templates
+        Performs a smart bulk request, by not searching for templates
         if restrictions of these templates already did not return any results
         '''
         
@@ -187,36 +184,36 @@ class Labeller():
             size_queries = sorted(group, lambda x: x.core)
             
             # 1) Fetch first of all unique cores            
-            query_batch = []
+            query_bulk = []
             for core, sub_group in itertools.groupby(size_queries, key=lambda x: x.core):
                 # Only add core if all parents can have results
                 core_queries = list(sub_group)
                 first_query = core_queries[0]
                 if all(core_has_match.get(parent_core, True) for parent_core in first_query.core_parents):
-                    query_batch.append(first_query)        
+                    query_bulk.append(first_query)        
                 else:
                     core_has_match[core] = False
                     
             # Perform actual queries
-            batch_results = self._batch_request(query_batch, assert False)
+            bulk_results = self._bulk_request(query_bulk, assert False)
             
             # Store results
-            results.update(zip(query_batch, batch_results))
-            for query, res in zip(query_batch, batch_results):
+            results.update(zip(query_bulk, bulk_results))
+            for query, res in zip(query_bulk, bulk_results):
                 core_has_match[query.core] = bool(res)
                 
                 
             # 2) Fetch queries when cores have 
-            query_batch = []
+            query_bulk = []
             for core, sub_group in itertools.groupby(size_queries, key=lambda x: x.core):
                 if core_has_match[core]:
-                    query_batch.extend(list(sub_group))
+                    query_bulk.extend(list(sub_group))
  
             # Perform actual queries
-            batch_results = self._batch_request(query_batch)
+            bulk_results = self._bulk_search(query_bulk)
             
             # Store results
-            results.update(zip(query_batch, batch_results))
+            results.update(zip(query_bulk, bulk_results))
             
         # Order responses
         to_return = [results.get(query, []) for query in queries_to_perform]        
