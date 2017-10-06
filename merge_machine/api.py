@@ -376,7 +376,8 @@ def set_skipped(project_type, project_id):
     proj = _init_project(project_type, project_id)
     proj.set_skip(data_params['module_name'], data_params['file_name'], 
                   module_params.get('skip_value', True))
-
+    return jsonify(project_id=project_id, 
+                   error=False)
 
 @app.route('/api/last_written/<project_type>/<project_id>', methods=['GET', 'POST'])
 def get_last_written(project_type, project_id):
