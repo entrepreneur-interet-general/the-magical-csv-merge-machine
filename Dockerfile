@@ -1,45 +1,26 @@
-# Use an official Python runtime as a base image
 FROM python:3.5 
-#FROM continuumio/anaconda3
-
-#RUN apk add --update curl gcc g++ \
-#    && rm -rf /var/cache/apk/*
 RUN apt-get install autoconf automake curl gcc g++ libtool pkg-config
-#RUN ln -s /usr/include/locale.h /usr/include/xlocale.h
 
-RUN pip3 install bottle numpy cython --no-input 
+#RUN apt-get install apt-transport-https
+#RUN echo "deb https://artifacts.elastic.co/packages/5.x/apt stable main" | tee -a /etc/apt/sources.list.d/elastic-5.x.list
+#RUN apt-get update && apt-get install elasticsearch
+RUN wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.6.2.deb
+RUN sha1sum elasticsearch-5.6.2.deb 
+RUN dpkg -i elasticsearch-5.6.2.deb
 
-#CMD tail -f /dev/null
+# RUN systemctl daemon-reload
+# RUN systemctl enable elasticsearch.service
+# RUN systemctl start elasticsearch.service
 
-
-# Set the working directory to /merge_machine
 WORKDIR /merge_machine
-
-# Requirements for libpostal
-RUN git clone https://github.com/openvenues/libpostal
-RUN cd libpostal \
-	&& ./bootstrap.sh \
-	&& mkdir /libpostal_data \
-	&& ./configure --datadir=/libpostal_data \
-	&& make \
-	&& make install
-
-RUN pip3 install numpy
 COPY requirements.txt requirements.txt
 RUN pip3 install -r requirements.txt
 RUN ldconfig
-
-# Copy the current directory contents into the container at /merge_machine
-# For dev, use COPY. For prod, use github
 COPY . /merge_machine
+RUN mkdir -p merge_machine/resource/es_linker
+RUN wget "https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000@public/download/?format=json&timezone=Europe/Berlin" -O merge_machine/resource/es_linker/geonames-all-cities-with-a-population-1000.json
+RUN python3 merge_machine/es_gen_resource.py
 
-# Install requirements
-
-# Make port XX available to the outside world
 EXPOSE 80
-
-
-# Define environment variables? 
-WORKDIR /merge_machine/merge_machine
-# Run app when container launches
-CMD ["python3", "api.py"]
+CMD ["uwsgi", "--http 0.0.0.0:5000 -b 32768 --wsgi-file merge_machine/api.py --callable app  --master --processes 4 --threads 2"]
+CMD ["python3", "merge_machine/worker.py"]

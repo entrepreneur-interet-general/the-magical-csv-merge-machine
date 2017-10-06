@@ -1,9 +1,5 @@
 unidecode
 pandas
-flask
-flask-cors
-flask-session
-flask-socketio
 python-memcached
 redis
 rq
@@ -13,6 +9,6 @@ phonenumbers
 dateparser
 persistent
 python-stdnum
+bottle
 numpy
 cython
-elasticsearch

@@ -1,0 +1,9 @@
+unidecode
+pandas
+python-memcached
+flask
+flask-cors
+flask-session
+flask-socketio
+redis
+rq

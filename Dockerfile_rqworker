@@ -1,0 +1,10 @@
+FROM python:3.5 
+RUN apt-get install autoconf automake curl gcc g++ libtool pkg-config enchant
+WORKDIR /merge_machine
+COPY requirements_rqworker.txt requirements_rqworker.txt
+RUN pip3 install -r requirements_rqworker.txt
+RUN ldconfig
+COPY . /merge_machine
+EXPOSE 80
+WORKDIR /merge_machine/merge_machine
+CMD ["python3", "worker.py"]
