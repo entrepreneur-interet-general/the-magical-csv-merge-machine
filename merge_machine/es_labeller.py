@@ -140,25 +140,31 @@ class Labeller():
         
         self.labelled_pairs = [] # Flat list of labelled pairs
         self.labels = [] # Flat list of labels
-
+        self.num_rows_labelled = [] # Flat list: at given label, how many were labelled
+        
+        self.labelled_pairs_match = [] # For each row, the resulting match: (A, B) / no-match: (A, None) or forgotten: None
+            
         self._init_queries() # creates self.current_queries
         self._init_metrics() # creates self.metrics
         self._init_history() # creates self.history
         
         self.current_source_idx = None
         self.current_ref_idx = None
+        
+        self.current_source_item = None
+        self.current_ref_item = None
     
     def _init_queries(self, ):
         """Generates initial query templates"""
         self.current_queries = []
         
-    def _init_metrics(self):
-        """Generate metrics object"""
-        self.metrics = dict()
-        for query in self.current_queries:
-            self.metrics[query] = {'precision': None,
-                                    'recall': None,
-                                    'score': None}
+#    def _init_metrics(self):
+#        """Generate metrics object"""
+#        self.metrics = dict()
+#        for query in self.current_queries:
+#            self.metrics[query] = {'precision': None,
+#                                    'recall': None,
+#                                    'score': None}
     
     def _init_history(self):
         """Generate history object"""
@@ -170,15 +176,27 @@ class Labeller():
                                     'is_match': [], # indicates if the best hit was a match
                                     'step': [] # indicates the step at which the pair was added
                                     }
+    
+    def _compute_metrics(self):
         
+
+            
+        for query in self.current_queries:
+            returned_pairs = self.history[query]['returned_pairs']
+            steps = self.history[query]['step']
+            
+                    for pair_match in self.labelled_pairs_match:
+            if pair_match is not None:
+            for step, pair in returned_pairs
+                
+    
     def _init_row_gen(self):
-        for idx in random.sample(source.index, self.max_num_samples):
+        for idx in random.sample(self.source.index, self.max_num_samples):
             yield (idx, self.source.loc[idx, :])
         
         
-    def _bulk_search(self, queries_to_perform, row):
+    def _bulk_search(self, queries_to_perform, row, num_results):
         # TODO: use self.current_queries instead ?
-        NUM_RESULTS = 3
         
         # Transform
         queries_to_perform_tuple = [x.as_tuple() for x in queries_to_perform]
@@ -188,12 +206,12 @@ class Labeller():
                                              [row],
                                              self.must_filters, 
                                              self.must_not_filters, 
-                                             NUM_RESULTS)
+                                             num_results)
         
         assert [x[1][0] for x in search_templates] == queries_to_perform_tuple
         return [x['hits']['hits'] for x in full_responses]
         
-    def pruned_bulk_search(self, queries_to_perform, row):
+    def pruned_bulk_search(self, queries_to_perform, row, num_results):
         ''' 
         Performs a smart bulk request, by not searching for templates
         if restrictions of these templates already did not return any results
@@ -218,7 +236,7 @@ class Labeller():
                     core_has_match[core] = False
                     
             # Perform actual queries
-            bulk_results = self._bulk_search(query_bulk, row)
+            bulk_results = self._bulk_search(query_bulk, row, num_results)
             
             # Store results
             results.update(zip(query_bulk, bulk_results))
@@ -233,7 +251,7 @@ class Labeller():
                     query_bulk.extend(list(sub_group))
  
             # Perform actual queries
-            bulk_results = self._bulk_search(query_bulk, row)
+            bulk_results = self._bulk_search(query_bulk, row, num_results)
             
             # Store results
             results.update(zip(query_bulk, bulk_results))
@@ -271,7 +289,7 @@ class Labeller():
         pass
 
 
-    def _sort_keys(self):
+    def _sort_queries(self):
         '''
         Update sorted_keys, that determin the order in which samples are shown
         to the user        
@@ -443,7 +461,7 @@ class Labeller():
             self.full_responses = {all_search_templates[i][1][0]: values for i, values in tmp_full_responses.items()}
             print('LEN OF FULL_RESPONSES (number of queries):', len(self.full_responses))
             # import pdb; pdb.set_trace()
-            self._sort_keys()
+            self._sort_queries()
             
             print('BEST 10 KEYS:')
             for key in self.sorted_keys[:10]:
@@ -611,30 +629,25 @@ class Labeller():
         '''Use this if updated must or must_not'''
         print('WARNING: Re-Scoring history')
 
-        # Re-initiate query_summaries
-        self.query_summaries = dict()
-        for q_t in self.sorted_keys:
-            self.query_summaries[q_t] = []
+        self._init_metrics() # re-initialisez self.metrics
+
         
         # TODO: temporary sol: put all in bulk
         for pair in self.pairs:
-            all_search_templates, self.full_responses = perform_queries(
-                                                          self.ref_table_name, 
-                                                          self.sorted_keys, 
-                                                          [self.source.loc[pair[0]]], 
-                                                          self.must, self.must_not, 
-                                                          self.num_results_labelling)
-            self.full_responses = {all_search_templates[idx][1][0]: values \
-                                   for idx, values in self.full_responses.items()}
-            self._update_query_summaries(pair[1])
+            # TODO: get row somehow
+            all_search_templates, self.full_responses = self.pruned_bulk_search(
+                                                                queries_to_perform,
+                                                                row, 
+                                                                1)
+            # TODO: update metrics
 
-        self._sort_keys()
+        self._sort_queries()
 
         if not self.sorted_keys:
             raise ValueError('No keys in self.sorted_keys')
         
     def answer_is_valid(self, user_input):
-        '''Check if the user input is valid'''
+        '''Check if the user input is valid''' # DONE
         valid_responses = {'y', '1', 'yes',
                            'n', '0', 'no',
                            'u', 'uncertain', 
@@ -642,47 +655,53 @@ class Labeller():
                            'p', 'previous'}
         return user_input in valid_responses
 
-    def export_best_params(self):
-        '''Returns a dictionnary with the best parameters (input for es_linker)'''
+    def export_best_params(self, p):
+        '''Returns a dictionnary with the best parameters (input for es_linker)''' # DONE
         params = dict()
         params['index_name'] = self.ref_table_name
-        params['query_template'] = self._best_query_template()
-        params['must'] = self.must
-        params['must_not'] = self.must_not
-        params['thresh'] = 0 # self.threshold #TODO: fix this
-        params['best_thresh'] = self.query_metrics[params['query_template']]['thresh']
-        params['exact_pairs'] = self.pairs
-        params['non_matching_pairs'] = [(key, val) for key, values in self.pairs_not_match.items() for val in values]
+        params['query_template'] = None # TODO:
+        params['must'] = self.must_filters
+        params['must_not'] = self.must_not_filters
+        params['thresh'] = 0 
+        params['best_thresh'] = self.metrics[params['query_template']]['thresh']
+        
+        params['exact_pairs'] = [p for (p, l) in zip(self.labelled_pairs, self.labels) if l == 'y']
+        params['non_matching_pairs'] = [p for (p, l) in zip(self.labelled_pairs, self.labels) if l == 'n']
+        params['forgotten_pairs'] = [p for (p, l) in zip(self.labelled_pairs, self.labels) if l == 'f']
+        
         return params
     
-    def write_training(self, file_path):        
+    def write_training(self, file_path): # DONE     
         params = self.export_best_params()
         encoder = MyEncoder()
         with open(file_path, 'w') as w:
             w.write(encoder.encode(params))
     
-    def update_musts(self, must, must_not):
-        if (not isinstance(must, dict)) or (not isinstance(must_not, dict)):
+    def update_musts(self, must_filters, must_not_filters): # DONE
+        if (not isinstance(must_filters, dict)) or (not isinstance(must_not_filters, dict)):
             raise ValueError('Variables "must" and "must_not" should be dicts' \
                 'with keys being column names and values a list of strings')
-        self.must = must
-        self.must_not = must_not
+        self.must_filters = must_filters
+        self.must_not_filters = must_not_filters
         self.re_score_history()
         
     def _best_query_template(self):
         """Return query template with the best score (ratio)"""
         if self.query_metrics:
-            return sorted(self.query_metrics.keys(), key=lambda x: \
-                          self.query_metrics[x]['ratio'], reverse=True)[0]
+            return sorted(self.metrics.keys(), key=lambda x: \
+                          self.metrics[x]['ratio'], reverse=True)[0]
         else:
             return None
  
-    def to_emit(self, message):
-        '''Creates a dict to be sent to the template #TODO: fix this'''
+    def to_emit(self):
+        '''Creates a dict to be sent to the template #TODO: fix this''' # DONE-ISH
         dict_to_emit = dict()
         # Info on pair
-        dict_to_emit['source_item'] = self.source_item
-        dict_to_emit['ref_item'] = self.ref_item
+        dict_to_emit['source_idx'] = self.current_source_idx
+        dict_to_emit['ref_idx'] = self.current_ref_idx
+        
+        dict_to_emit['source_item'] = self.current_source_item
+        dict_to_emit['ref_item'] = self.current_ref_item
         
         # Info on past labelling
         dict_to_emit['num_proposed_source'] = str(self.num_rows_proposed_source)
@@ -692,19 +711,13 @@ class Labeller():
         dict_to_emit['t_r'] = self.t_r
         
         # Info on current performence
-        b_q_t = self._best_query_template()
-        if b_q_t is not None:
-            dict_to_emit['estimated_precision'] = str(self.query_metrics.get(b_q_t, {}).get('precision'))
-            dict_to_emit['estimated_recall'] = str(self.query_metrics.get(b_q_t, {}).get('recall'))
-            dict_to_emit['best_query_template'] = str(b_q_t)
-        else:
-            dict_to_emit['estimated_precision'] = None
-            dict_to_emit['estimated_recall'] = None
-            dict_to_emit['best_query_template'] = None
+        assert False
+        dict_to_emit['estimated_precision'] = None # TODO: 
+        dict_to_emit['estimated_recall'] = None # TODO: 
+        dict_to_emit['best_query_template'] = None # TODO: 
             
-        dict_to_emit['has_previous'] = 'temp_has_previous'# len(self.examples_buffer) >= 1
-        if message:
-            dict_to_emit['_message'] = message
+        dict_to_emit['has_previous'] = None # TODO: 
+        
         return dict_to_emit
     
 
