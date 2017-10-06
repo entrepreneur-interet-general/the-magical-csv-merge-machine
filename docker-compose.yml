@@ -1,0 +1,54 @@
+version: "3"
+services:
+  laundry_api:
+    build:
+      context: .
+    deploy:
+      replicas: 5
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 50M
+      restart_policy:
+        condition: on-failure
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    ports:
+      - 5000:5000
+    networks:
+      - laundry_net
+    links:
+     - elasticsearch
+     - elasticsearch:localhost
+     - redis
+    logging:
+      driver: "json-file"
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:5.6.2
+    container_name: elasticsearch
+    environment:
+      - cluster.name=docker-cluster
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - discovery.type=single-node
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - 9200:9200
+    networks:
+      - laundry_net
+  redis:
+    image: redis
+    ports:
+      - 6379:6379
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+    command: redis-server --appendonly yes
+    networks:
+      - laundry_net
+networks:
+  laundry_net:
+
