@@ -355,7 +355,7 @@ def metadata(project_type, project_id):
                    project_id=proj.project_id)
     return resp
 
-
+@app.route('/api/set_skip/<project_type>/<project_id>', methods=['POST'])
 def set_skipped(project_type, project_id):
     """
     Set skip value for selected module
