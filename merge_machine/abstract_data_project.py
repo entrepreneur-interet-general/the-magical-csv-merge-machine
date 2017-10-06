@@ -206,8 +206,8 @@ class AbstractDataProject(AbstractProject):
         return log
     
     def set_skip(self, module_name, file_name, skip_value):
-        '''Sets the "skiped value to True in log"'''
-        self.metadata['log'][file_name][module_name]['skiped'] = skip_value
+        '''Sets the "skipped value to True in log"'''
+        self.metadata['log'][file_name][module_name]['skipped'] = skip_value
         self._write_metadata() #TODO: Do we write meta"data?
 
     def _check_mem_data(self):
