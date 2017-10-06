@@ -366,15 +366,15 @@ def set_skipped(project_type, project_id):
         
     POST:
         data_params:
+            - module_name
             - file_name
         module_params:
-            - module_name
             - skip_value: (true)
     """
     data_params, module_params = _parse_request()
     
     proj = _init_project(project_type, project_id)
-    proj.set_skip(module_params['module_name'], data_params['file_name'], 
+    proj.set_skip(data_params['module_name'], data_params['file_name'], 
                   module_params.get('skip_value', True))
 
 
