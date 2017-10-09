@@ -222,8 +222,11 @@ class AbstractDataProject(AbstractProject):
             columns = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
                                     nrows=0, usecols=columns).columns
         def choose_dtype(col):
+            '''Load the correct type according to the column name'''
             if '__MODIFIED' in col:
                 return bool
+            elif col == '__CONFIDENCE':
+                return float
             else:
                 return str
             
