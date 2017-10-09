@@ -1,25 +1,17 @@
 version: "3"
 services:
-  laundry_api:
+  laundry:
+    container_name: laundry
     build:
       context: .
-    deploy:
-      replicas: 5
-      resources:
-        limits:
-          cpus: "0.1"
-          memory: 50M
-      restart_policy:
-        condition: on-failure
+    # command: ["./wait-for-it.sh", "elasticsearch:9200", "--", "python3", "merge_machine/worker.py"]
+    # command: ["./wait-for-it.sh", "elasticsearch:9200", "--", "curl", "-u elastic http://127.0.0.1:9200/_cat/health"]
     environment:
       - ELASTICSEARCH_URL=http://elasticsearch:9200
     ports:
       - 5000:5000
-    networks:
-      - laundry_net
     links:
      - elasticsearch
-     - elasticsearch:localhost
      - redis
     logging:
       driver: "json-file"
@@ -37,18 +29,13 @@ services:
         hard: -1
     ports:
       - 9200:9200
-    networks:
-      - laundry_net
   redis:
     image: redis
+    container_name: redis
     ports:
       - 6379:6379
     deploy:
       placement:
         constraints: [node.role == manager]
     command: redis-server --appendonly yes
-    networks:
-      - laundry_net
-networks:
-  laundry_net:
 
