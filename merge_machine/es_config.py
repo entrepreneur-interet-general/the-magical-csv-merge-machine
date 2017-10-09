@@ -128,6 +128,10 @@ filters = {
 }
 
 analyzers = {
+    "case_insensitive_keyword": {
+        'tokenizer': 'keyword',
+        'filter': ['lowercase']
+    },        
     "integers": {
         'tokenizer': 'integers'
     },
@@ -198,7 +202,7 @@ def _gen_index_settings(index_settings_template, columns_to_index):
     
     field_mappings = {
         key: {
-            'analyzer': 'keyword',
+            'analyzer': 'case_insensitive_keyword',
             'type': 'string',
             'fields': {
                 analyzer: {
@@ -208,17 +212,15 @@ def _gen_index_settings(index_settings_template, columns_to_index):
                 for analyzer in values
             }
         }
-        for key,
-        values in columns_to_index.items() if values
+        for key, values in columns_to_index.items() if values
     }
                 
     field_mappings.update({
         key: {
-            'analyzer': 'keyword',
+            'analyzer': 'case_insensitive_keyword',
             'type': 'string'
         }
-        for key,
-        values in columns_to_index.items() if not values
+        for key, values in columns_to_index.items() if not values
     })
                 
     index_settings['mappings']['structure']['properties'] = field_mappings

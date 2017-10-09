@@ -61,7 +61,7 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
     DEFAULT_MUST_FIELD = '.french'
     
     query_template = [_reformat_s_q_t(s_q_t) for s_q_t in query_template]
-    
+
     body = {
           'size': num_results,
           'query': {
@@ -176,5 +176,6 @@ def _bulk_search(es, index_name, all_query_templates, rows, must_filters, must_n
         
         if i >= 10:
             raise Exception('Problem with elasticsearch: could not perform all queries in 10 trials')
-            
+        
+
     return og_search_templates, full_responses

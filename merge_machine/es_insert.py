@@ -87,7 +87,7 @@ if __name__ == '__main__':
         'SIREN': {},
         'NIC': {},
         'L1_NORMALISEE': {
-            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city', 'organization'
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
         },
         'L4_NORMALISEE': {
             'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
@@ -96,7 +96,7 @@ if __name__ == '__main__':
             'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
         },
         'L1_DECLAREE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
         },
         'L4_DECLAREE': {
             'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
@@ -124,7 +124,7 @@ if __name__ == '__main__':
     #==============================================================================
     # Index in Elasticsearch 
     #==============================================================================
-    testing = True
+    testing = False
     new_index = True
     do_indexing = True
     chunksize = 2000

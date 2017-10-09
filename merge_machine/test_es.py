@@ -15,7 +15,8 @@ $ ./bin/elasticsearch
 
 import pandas as pd
 
-from es_match import es_linker, Labeller
+from es_match import es_linker #Labeller
+from es_labeller import Labeller
 
 
 dir_path = 'data/sirene'
@@ -23,7 +24,7 @@ chunksize = 3000
 file_len = 10*10**6
 
 
-test_num = 2
+test_num = 0
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
     match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},
@@ -99,32 +100,32 @@ if test_num in [0,1,2]:
         'SIREN': {},
         'NIC': {},
         'L1_NORMALISEE': {
-            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'my_organization'
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
         },
         'L4_NORMALISEE': {
-            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
         },
         'L6_NORMALISEE': {
-            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
         },
         'L1_DECLAREE': {
-            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
         },
         'L4_DECLAREE': {
-            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
         },
         'L6_DECLAREE': {
-            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
         },
         'LIBCOM': {
-            'my_french', 'whitespace', 'end_n_grams', 'n_grams', 'my_city'
+            'french', 'whitespace', 'end_n_grams', 'n_grams', 'city'
         },
         'CEDEX': {},
         'ENSEIGNE': {
-            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
         },
         'NOMEN_LONG': {
-            'my_french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
         },
         #Keyword only 'LIBNATETAB': {},
         'LIBAPET': {},
@@ -134,10 +135,10 @@ if test_num in [0,1,2]:
 elif test_num in [3, 4]:
     columns_to_index = {
             "Name": {
-                    'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+                    'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
                     }, 
             "City": {
-                    'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+                    'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
                     }      
             }
 
@@ -155,26 +156,42 @@ else:
 #                      {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']})
 
 for i in range(100):
-    (source_item, ref_item) = labeller.new_label()
-    if not ref_item:
-        print('No more examples to label')
-        break
-    
+    print(labeller.to_emit())
+
     for x in range(10):
-        user_input = labeller.console_input(source_item, ref_item, test_num)
+        user_input = labeller.console_input()
         if labeller.answer_is_valid(user_input):
             break
         else:
             print('Invalid answer ("y"/"1", "n"/"0", "u" or "p")')
-    else:
-        raise ValueError('No valid answer after 10 iterations')
-           
-    labeller.update(user_input, ref_item['_id'])
+    labeller.update(user_input)
     
-    if (test_num == 0) and i == 3:
+    if i == 5:
+        print('Updating musts')
         labeller.update_musts({'NOMEN_LONG': ['lycee']},
                               {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']})
-        labeller.re_score_history()
+
+#for i in range(100):
+#    (source_item, ref_item) = labeller.new_label()
+#    if not ref_item:
+#        print('No more examples to label')
+#        break
+#    
+#    for x in range(10):
+#        user_input = labeller.console_input(source_item, ref_item, test_num)
+#        if labeller.answer_is_valid(user_input):
+#            break
+#        else:
+#            print('Invalid answer ("y"/"1", "n"/"0", "u" or "p")')
+#    else:
+#        raise ValueError('No valid answer after 10 iterations')
+#           
+#    labeller.update(user_input, ref_item['_id'])
+#    
+#    if (test_num == 0) and i == 3:
+#        labeller.update_musts({'NOMEN_LONG': ['lycee']},
+#                              {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']})
+#        labeller.re_score_history()
 
 print('best_query:\n', labeller._best_query_template())
 print('must:\n', labeller.must)
