@@ -166,7 +166,7 @@ for i in range(100):
             print('Invalid answer ("y"/"1", "n"/"0", "u" or "p")')
     labeller.update(user_input)
     
-    if i == 5:
+    if i == 15:
         print('Updating musts')
         labeller.update_musts({'NOMEN_LONG': ['lycee']},
                               {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']})

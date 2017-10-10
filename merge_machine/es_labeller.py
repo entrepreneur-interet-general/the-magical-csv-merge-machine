@@ -31,8 +31,14 @@ class SingleQueryTemplate():
     
     def __init__(self, bool_lvl, source_col, ref_col, analyzer_suffix, boost):
         self.bool_lvl = bool_lvl
-        self.source_col = source_col
-        self.ref_col = ref_col
+        
+        if isinstance(source_col, str):
+            source_col = [source_col]
+        if isinstance(ref_col, str):
+            ref_col = [ref_col]
+            
+        self.source_col = tuple(sorted(source_col))
+        self.ref_col = tuple(sorted(ref_col))
         self.analyzer_suffix = analyzer_suffix
         self.boost = boost
 
@@ -45,7 +51,19 @@ class SingleQueryTemplate():
         
     def __hash__(self):
         # TODO: join is not clean
-        return hash(self.bool_lvl, '/./'.join(self.source_col), '/./'.join(self.ref_col), self.analyzer_suffix, self.boost)
+        try:
+            return self.__hash
+        except:
+            self.__hash = hash((self.bool_lvl, tuple(sorted(self.source_col)), tuple(sorted(self.source_col)), 
+                     self.analyzer_suffix, self.boost))
+            return self.__hash
+    
+    def __eq__(self, other):
+        return self._as_tuple() == other._as_tuple()
+    
+
+    def __gt__(self, other):
+        return self._as_tuple() > other._as_tuple()
 
 #    def __str__(self):
 #        return self._as_tuple().__str__()
@@ -62,8 +80,8 @@ class SingleQueryTemplate():
 class CompoundQueryTemplate():
     '''Information regarding a query to be used in the labeller'''
     def __init__(self, single_query_templates_tuple):        
-        self.musts = [SingleQueryTemplate(*x) for x in single_query_templates_tuple if x[0] == 'must']
-        self.shoulds = [SingleQueryTemplate(*x) for x in single_query_templates_tuple if x[0] == 'should']
+        self.musts = tuple(sorted([SingleQueryTemplate(*x) for x in single_query_templates_tuple if x[0] == 'must']))
+        self.shoulds = tuple(sorted([SingleQueryTemplate(*x) for x in single_query_templates_tuple if x[0] == 'should']))
         
         assert self.musts
         
@@ -78,7 +96,18 @@ class CompoundQueryTemplate():
         return tuple(sorted(cores))
 
     def __hash__(self):
-        return hash((q.__hash__() for q in self.musts + self.shoulds))    
+        try:
+            return self.__hash
+        except:
+            self.__hash = hash((q.__hash__() for q in self.musts + self.shoulds))    
+            return self.__hash
+
+    def __eq__(self, other):        
+        bool_1 = self.musts == other.musts
+        bool_2 = self.shoulds == other.shoulds
+        
+        return bool_1 and bool_2
+
 
 #    def __str__(self):
 #        return [x.__str__() for x in self.musts + self.shoulds].__str__()
@@ -130,7 +159,7 @@ class LabellerQuery(CompoundQueryTemplate):
         super().__init__(*argv, **kwargs)
         
         self.history_pairs = [] # [[(1,5), (1,2)], [(2,3), (2,5)], []]
-        self.steps = [] # Num rows labelled at which this pair was added (in case of later creation)
+        #self.steps = [] # Num rows labelled at which this pair was added (in case of later creation)
         self.first_scores = [] # ES scores of first result of queies
         self.has_match = []
         self.first_is_match = []
@@ -165,13 +194,13 @@ class LabellerQuery(CompoundQueryTemplate):
         ''' Go back to state when num_labelled were labelled'''
         # Compute idx to go back to
         # TODO: check that steps are ordered
-        idx = sum(x <= num_labelled for x in self.steps) - 1
-        
-        assert idx >= 0
+        idx = num_labelled 
+        #        idx = sum(x <= num_labelled for x in self.steps) - 1
+        #        assert idx >= 0
         
         self.history_pairs = self.history_pairs[:idx+1] # TODO: do this ?
-        self.steps = self.history_pairs[:idx+1]
-        self.first_scores = self.first_scores[:idx]
+        # self.steps = self.steps[:idx+1]
+        self.first_scores = self.first_scores[:idx+1]
         self.has_match = self.has_match[:idx]
         self.first_is_match = self.first_is_match[:idx]
 
@@ -345,7 +374,9 @@ class Labeller():
                  'f': 'f',
                  
                  'previous': 'p',
-                 'p': 'p'                         
+                 'p': 'p',
+
+                 'quit': 'q'             
                  }
 
     #min_precision_tab = [(20, 0.7), (10, 0.5), (5, 0.3)]
@@ -396,6 +427,8 @@ class Labeller():
         
         self.current_source_item = None
         self.current_ref_item = None
+        
+        self.current_es_score = None
 
         self._first_pair()
     
@@ -404,7 +437,7 @@ class Labeller():
     
     def _fetch_ref_item(self, ref_idx):
         # TODO: look into batching this
-        return self.es.get(self.ref_index_name, ref_idx)    
+        return self.es.get(self.ref_index_name, ref_idx)['_source'] 
 
     
     def _init_queries(self, match_cols, columns_to_index):
@@ -439,13 +472,18 @@ class Labeller():
     def _init_ref_gen(self):
         '''Generator of results for the current source element'''
         def temp():
-            for query in self.current_queries:
+            for i, query in enumerate(self.current_queries):
+                self.current_query_ranking = i
                 self.current_query = query # TODO: for display only
                 for pair in query.history_pairs[-1]: # TODO: this is only idx of results: get results
-                    assert pair[0] == self.current_source_idx
+                    try:
+                        assert pair[0] == self.current_source_idx
+                    except:
+                        import pdb; pdb.set_trace()
                     if pair not in self.labelled_pairs:
-                        item = self.ref_id_to_data[pair[1]] # TODO: get item if it is not in ref_id_to_data
-                        yield pair[1], item
+                        item = self.ref_id_to_data[pair[1]]['_source'] # TODO: get item if it is not in ref_id_to_data
+                        es_score = self.ref_id_to_data[pair[1]]['_score']
+                        yield pair[1], item, es_score
                     # TODO: check that source idx is same as in source_gen
         self.ref_gen = temp()        
 
@@ -458,7 +496,7 @@ class Labeller():
         self.add_results(results)
         
         self._init_ref_gen()     
-        (self.current_ref_idx, self.current_ref_item) = next(self.ref_gen)
+        (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
 
         
     def _bulk_search(self, queries_to_perform, row, num_results):
@@ -533,6 +571,9 @@ class Labeller():
         # Order responses
         to_return = [results.get(query, []) for query in queries_to_perform]
         
+        if not sum(bool(x) for x in to_return):
+            import pdb; pdb.set_trace()
+        
         print('Num queries before pruning:', len(queries_to_perform))
         print('Num queries performed:', num_queries_performed)
         print('Non empty results:', sum(bool(x) for x in to_return))
@@ -572,19 +613,30 @@ class Labeller():
 
     def previous(self):
         '''Goes to previous state'''
+        # Re-place current values in todo-stack
+        s_elem = (self.current_source_idx, self.current_source_item)
+        r_elem = (self.current_ref_idx, self.current_ref_item, self.current_es_score)
+        self.source_gen = itertools.chain([s_elem], self.source_gen)
+        self.ref_gen = itertools.chain([r_elem], self.ref_gen)
+        
         # TODO: test that previous is possible
         (self.current_source_idx, self.current_ref_idx) = self.labelled_pairs.pop()
         self.labels.pop()
         num_rows_labelled = self.num_rows_labelled.pop()
-        
+    
         # self.labelled_pairs_match = self.labelled_pairs_match[:num_rows_labelled] # For each row, the resulting match: (A, B) / no-match: (A, None) or forgotten: None
             
         self.current_source_item = self._fetch_source_item(self.current_source_idx)
         self.current_ref_item = self._fetch_ref_item(self.current_ref_idx)   
         
+        self.current_es_score = None
+        
         # Previous on all queries
         for query in self.current_queries:
             query.previous(num_rows_labelled)
+            
+            
+        
 
 
     def _auto_label_pair(self, source_item, ref_item):
@@ -654,7 +706,7 @@ class Labeller():
             
             for res in ref_result:
                 if res['_id'] not in self.ref_id_to_data:
-                    self.ref_id_to_data[res['_id']] = res['_source']
+                    self.ref_id_to_data[res['_id']] = res
             
 
     def update(self, user_input):
@@ -679,8 +731,12 @@ class Labeller():
         uncertain = self.VALID_ANSWERS[user_input] == 'u'
         forget_row = self.VALID_ANSWERS[user_input] == 'f'
         use_previous = self.VALID_ANSWERS[user_input] == 'p'
+        quit_ = self.VALID_ANSWERS[user_input] == 'q'
         
-        assert yes + no + uncertain + forget_row + use_previous == 1
+        assert yes + no + uncertain + forget_row + use_previous + quit_ == 1
+    
+        if quit_:
+            raise RuntimeError('User quit labeller by typing "quit"')
     
         if use_previous:
             self.previous()
@@ -710,7 +766,7 @@ class Labeller():
         if not next_row:
             # Try to get next label, otherwise jump        
             try:
-                (self.current_ref_idx, self.current_ref_item) = next(self.ref_gen)
+                (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
 
                 # If iterator runs out: next_row = True
                 if self.num_rows_labelled:
@@ -751,23 +807,28 @@ class Labeller():
             self.add_results(results)
             
             self._init_ref_gen()
-            (self.current_ref_idx, self.current_ref_item) = next(self.ref_gen)
+            
+            (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
 
 
     def _re_score_history(self):        
         # TODO: choose between keeping old or full re-initialisation
+        print('WARNING: re-scoring history')
+        
         self._init_queries(self.match_cols, self.columns_to_index)
         
         og_labelled_pairs = list(self.labelled_pairs_match)
         self.labelled_pairs_match = []
         for labelled_pair in og_labelled_pairs:
-            if labelled_pair is not None:
-                (source_idx, ref_idx) = labelled_pair
+            (source_idx, ref_idx) = labelled_pair
+            if (labelled_pair is not None) and (ref_idx is not None): # TODO: not re_labelling Nones
                 self.current_source_idx = source_idx
                 self.current_ref_idx = ref_idx
                 
                 self.current_source_item = self._fetch_source_item(source_idx)
                 self.current_ref_item = self._fetch_ref_item(ref_idx)
+                
+                self.current_es_score = None
                 
                 # Fetch data for next row
                 results = self.pruned_bulk_search(self.current_queries, 
@@ -775,6 +836,13 @@ class Labeller():
                 self.add_results(results)
                 
                 self.add_labelled_pair(labelled_pair)
+
+
+        # Re-score metrics
+        self._compute_metrics()
+        if True: # TODO: use sort_queries
+            self._sorta_sort_queries()
+            self._sort_queries()
         
         self._first_pair()
 
@@ -847,6 +915,24 @@ class Labeller():
     def to_emit(self):
         '''Creates a dict to be sent to the template #TODO: fix this''' # DONE-ISH
         dict_to_emit = dict()
+
+        # Info on labeller
+        dict_to_emit['t_p'] = self.t_p
+        dict_to_emit['t_r'] = self.t_r
+        dict_to_emit['has_previous'] = None # TODO: 
+        #        dict_to_emit['num_proposed_source'] = str(self.num_rows_proposed_source)
+        #        dict_to_emit['num_proposed_ref'] = str(sum(self.num_rows_proposed_ref.values()))
+        #        dict_to_emit['num_labelled'] = str(self.num_rows_labelled)
+        
+        # Info on current query
+        current_query = self.current_query
+        dict_to_emit['query'] = current_query._as_tuple()
+        dict_to_emit['query_ranking'] = self.current_query_ranking
+        dict_to_emit['estimated_precision'] = current_query.precision # TODO: 
+        dict_to_emit['estimated_recall'] = current_query.recall # TODO: 
+        dict_to_emit['estimated_score'] = current_query.score # TODO:   
+        dict_to_emit['thresh'] = current_query.thresh        
+
         # Info on pair
         dict_to_emit['source_idx'] = self.current_source_idx
         dict_to_emit['ref_idx'] = self.current_ref_idx
@@ -854,22 +940,12 @@ class Labeller():
         dict_to_emit['source_item'] = self.current_source_item
         dict_to_emit['ref_item'] = self.current_ref_item
         
-        current_query = self.current_query
-        dict_to_emit['query'] = current_query._as_tuple()
+        dict_to_emit['es_score'] = self.current_es_score
         
-        # Info on past labelling
-        #        dict_to_emit['num_proposed_source'] = str(self.num_rows_proposed_source)
-        #        dict_to_emit['num_proposed_ref'] = str(sum(self.num_rows_proposed_ref.values()))
-        #        dict_to_emit['num_labelled'] = str(self.num_rows_labelled)
-        dict_to_emit['t_p'] = self.t_p
-        dict_to_emit['t_r'] = self.t_r
-        
-        # Info on current performence
-        dict_to_emit['estimated_precision'] = current_query.precision # TODO: 
-        dict_to_emit['estimated_recall'] = current_query.recall # TODO: 
-        dict_to_emit['estimated_score'] = current_query.score # TODO:   
-        
-        dict_to_emit['has_previous'] = None # TODO: 
+        if (self.current_es_score is not None) and (current_query.thresh is not None):
+            dict_to_emit['estimated_is_match'] = self.current_es_score >= current_query.thresh
+        else:
+            dict_to_emit['estimated_is_match'] = None       
         
         return dict_to_emit
     
@@ -879,11 +955,17 @@ class Labeller():
         dict_to_emit = self.to_emit()
         
         print('\n' + '*'*50)
-        print(dict_to_emit['query'])
+        print('({0}): {1}'.format(dict_to_emit['query_ranking'], dict_to_emit['query']))
         print('Precision: {0}; Recall: {1}; Score: {2}'.format(
                                           dict_to_emit['estimated_precision'],
                                           dict_to_emit['estimated_recall'],
                                           dict_to_emit['estimated_score']))
+    
+        print('ES score: {0}; Thresh: {1}; Is match: {2}'.format(dict_to_emit['es_score'],
+                  dict_to_emit['thresh'], dict_to_emit['estimated_is_match']))
+    
+        print('\n(S): {0}'.format(dict_to_emit['source_idx']))
+        print('(R): {0}'.format(dict_to_emit['ref_idx']))
 
         for match in self.match_cols:
             print('\n')
@@ -907,7 +989,7 @@ class Labeller():
     def console_input(self):
         ''' '''
         self.print_emit()
-        return input('\n >')
+        return input('\n > ')
         
 
         
