@@ -9,9 +9,12 @@ Created on Fri Mar  3 10:41:34 2017
 import os 
 import sys
 
-cwd = os.getcwd()
-cwd = os.path.split((os.path.join(cwd, sys.argv[0])))[0]
+PRODUCTION_MODE = True
 
+cwd = os.getcwd()
+
+if not PRODUCTION_MODE:
+	cwd = os.path.split((os.path.join(cwd, sys.argv[0])))[0]
 
 DATA_PATH = os.path.join(cwd, 'data')
 LINK_DATA_PATH = os.path.join(cwd, 'data/link')

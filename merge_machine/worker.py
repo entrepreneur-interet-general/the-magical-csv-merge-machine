@@ -22,7 +22,8 @@ from linker import ESLinker
 
 VALID_QUEUES = ['high', 'low']
 
-redis_url = os.getenv('REDISTOGO_URL', 'redis://localhost:6379')
+import CONFIG
+redis_url = os.getenv('REDISTOGO_URL', 'redis://{}:6379'.format('redis' if CONFIG.PRODUCTION_MODE else 'localhost'))
 
 conn = redis.from_url(redis_url)
 
