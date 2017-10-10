@@ -1,10 +1,13 @@
 FROM python:3.5 
-RUN apt-get install autoconf automake curl gcc g++ libtool pkg-config enchant
+RUN apt-get install autoconf automake curl gcc g++ libtool pkg-config
+
 WORKDIR /merge_machine
-COPY requirements_rqworker.txt requirements_rqworker.txt
-RUN pip3 install -r requirements_rqworker.txt
+COPY requirements.txt requirements.txt
+RUN pip3 install -r requirements.txt
 RUN ldconfig
 COPY . /merge_machine
-EXPOSE 80
-WORKDIR /merge_machine/merge_machine
-CMD ["python3", "worker.py"]
+#RUN mkdir -p merge_machine/resource/es_linker
+#RUN wget "https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000@public/download/?format=json&timezone=Europe/Berlin" -O merge_machine/resource/es_linker/geonames-all-cities-with-a-population-1000.json
+#RUN python3 merge_machine/es_gen_resource.py
+
+CMD ["python3", "merge_machine/worker.py"]

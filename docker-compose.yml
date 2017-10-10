@@ -1,15 +1,26 @@
 version: "3"
 services:
-  laundry:
-    container_name: laundry
+  laundry_api:
+    container_name: laundry_api
     build:
       context: .
-    # command: ["./wait-for-it.sh", "elasticsearch:9200", "--", "python3", "merge_machine/worker.py"]
-    # command: ["./wait-for-it.sh", "elasticsearch:9200", "--", "curl", "-u elastic http://127.0.0.1:9200/_cat/health"]
+      dockerfile: Dockerfile_api_uwsgi
     environment:
       - ELASTICSEARCH_URL=http://elasticsearch:9200
     ports:
       - 5000:5000
+    links:
+     - elasticsearch
+     - redis
+    logging:
+      driver: "json-file"
+  laundry_worker:
+    container_name: laundry_worker
+    build:
+      context: .
+      dockerfile: Dockerfile_rqworker
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
     links:
      - elasticsearch
      - redis
