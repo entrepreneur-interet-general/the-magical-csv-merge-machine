@@ -151,7 +151,16 @@ class Normalizer(ESAbstractDataProject):
                             for col in column_names]
 
     def _clean_header(self, tab_part):
-        tab_part.columns = self._clean_column_names(tab_part.columns)
+        try:
+            tab_part.columns = self._clean_column_names(tab_part.columns)
+        except:
+            import pdb; pdb.set_trace()
+        return tab_part
+
+    @staticmethod
+    def assign_columns(tab_part, columns):
+        '''Replaces columns in tab_part'''
+        tab_part.columns = columns
         return tab_part
 
     def read_csv(self, file):
@@ -216,7 +225,9 @@ class Normalizer(ESAbstractDataProject):
         except:
             tab = itertools.chain([tab_part])  
         
-        tab = (self._clean_header(tab_part) for tab_part in tab)
+        
+        
+        tab = (self._clean_header(self.assign_columns(tab_part, best_columns)) for tab_part in tab)
         
         print(tab, best_sep, encoding, self._clean_column_names(best_columns))
         return tab, best_sep, encoding, self._clean_column_names(best_columns)
