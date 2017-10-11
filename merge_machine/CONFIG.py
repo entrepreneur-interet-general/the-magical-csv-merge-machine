@@ -9,7 +9,7 @@ Created on Fri Mar  3 10:41:34 2017
 import os 
 import sys
 
-PRODUCTION_MODE = True
+PRODUCTION_MODE = False
 
 cwd = os.getcwd()
 
