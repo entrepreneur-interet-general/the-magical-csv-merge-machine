@@ -271,6 +271,7 @@ def socket_error_wrapper(func):
             encoder = MyEncoder()
             emit('message', encoder.encode(to_send))
     return func_wrapper
+
 #==============================================================================
 # API
 #==============================================================================
@@ -281,6 +282,10 @@ def socket_error_wrapper(func):
 #    '''See docs in abstract_project'''
 #    proj = _init_project(project_type, project_id)
 #    return proj.get_config(module_name, file_name)
+
+@app.route('/api/ping/')
+def ping():
+    return jsonify(error=False, message="It's alive !!")
 
 #==============================================================================
 # GENERIC API METHODS (NORMALIZE AND LINK)
