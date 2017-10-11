@@ -28,16 +28,36 @@ def _remove_words(string, words):
     return string
 
 def _reformat_s_q_t(s_q_t):
-    '''Makes sure s_q_t[1] is a list'''
+    '''
+    Makes sure s_q_t[1] is a list and s_q_t[2] is list (multi_match) or string
+    (match) if there is only one column    
+    '''
+    old_len = len(s_q_t)
+    
+    col_lists = dict()
+    
+    #
     if isinstance(s_q_t[1], str):
-        old_len = len(s_q_t)
-        s_q_t = (s_q_t[0], [s_q_t[1]], s_q_t[2], s_q_t[3], s_q_t[4])
-        assert len(s_q_t) == old_len
-    elif isinstance(s_q_t[1], list) or isinstance(s_q_t[1], tuple):
-        s_q_t = (s_q_t[0], list(s_q_t[1]), s_q_t[2], s_q_t[3], s_q_t[4])
+        col_lists[1] = [s_q_t[1]]
+    elif isinstance(s_q_t[1], tuple):
+        col_lists[1] = list(s_q_t[1])    
     else:
-        raise ValueError('Single query template element 1 should be str or list')
-    return s_q_t
+        col_lists[1] = s_q_t[1]
+    assert isinstance(col_lists[1], list) 
+
+    #
+    if isinstance(s_q_t[2], tuple):
+        if len(s_q_t[2]) == 1:
+            col_lists[2] = s_q_t[2][0]
+        else:
+            col_lists[2] = list(s_q_t[2])    
+    else:
+        col_lists[2] = s_q_t[2]
+    assert isinstance(col_lists[2], list) or isinstance(col_lists[2], str)
+
+    to_return = (s_q_t[0], col_lists[1], col_lists[2], s_q_t[3], s_q_t[4])
+    assert len(to_return) == old_len
+    return to_return
 
 def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_results=3):
     '''
@@ -61,7 +81,7 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
     DEFAULT_MUST_FIELD = '.french'
     
     query_template = [_reformat_s_q_t(s_q_t) for s_q_t in query_template]
-
+    
     body = {
           'size': num_results,
           'query': {
@@ -96,6 +116,7 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
                     })               
                   }
            }
+
     return body
 
 

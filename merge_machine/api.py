@@ -104,6 +104,7 @@ import logging
 import os
 import shutil
 import tempfile
+import traceback
     
 # Change current path to path of api.py
 curdir = os.path.dirname(os.path.realpath(__file__))
@@ -263,10 +264,13 @@ def method_not_allowed(error):
 
 def socket_error_wrapper(func):
     def func_wrapper(*argv, **kwarg):
+        
         try:
             func(*argv, **kwarg)
         except Exception as e:
-            print('Exception in socket:', e)
+            tb = traceback.format_exc()
+            print('Exception in socket:', tb)
+            
             to_send = {'error': True, 'error_message': e.__str__()}
             encoder = MyEncoder()
             emit('message', encoder.encode(to_send))
@@ -281,6 +285,10 @@ def socket_error_wrapper(func):
 #    '''See docs in abstract_project'''
 #    proj = _init_project(project_type, project_id)
 #    return proj.get_config(module_name, file_name)
+
+@app.route('/api/ping/')
+def ping():
+    return jsonify(error=False, message="It's alive !!")
 
 #==============================================================================
 # GENERIC API METHODS (NORMALIZE AND LINK)
@@ -873,10 +881,8 @@ def socket_load_labeller(message_received):
     flask._app_ctx_stack.labeller_mem[project_id]['paths'] = paths
     flask._app_ctx_stack.labeller_mem[project_id]['labeller'] = proj._read_labeller('es_linker')
     
-    flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
-    
     encoder = MyEncoder()
-    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message='')))
+    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit()))
 
 
 @socketio.on('answer', namespace='/')
@@ -894,17 +900,13 @@ def socket_get_answer(message_received):
     message_to_display = ''
     #message = 'Expect to have about 50% of good proposals in this phase. The more you label, the better...'
     if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].answer_is_valid(user_input):
-        flask._app_ctx_stack.labeller_mem[project_id]['labeller'].parse_valid_answer(user_input)
-        # if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].finished:
-
-        flask._app_ctx_stack.labeller_mem[project_id]['labeller'].new_label()
+        flask._app_ctx_stack.labeller_mem[project_id]['labeller'].update(user_input)
+        
     else:
         raise ValueError('Answer received "{0}" is not valid'.format(user_input))
-#    else:
-#        message_to_display = 'Sent an invalid answer'
         
     encoder = MyEncoder()
-    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message=message_to_display)))
+    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit()))
 
 @socketio.on('update_filters', namespace='/')
 @socket_error_wrapper
@@ -925,7 +927,7 @@ def socket_update_musts(message_received):
     flask._app_ctx_stack.labeller_mem[project_id]['labeller'].update_musts(must, must_not)
     
     encoder = MyEncoder()
-    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit(message='')))
+    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit()))
 
 @socketio.on('complete_training', namespace='/')
 @socket_error_wrapper

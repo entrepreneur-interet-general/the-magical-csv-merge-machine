@@ -209,24 +209,6 @@ def _run_all_transforms(project_id, data_params, *argv):
     proj.write_data()
     return all_run_infos
 
-def _create_dedupe_labeller(project_id, *argv):
-    '''
-    Create a "dedupe" labeller and pickle to project
-    
-    ARGUMENTS (GET):
-        - project_id
-    
-    ARGUMENTS (POST):
-        - data_params: none
-        - module_params: none
-    '''
-    
-    # TODO: data input in gen_dedupe_labeller ?
-    proj = ESLinker(project_id=project_id)
-    labeller = proj._gen_dedupe_labeller()
-    proj.write_labeller('dedupe_linker', labeller)
-    return
-
 
 def _create_es_index(project_id, data_params, module_params):
     '''

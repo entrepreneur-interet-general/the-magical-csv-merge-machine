@@ -13,7 +13,7 @@ import pickle
 import pandas as pd
 
 from abstract_data_project import ESAbstractDataProject
-from es_match import Labeller as ESLabeller
+from es_labeller import Labeller as ESLabeller
 from normalizer import ESNormalizer
 from results_analyzer import link_results_analyzer
 
@@ -276,7 +276,6 @@ class Linker(ESAbstractDataProject):
             return self.es_linker(module_params)
         elif module_name == 'dedupe_linker':
             raise DeprecationWarning
-            return self.dedupe_linker(data_params, module_params)
 
     def es_linker(self, module_params):
         module_params['index_name'] = ESNormalizer(self.ref.project_id).index_name
@@ -325,15 +324,14 @@ class Linker(ESAbstractDataProject):
         '''Pickles the labeller object in project'''
         # TODO: Add isinstance(labeller, Labeller)        
         pickle_path = self.path_to(module_name, 'labeller.pkl')
-        with open(pickle_path, 'wb') as w:
-            pickle.dump(labeller, w)
+        
+        labeller.to_pickle(pickle_path)
     
     def _read_labeller(self, module_name):
         '''Reads labeller stored in pickle'''
         pickle_path = self.path_to(module_name, 'labeller.pkl')
-        with open(pickle_path, 'rb') as r:
-            labeller  = pickle.load(r)
-            
+        
+        labeller = ESLabeller.from_pickle(pickle_path)            
         return labeller
 
     #==========================================================================
@@ -370,64 +368,6 @@ class Linker(ESAbstractDataProject):
                 'learned_settings': learned_settings_path            
                 }
         return paths
-
-
-
-    @staticmethod
-    def _gen_dedupe_variable_definition(col_matches):
-        """Generate my_variable definition for use in dedupe_linker"""
-        my_variable_definition = []
-        for match in col_matches:
-            if (len(match['source']) != 1) or (len(match['ref']) != 1):
-                raise Exception('Not dealing with multiple columns (1 source, 1 ref only)')
-            my_variable_definition.append({"crf": True, "missing_values": True, "field": 
-                {"ref": match['ref'][0], "source": match['source'][0]}, "type": "String"})
-        return my_variable_definition
-
-    def _gen_dedupe_dummy_labeller(self):
-        '''Return DummyLabeller object'''
-        paths = self._gen_paths_dedupe()
-        return DummyLabeller(paths, use_previous=True)
-
-
-    def _gen_dedupe_labeller(self):
-        '''Return a Labeller object'''
-        
-        self._check_select()
-        # TODO: Add extra config page
-        col_matches = self.read_col_matches()
-        paths = self._gen_paths_dedupe()
-        
-        # Generate variable definition for dedupe
-        my_variable_definition = self._gen_dedupe_variable_definition(col_matches)
-        
-        # Put to dedupe input format
-        logging.debug('loading reference file')
-        ref = pd.read_csv(paths['ref'], encoding='utf-8', dtype=str)
-        data_ref = format_for_dedupe(ref, my_variable_definition, 'ref')
-        del ref
-        gc.collect()
-        logging.debug('finished loading reference file')
-        
-        # Put to dedupe input format
-        logging.debug('loading source file')
-        source = pd.read_csv(paths['source'], encoding='utf-8', dtype=str)
-        data_source = format_for_dedupe(source, my_variable_definition, 'source')
-        del source
-        gc.collect()
-        logging.debug('finished loading source file')
-        
-        #==========================================================================
-        # Should really start here
-        #==========================================================================
-        gazetteer = current_load_gazetteer(data_ref, data_source, my_variable_definition)
-#                                       og_len_ref=og_len_ref,
-#                                       og_len_source=og_len_source)
-        
-        return Labeller(gazetteer, 
-                        training_path=paths['train'], 
-                        use_previous=True)
-
 
     #==========================================================================
     #  Module specific: ES Linker
@@ -713,49 +653,6 @@ if __name__ == '__main__':
         params['must_not'] = must_not
         
         proj.linker('es_linker', None, params)
-        
-    elif linker_type == 'dedupe_linker':
-        
-        paths = proj._gen_paths_dedupe()    
-            
-        ## Parameters
-        # Variables
-        my_variable_definition = [
-                                {'field': 
-                                        {'source': 'lycees_sources',
-                                        'ref': 'full_name'}, 
-                                'type': 'String', 
-                                'crf':True, 
-                                'missing_values':True},
-                                
-                                {'field': {'source': 'commune', 
-                                           'ref': 'localite_acheminement_uai'}, 
-                                'type': 'String', 
-                                'crf': True, 
-                                'missing_values':True}
-                                ]
-    
-        # What columns in reference to include in output
-        selected_columns_from_ref = ['numero_uai', 'patronyme_uai', 
-                                     'localite_acheminement_uai']
-        
-        # Add training data
-        with open('local_test_data/integration_1/training.json') as f:
-            training = json.load(f)
-        proj.upload_config_data(training, 'dedupe_linker', 'training.json')
-        
-        # Restrict reference
-        params = proj.infer('infer_restriction', {'training': training})
-        proj.perform_restriction(params)
-        
-        # proj.transform()
-        
-        # Perform linking
-        params = {'variable_definition': my_variable_definition,
-                  'selected_columns_from_ref': selected_columns_from_ref}
-               
-        
-        proj.linker('dedupe_linker', paths, params)
 
     proj.write_data()   
 
