@@ -98,13 +98,12 @@ curl -i http://127.0.0.1:5000/metadata/ -X POST -F "request_json=@sample_downloa
 USES: /python-memcached
 """
 
-import gzip
 import json
 import logging
 import os
-import shutil
 import tempfile
 import traceback
+import zipfile
     
 # Change current path to path of api.py
 curdir = os.path.dirname(os.path.realpath(__file__))
@@ -443,13 +442,10 @@ def download(project_type, project_id):
     if module_params is None:
         module_params = {}
     file_type = module_params.get('file_type', 'csv')
-    zip_ = module_params.get('zip', False)
+    zip_ = module_params.get('zip', True)
     
     if file_type != 'csv':
         raise NotImplementedError('file_type can only be csv')
-
-    if zip_:
-        raise NotImplementedError('zip has to be false')
         
     file_role = data_params.get('file_role')
     module_name = data_params.get('module_name')
@@ -491,9 +487,15 @@ def download(project_type, project_id):
     if zip_:
         zip_file_name = new_file_name + '.zip'
         zip_file_path = proj.path_to(module_name, zip_file_name)
-        with open(file_path, 'rb') as f_in, gzip.open(zip_file_path, 'wb') as f_out:
-            shutil.copyfileobj(f_in, f_out)    
-    
+        zf = zipfile.ZipFile(zip_file_path, mode='w')
+        
+        compression = zipfile.ZIP_DEFLATED
+        zf.write(file_path, compress_type=compression, arcname=new_file_name)
+        zf.close()
+        
+        print('yagedoo: ', zip_file_path, ' / ', zip_file_name)
+        zip_file_path = '/home/m75380/Documents/eig/the-magical-csv-merge-machine/merge_machine/CONFIG.py'
+        zip_file_name = 'samba.'
         return send_file(zip_file_path, as_attachment=True, attachment_filename=zip_file_name)
 
     else:
@@ -882,6 +884,8 @@ def socket_load_labeller(message_received):
     flask._app_ctx_stack.labeller_mem[project_id]['labeller'] = proj._read_labeller('es_linker')
     
     encoder = MyEncoder()
+    
+    flask._app_ctx_stack.labeller_mem[project_id]['labeller'].print_emit() # Print what is about to be emited
     emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit()))
 
 
@@ -906,6 +910,7 @@ def socket_get_answer(message_received):
         raise ValueError('Answer received "{0}" is not valid'.format(user_input))
         
     encoder = MyEncoder()
+    flask._app_ctx_stack.labeller_mem[project_id]['labeller'].print_emit() # Print what is about to be emited
     emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit()))
 
 @socketio.on('update_filters', namespace='/')
@@ -927,6 +932,7 @@ def socket_update_musts(message_received):
     flask._app_ctx_stack.labeller_mem[project_id]['labeller'].update_musts(must, must_not)
     
     encoder = MyEncoder()
+    flask._app_ctx_stack.labeller_mem[project_id]['labeller'].print_emit() # Print what is about to be emited
     emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit()))
 
 @socketio.on('complete_training', namespace='/')
