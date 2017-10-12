@@ -187,7 +187,10 @@ class CompoundQueryTemplate():
      
         
 class LabellerQuery(CompoundQueryTemplate):
-    '''Extension of CompoundQueryTemplate which can also store history of labels'''
+    '''
+    Extension of CompoundQueryTemplate which can also store data relative
+    to the performance of the query in the context of labelling.
+    '''
     
     def __init__(self, *argv, **kwargs):
         super().__init__(*argv, **kwargs)
@@ -196,11 +199,13 @@ class LabellerQuery(CompoundQueryTemplate):
         #self.steps = [] # Num rows labelled at which this pair was added (in case of later creation)
         self.first_scores = [] # ES scores of first result of queies
         self.has_match = []
-        self.first_is_match = []
+        self.first_is_match = [] # First hit is the actual match
+        self.any_is_match = [] # Any of the hits is the actual match
         
         self.thresh = None
         self.precision = None
         self.recall = None
+        self.inclusion_ratio = None
         self.score = 0.1 # General score of the template based on precision and recall
 
     def to_dict(self):
@@ -212,6 +217,7 @@ class LabellerQuery(CompoundQueryTemplate):
         dict_['first_scores'] = self.first_scores
         dict_['thresh'] = self.thresh
         dict_['precision'] = self.precision
+        dict_['inclusion_ratio'] = self.inclusion_ratio
         dict_['recall'] = self.recall
         dict_['score'] = self.score
         return dict_
@@ -228,6 +234,7 @@ class LabellerQuery(CompoundQueryTemplate):
         labeller['first_scores'] = dict_['first_scores']
         labeller['thresh'] = dict_['thresh']
         labeller['precision'] = dict_['precision']
+        labeller['inclusion_ratio'] = dict_['inclusion_ratio']
         labeller['recall'] = dict_['recall']
         labeller['score'] = dict_['score']
         return labeller
@@ -240,18 +247,21 @@ class LabellerQuery(CompoundQueryTemplate):
         self.first_scores.append(first_score)
         
     def add_labelled_pair(self, labelled_pair):
-        ''' Update first_is_match with a labelled_pair (commes after add_pairs)'''
+        ''' Update first_is_match, any_is_match with a labelled_pair (commes after add_pairs)'''
         
         assert len(self.first_scores) == len(self.history_pairs)
         
         # If row is forgotten or no matches were found in all queries, mark as unaplicable
         if (labelled_pair is None) or (labelled_pair[1] is None): 
             self.first_is_match.append(None) # None if does not apply
+            self.any_is_match.append(None) # None if does not apply
         else:
             if self.history_pairs[-1]:        
                 self.first_is_match.append(labelled_pair==self.history_pairs[-1][0])
+                self.any_is_match.append(labelled_pair in self.history_pairs[-1])
             else:
                 self.first_is_match.append(False)
+                self.any_is_match.append(False)
             
     def previous(self, num_labelled):
         ''' Go back to state when num_labelled were labelled'''
@@ -266,6 +276,7 @@ class LabellerQuery(CompoundQueryTemplate):
         self.first_scores = self.first_scores[:idx+1]
         self.has_match = self.has_match[:idx]
         self.first_is_match = self.first_is_match[:idx]
+        self.any_is_match = self.any_is_match[:idx]
 
         # Check whether or not to re-compute scores 
 
@@ -282,12 +293,13 @@ class LabellerQuery(CompoundQueryTemplate):
             - thresh: optimal threshold (#TODO: explain more)
             - precision
             - recall
-            - ratio
+            - score
         '''
-        summaries = [{'score': s, 'first_is_match': fim, 'has_match': hm} \
-                for (s, fim, hm) in zip(self.first_scores, self.first_is_match, self.has_match)]
+        summaries = [{'score': s, 'first_is_match': fim, 'any_is_match': aim, 'has_match': hm} \
+                for (s, fim, aim, hm) in zip(self.first_scores, self.first_is_match, 
+                                        self.any_is_match, self.has_match)]
         
-        # Filter out relevent summaries only
+        # Filter out relevent summaries only (line not forgotten)
         summaries = [summary for summary in summaries if summary['first_is_match'] is not None]
         
         #
@@ -314,16 +326,16 @@ class LabellerQuery(CompoundQueryTemplate):
         
         # TODO: WHY is recall same as precision ?
         
-        # Compute ratio
+        # Compute score
         _f_precision = lambda x: max(x - t_p, 0) + min(t_p*(x/t_p)**3, t_p)
         _f_recall = lambda x: max(x - t_r, 0) + min(t_p*(x/t_r)**3, t_r)
         a = np.fromiter((_f_precision(xi) for xi in rolling_precision), rolling_precision.dtype)
         b = np.fromiter((_f_recall(xi) for xi in rolling_recall), rolling_recall.dtype)
-        rolling_ratio = a*b
+        rolling_score = a*b
     
         # Find best index for threshold
-        MIN_OBSERVATIONS = 6 # minimal number of values on which to comupute threshold etc...
-        idx = max(num_summaries - rolling_ratio[::-1].argmax() - 1, min(MIN_OBSERVATIONS, num_summaries-1))
+        MIN_OBSERVATIONS = 4 # minimal number of values on which to comupute threshold etc...
+        idx = max(num_summaries - rolling_score[::-1].argmax() - 1, min(MIN_OBSERVATIONS, num_summaries-1))
         
         # TODO: added if // was is das ?
         if idx == len(summaries) - 1:
@@ -333,7 +345,11 @@ class LabellerQuery(CompoundQueryTemplate):
         
         precision = rolling_precision[idx]
         recall = rolling_recall[idx]
-        score = rolling_ratio[idx]
+        score = rolling_score[idx]
+        
+        # Compute 
+        inclusion_ratio = sum(x['any_is_match'] for x in summaries) / len(summaries)
+        
         
         self.thresh = thresh
         self.precision = precision
@@ -451,7 +467,7 @@ class Labeller():
                    '.city': ['must', 'should']}
     BOOST_LEVELS = [1]
     
-    t_p = 0.92
+    t_p = 0.95
     t_r = 0.3
     
     
@@ -1043,6 +1059,8 @@ class Labeller():
         dict_to_emit['t_p'] = self.t_p
         dict_to_emit['t_r'] = self.t_r
         dict_to_emit['has_previous'] = None # TODO: 
+        dict_to_emit['must_filters'] = self.must_filters
+        dict_to_emit['must_not_filters'] = self.must_not_filters
         #        dict_to_emit['num_proposed_source'] = str(self.num_rows_proposed_source)
         #        dict_to_emit['num_proposed_ref'] = str(sum(self.num_rows_proposed_ref.values()))
         #        dict_to_emit['num_labelled'] = str(self.num_rows_labelled)
@@ -1113,7 +1131,12 @@ class Labeller():
                 for ref_col in ref_cols:
                     print('(R): {0} -> {1}'.format(ref_col, dict_to_emit['ref_item'][ref_col]))
             except:
-                import pdb; pdb.set_trace()
+                
+                for source_col in source_cols:
+                    print('(S): {0} -> {1}'.format(source_col, dict_to_emit['source_item']['_source'][source_col]))
+                    
+                for ref_col in ref_cols:
+                    print('(R): {0} -> {1}'.format(ref_col, dict_to_emit['ref_item']['_source'][ref_col]))
 
     
     def console_input(self):

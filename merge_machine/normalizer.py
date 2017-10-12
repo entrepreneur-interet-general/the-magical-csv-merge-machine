@@ -283,7 +283,7 @@ class Normalizer(ESAbstractDataProject):
         file_name = base_name + '.csv'
 
         if extension not in ['csv', 'xls', 'xlsx']:
-            raise Exception('file name (and user given name) should end with .csv , .xls , or .xlsx or .zip')
+            raise Exception('file name (and user given name) should end with .csv , .xls , or .xlsx')
             
     
         self.mem_data_info = {
