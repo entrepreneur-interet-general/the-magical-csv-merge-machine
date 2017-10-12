@@ -555,6 +555,13 @@ class TypeMatcher(object):
 			except urllib.error.URLError as ue:
 				logging.warning('{}: request rejected for "{}": {}'.format(self, vc.value, ue))
 				fatal_values[v] += 1
+			except ConnectionError as cne:
+				logging.warning('{}: connection error: {}'.format(self, cne))
+				fatal_values[v] += 1
+			except Exception as une:
+				logging.warning('{}: unknown exception: {}'.format(self, une))
+				fatal_values[v] += 1
+
 	def update_diversity(self, hit):
 		self.diversion |= set(hit if isinstance(hit, list) else [hit])
 	def check_diversity(self, cells):
