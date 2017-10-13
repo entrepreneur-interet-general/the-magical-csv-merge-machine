@@ -32,7 +32,7 @@ if test_num == 0:
     source_sep = ','
     source_encoding = 'utf-8'
     
-    ref_table_name = '123vivalalgerie'
+    ref_table_name = '123vivalalgerie3'
     
 elif test_num == 1:
     source_file_path = 'local_test_data/integration_5/data_ugly.csv'

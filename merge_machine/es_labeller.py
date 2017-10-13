@@ -17,12 +17,12 @@ TODO:
 - query_filter    
     
 """
-
+import copy
 import itertools
 import pickle
 import random
 
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, client
 import numpy as np
 
 from es_helpers import _gen_body, _bulk_search
@@ -108,6 +108,13 @@ class CompoundQueryTemplate():
         self.core = self._core()
         self.parent_cores = self._parent_cores()
 
+    def add_must(self, query):
+        self.musts.append(query)
+        self.core = self._core()
+        
+    def add_should(self, query):
+        self.shoulds.append(query)
+
     def to_dict(self):
         '''Returns a dict representation of the instance'''
         return {'musts': [x.to_dict() for x in self.musts],
@@ -142,6 +149,9 @@ class CompoundQueryTemplate():
         
         return bool_1 and bool_2
 
+
+    def __len__(self):
+        return len(self.musts) + len(self.shoulds)
 
 #    def __str__(self):
 #        return [x.__str__() for x in self.musts + self.shoulds].__str__()
@@ -359,6 +369,97 @@ class LabellerQuery(CompoundQueryTemplate):
         return self.thresh, self.precision, self.recall, self.score
 
 
+    def multiply_by_boost(self, boost_multiplier=2):
+        '''Takes a single compound query and returns a list of multiple queries'''
+        new_query_templates = []
+        
+        new_query = copy.deepcopy(self) 
+        new_query_templates.append(new_query) # Keep original query
+        
+        og_boost_total = sum(x.boost for x in self.musts + self.shoulds)
+        for level in ['shoulds', 'musts']:
+            for i in range(len(self.__dict__[level])):
+                new_query = copy.deepcopy(self)
+                new_boost_total = og_boost_total + new_query.__dict__[level][i].boost
+                new_query.__dict__[level][i].boost *= 2
+                
+                # Normalize total boost back to original level
+                for level_ in ['shoulds', 'musts']:
+                    for j in range(len(self.__dict__[level_])):
+                        new_query.__dict__[level][i].boost *= og_boost_total/new_boost_total
+                new_query_templates.append(new_query)
+        return new_query_templates
+    
+    def multiply_by_core(self, core_queries, bool_levels):
+        '''Takes a single compound query and returns a list of multiple queries'''
+        
+        new_query_templates = []
+        
+        new_query = copy.deepcopy(self)
+        new_query_templates.append(new_query) # Keep original query
+        
+        # Multiply by core queries and bool levels
+        for core_query in core_queries:
+            for level in bool_levels:
+                if level == 'must':
+                    if all(core_query.core != q.core for q in self.musts):
+                        new_query = copy.deepcopy(self)
+                        new_query.add_must(core_query)
+                        new_query_templates.append(new_query)
+                elif level == 'should':
+                    if all(core_query.core != q.core for q in self.musts):
+                        new_query = copy.deepcopy(self)
+                        new_query.add_should(core_query)
+                        new_query_templates.append(new_query)   
+                else:
+                    raise ValueError('Invalid level: {0}; should be must or should')
+        return new_query_templates
+
+
+class CoreScorerQueryTemplate(SingleQueryTemplate):
+    '''Scor'''
+    
+    def __init__(self, *argv, **kwargs):
+        super().__init__(*argv, **kwargs)    
+        
+        self.source_lens = []
+        self.ref_lens = []
+        self.intersect_lens = []
+    
+    @staticmethod
+    def _analyze(es, index_name, analyzer, text):
+        '''Use the current analyzer in the given index_name to analyze text'''
+        ic = client.IndicesClient(es)
+        if analyzer:
+            return ic.analyze(index_name, body={'text': text, 'analyzer': analyzer})
+        else:
+            return ic.analyze(index_name, body={'text': text})
+        
+    def analyze_pair_items(self, es, index_name, source_item, ref_item):
+        '''Count tokens for source, ref and the intersection fof both'''  
+        text_source = ' '.join(source_item[col] for col in self.source_col)
+        text_ref = ' '.join(ref_item[col] for col in self.ref_col)
+        
+        analyzer = self.analyzer_suffix.strip('.')
+        
+        tokens_source = {x['token'] for x in self._analyze(es, index_name, analyzer, text_source)['tokens']}
+        tokens_ref = {x['token'] for x in self._analyze(es, index_name, analyzer, text_ref)['tokens']}
+
+        return len(tokens_source), len(tokens_ref), len(tokens_source & tokens_ref)
+    
+    def add_labelled_pair_items(self, es, index_name, source_item, ref_item):
+        ''''''
+        l_s, l_r, l_i = self.analyze_pair_items(es, index_name, source_item, ref_item)
+        
+        self.source_lens.append(l_s)
+        self.ref_lens.append(l_r)
+        self.intersect_lens.append(l_i)
+        
+        self.score = sum(x > 0 for x in self.intersect_lens) / len(self.intersect_lens)
+        
+        
+        
+
 def _gen_suffix(columns_to_index, s_q_t_2):
     '''
     Yields suffixes to add to field_names for the given analyzers
@@ -387,14 +488,21 @@ def DETUPLIFY_TODO_DELETE(arg):
         return arg[0]
     return arg
 
-def _gen_all_query_template_tuples(match_cols, columns_to_index, bool_levels, 
-                            boost_levels, max_num_levels):
-    ''' Generate query templates #TODO: more doc '''
-    single_queries = list(((bool_lvl, DETUPLIFY_TODO_DELETE(x['source']), DETUPLIFY_TODO_DELETE(x['ref']), suffix, boost) \
+
+def _gen_all_single_query_template_tuples(match_cols, columns_to_index, bool_levels,
+                                          boost_levels):
+    '''Generate a list of single query tuples'''
+    return list(((bool_lvl, DETUPLIFY_TODO_DELETE(x['source']), DETUPLIFY_TODO_DELETE(x['ref']), suffix, boost) \
                                        for x in match_cols \
                                        for suffix in _gen_suffix(columns_to_index, x['ref']) \
                                        for bool_lvl in bool_levels.get(suffix, ['must']) \
                                        for boost in boost_levels))
+
+def _gen_all_query_template_tuples(match_cols, columns_to_index, bool_levels, 
+                            boost_levels, max_num_levels):
+    ''' Generate query templates #TODO: more doc '''
+    single_queries = _gen_all_single_query_template_tuples(match_cols, 
+                                    columns_to_index, bool_levels, boost_levels)
     all_query_templates = list(itertools.chain(*[list(itertools.combinations(single_queries, x)) \
                                         for x in range(2, max_num_levels+1)][::-1]))
     # Queries must contain at least two distinct columns (unless one match is mentionned)
@@ -418,7 +526,19 @@ for x in range(100):
 
 labeller.export_params()
 """
-    
+
+
+"""
+Initialise core queries (list)
+On match:
+    - Analyze source and ref Using the query analyzer
+    - Add number Of common tokens 
+"""
+
+
+
+
+
 class Labeller():
     '''
     Labeller object that stores previous labels and generates new matches
@@ -498,6 +618,7 @@ class Labeller():
         
            
         self._init_queries(match_cols, columns_to_index) # creates self.current_queries
+        self._init_core_queries(match_cols, columns_to_index) # creates self.single_core_queries
         #self._init_history() # creates self.history
         self._init_source_gen() # creates self.source_gen
         
@@ -509,7 +630,7 @@ class Labeller():
         
         self.current_es_score = None
 
-        self._first_pair()
+        self._next()
     
     def _init_es(self):
         self.es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
@@ -581,6 +702,18 @@ class Labeller():
                                                            self.MAX_NUM_LEVELS)        
         self.current_queries = [LabellerQuery(q_t_t) for q_t_t in all_query_template_tuples]            
 
+    
+    def _init_core_queries(self, match_cols, columns_to_index):
+        all_single_query_templates_tuples = _gen_all_single_query_template_tuples(
+                                                    match_cols, 
+                                                    columns_to_index, 
+                                                    {}, # defaults to must
+                                                    [1])
+            
+        self.single_core_queries = [CoreScorerQueryTemplate(*q_t_t) for q_t_t \
+                                    in all_single_query_templates_tuples]
+
+
     #    def _init_history(self):
     #        """Generate history object"""
     #        self.history = dict()
@@ -629,13 +762,22 @@ class Labeller():
                     # TODO: check that source idx is same as in source_gen
         self.ref_gen = temp()        
 
-    def _first_pair(self):
-        """Initialiaze labeller"""
-        self.current_source_idx, self.current_source_item = next(self.source_gen)
-
-        self._init_ref_gen()     
-        (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
-
+    def _next(self):
+        """Get's next pair assuming source_gen is initialized"""
+        NUM_ROW_TRIES = 10
+        
+        for _ in range(NUM_ROW_TRIES):
+        
+            self.current_source_idx, self.current_source_item = next(self.source_gen)
+    
+            self._init_ref_gen()
+            try: 
+                (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
+                break
+            except StopIteration:
+                print('WARNING: no results found for this row; skipping')
+        else:
+            raise StopIteration('Could not find any resut in {0} consecutive rows'.format(NUM_ROW_TRIES))
         
     def _bulk_search(self, queries_to_perform, row, num_results):
         # TODO: use self.current_queries instead ?
@@ -739,8 +881,9 @@ class Labeller():
         a = queries[:int(len(queries)/2)]
         a = sorted(a, key=lambda x: x.first_scores[-1], reverse=True)
         
-        self.sorted_keys = a
+        self.current_queries = a
         
+        # TODO: replace sorted_keys by current_queries and try again!
         #        if len(queries)%2 == 0:
         #            b = queries[int(len(queries)/2):]
         #            c = []
@@ -867,8 +1010,8 @@ class Labeller():
         
         print('At pair {0} / {1} ; user input: {2}'.format(self.current_source_idx, self.current_ref_idx, user_input))
         
-        MIN_NUM_KEYS = 9 # Number under which to expand
-        EXPAND_FREQ = 9
+        #        MIN_NUM_KEYS = 9 # Number under which to expand
+        #        EXPAND_FREQ = 9
         
         yes = self.VALID_ANSWERS[user_input] == 'y'
         no = self.VALID_ANSWERS[user_input] == 'n'
@@ -914,7 +1057,7 @@ class Labeller():
 
                 # If iterator runs out: next_row = True
                 if self.num_rows_labelled:
-                    self.num_rows_labelled.append(self.num_rows_labelled[-1] + 1)
+                    self.num_rows_labelled.append(self.num_rows_labelled[-1])
                 else:
                     self.num_rows_labelled = [0]
                                 
@@ -934,6 +1077,12 @@ class Labeller():
             # Re-score and sort metrics
             self.add_labelled_pair(labelled_pair)
             
+            # Update core queries
+            # TODO: look into batching this
+            for query in self.single_core_queries:
+                query.add_labelled_pair_items(self.es, self.ref_index_name, 
+                                self.current_source_item, self.current_ref_item)
+            
             # Update metrics
             if labelled_pair is not None:
                 self._compute_metrics()
@@ -942,12 +1091,12 @@ class Labeller():
                     self._sort_queries()
                 self._filter_queries() # TODO: implement this
             
-            # Generate next row
-            self.current_source_idx, self.current_source_item = next(self.source_gen)
-
-            self._init_ref_gen()
+            # Update queries
+            self.filter_()
+            self.expand()
             
-            (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
+            # Get new pair
+            self._next()
 
 
     def _re_score_history(self):        
@@ -983,7 +1132,7 @@ class Labeller():
             self._sorta_sort_queries()
             self._sort_queries()
         
-        self._first_pair()
+        self._next()
 
 
     def _filter_queries(self):
@@ -1006,12 +1155,90 @@ class Labeller():
         #            self.sorted_keys = _expand_by_boost(self.sorted_keys)
         #            self.re_score_history()    
         #            self.last_expanded = self.idx
-
-        
         
     def answer_is_valid(self, user_input):
         '''Check if the user input is valid''' # DONE
         return user_input in self.VALID_ANSWERS
+    
+    def filter_(self):
+        print('FILTERING')
+        self.filter_by_precision()
+        self.filter_by_num_keys()
+        
+    def expand(self):
+        EXPAND_FREQ = 2 # TODO: smarter than that
+        
+        print('NRL -->', self._nrl())
+        if self._nrl() + 1 % EXPAND_FREQ == 0:
+            if self._nrl() + 1 % (EXPAND_FREQ*2) == 0:
+                self.expand_by_boost()
+            else:
+                self.expand_by_core()
+        
+            self.re_score_history()
+            self.filter_()
+    
+    def _nrl(self):
+        # TODO: num rows_labelled, take care of this
+        if self.num_rows_labelled:
+            return self.num_rows_labelled[-1]
+        else:
+            return 0   
+    
+    def filter_by_precision(self):
+        
+        MIN_PRECISION_TAB = [(20, 0.7), (10, 0.5), (5, 0.3)]
+        def _min_precision(self):
+            '''
+            Return the minimum precision to keep a query template, according to 
+            the number of rows currently labelled
+            '''
+            
+            min_precision = 0
+            for min_idx, min_precision in MIN_PRECISION_TAB:
+                if self._nrl() >= min_idx:
+                    break    
+            return min_precision        
+        
+        l1 = len(self.current_queries)
+        # Remove queries if precision is too low (thresh depends on number of labels)
+        self.current_queries = list(filter(lambda x: x.precision \
+                                 >= _min_precision(self), self.current_queries))
+        l2 = len(self.current_queries)
+        print('min_precision: removed {0} queries; {1} left'.format(l1-l2, l2))
+        
+   
+
+    def filter_by_num_keys(self):
+        MAX_NUM_KEYS_TAB = [(20, 10), (10, 50), (7, 200), (5, 500), (0, 4000)]
+        def _max_num_queries(self):
+            '''
+            Max number of labels based on the number of rows currently labelled
+            '''
+            
+            max_num_keys = MAX_NUM_KEYS_TAB[-1][1]
+            for min_idx, max_num_keys in MAX_NUM_KEYS_TAB[:-1]:
+                if self._nrl() >= min_idx:
+                    break    
+            return max_num_keys    
+        
+        l2 = len(self.current_queries)
+        # Remove queries according to max number of keys
+        self.current_queries = self.current_queries[:_max_num_queries(self)]
+        l3 = len(self.current_queries)
+        print('max_num_keys: removed {0} queries; {1} left'.format(l2-l3, l3))     
+    
+    def expand_by_core(self):
+        print('EXPANDING BY CORE')
+        cores = [q for q in self.single_core_queries if q.score >= 0.7]
+        self.current_queries = [x for query in self.current_queries \
+                                for x in query.multiply_by_core(cores, ['must'])]
+        
+    def expand_by_boost(self):
+        print('EXPANDING BY BOOST')
+        self.current_queries = [x for query in self.current_queries \
+                                for x in query.multiply_by_boost(2)]
+    
 
     def export_best_params(self, p):
         '''Returns a dictionnary with the best parameters (input for es_linker)''' # DONE

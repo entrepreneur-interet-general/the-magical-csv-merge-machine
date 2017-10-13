@@ -225,7 +225,9 @@ def _expand_by_boost(all_query_templates):
                 if new_compound_query not in new_query_templates:
                     new_query_templates.append(new_compound_query)
     return new_query_templates
-    
+
+
+
 #def gen_label(full_responses, sorted_keys, row, num_results, num_rows_labelled):
 #    '''
 #    User labelling going through potential results (order given by sorted_keys) 
