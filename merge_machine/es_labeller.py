@@ -14,7 +14,18 @@ TODO:
 - ref_gen
 - buffer_for_future_matches in same row when previous is called:
     overwrite ref_gen
-- query_filter    
+- query_filter   
+
+
+for query in labeller.current_queries:
+    print('\n*******')
+    print(query._as_tuple())
+    print('precision:', query.precision)
+    print('recall', query.recall)
+    print('score', query.score)
+    print('thresh', query.thresh)
+
+ 
     
 """
 import copy
@@ -205,6 +216,9 @@ class LabellerQuery(CompoundQueryTemplate):
     def __init__(self, *argv, **kwargs):
         super().__init__(*argv, **kwargs)
         
+        self.reset()
+
+    def reset(self):
         self.history_pairs = [] # [[(1,5), (1,2)], [(2,3), (2,5)], []]
         #self.steps = [] # Num rows labelled at which this pair was added (in case of later creation)
         self.first_scores = [] # ES scores of first result of queies
@@ -216,7 +230,7 @@ class LabellerQuery(CompoundQueryTemplate):
         self.precision = None
         self.recall = None
         self.inclusion_ratio = None
-        self.score = 0.1 # General score of the template based on precision and recall
+        self.score = 0.1 # General score of the template based on precision and recall        
 
     def to_dict(self):
         '''Returns a dict representation of the instance'''
@@ -224,11 +238,13 @@ class LabellerQuery(CompoundQueryTemplate):
         dict_['history_pairs'] = self.history_pairs
         dict_['first_scores'] = self.first_scores
         dict_['has_match'] = self.has_match
-        dict_['first_scores'] = self.first_scores
+        dict_['first_is_match'] = self.first_is_match
+        dict_['any_is_match'] = self.any_is_match
+        
         dict_['thresh'] = self.thresh
         dict_['precision'] = self.precision
-        dict_['inclusion_ratio'] = self.inclusion_ratio
         dict_['recall'] = self.recall
+        dict_['inclusion_ratio'] = self.inclusion_ratio
         dict_['score'] = self.score
         return dict_
     
@@ -242,10 +258,12 @@ class LabellerQuery(CompoundQueryTemplate):
         labeller['first_scores'] = dict_['first_scores']
         labeller['has_match'] = dict_['has_match']
         labeller['first_scores'] = dict_['first_scores']
+        labeller['any_is_match'] = dict_['any_is_match']
+        
         labeller['thresh'] = dict_['thresh']
         labeller['precision'] = dict_['precision']
-        labeller['inclusion_ratio'] = dict_['inclusion_ratio']
         labeller['recall'] = dict_['recall']
+        labeller['inclusion_ratio'] = dict_['inclusion_ratio']
         labeller['score'] = dict_['score']
         return labeller
         
@@ -610,6 +628,7 @@ class Labeller():
         self.labelled_pairs = [] # Flat list of labelled pairs
         self.labels = [] # Flat list of labels
         self.num_rows_labelled = [] # Flat list: at given label, how many were labelled. NB: starts at 0, becomes 1 at first yes/forgotten, or when next_row
+        self.num_positive_rows_labelled = [] # Flat list: at given label, how_many were matches
         self.labelled_pairs_match = [] # For each row, the resulting match: (A, B) / no-match: (A, None) or forgotten: None
          
         
@@ -630,7 +649,7 @@ class Labeller():
         
         self.current_es_score = None
 
-        self._next()
+        self._next_row()
     
     def _init_es(self):
         self.es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
@@ -646,11 +665,8 @@ class Labeller():
         self.es = None
         
         with open(file_path, 'wb') as w:
-            try:
-                pickle.dump(self, w)
-            except:
-                import pdb; pdb.set_trace()
-            
+            pickle.dump(self, w)
+
         self.source_gen = temp_source_gen    
         self.ref_gen = temp_ref_gen   
             
@@ -750,20 +766,37 @@ class Labeller():
             for i, query in enumerate(self.current_queries):
                 self.current_query_ranking = i
                 self.current_query = query # TODO: for display only
-                for pair in query.history_pairs[-1]: # TODO: this is only idx of results: get results
+                
+                idx = self._nrl()                    
+                try:
+                    query.history_pairs[idx]
+                except:
+                    import pdb; print('hiosse'); pdb.set_trace()
+    
+                    
+                for pair in query.history_pairs[idx]: # TODO: this is only idx of results: get results
                     try:
                         assert pair[0] == self.current_source_idx
                     except:
                         import pdb; pdb.set_trace()
-                    if pair not in self.labelled_pairs:
-                        item = self.ref_id_to_data[pair[1]]['_source'] # TODO: get item if it is not in ref_id_to_data
-                        es_score = self.ref_id_to_data[pair[1]]['_score']
-                        yield pair[1], item, es_score
-                    # TODO: check that source idx is same as in source_gen
+                    
+                    # Check that source does not have match (or No match)
+                    if pair[0] not in [x[0] for x in  self.labelled_pairs_match if x is not None]:
+                        # Check that pair was not already labelled                        
+                        if pair not in self.labelled_pairs:
+                            if pair[1] in self.ref_id_to_data:
+                                item = self.ref_id_to_data[pair[1]]['_source'] # TODO: get item if it is not in ref_id_to_data
+                                es_score = self.ref_id_to_data[pair[1]]['_score']
+                            else:
+                                item = self._fetch_ref_item(pair[1])
+                                es_score = 1.23456789
+                            
+                            yield pair[1], item, es_score
+                        # TODO: check that source idx is same as in source_gen
         self.ref_gen = temp()        
 
-    def _next(self):
-        """Get's next pair assuming source_gen is initialized"""
+    def _next_row(self):
+        """Gets next first pair for the next row assuming source_gen has been initialized"""
         NUM_ROW_TRIES = 10
         
         for _ in range(NUM_ROW_TRIES):
@@ -775,7 +808,10 @@ class Labeller():
                 (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
                 break
             except StopIteration:
+                print(self.current_source_item)
+                import pdb; pdb.set_trace()
                 print('WARNING: no results found for this row; skipping')
+                self._update_row_count(True, False) # TODO: not tested! 
         else:
             raise StopIteration('Could not find any resut in {0} consecutive rows'.format(NUM_ROW_TRIES))
         
@@ -853,7 +889,6 @@ class Labeller():
         
         if not sum(bool(x) for x in to_return):
             print('NO RESULTS !!')
-            import pdb; pdb.set_trace()
         
         print('Num queries before pruning:', len(queries_to_perform))
         print('Num queries performed:', num_queries_performed)
@@ -881,18 +916,17 @@ class Labeller():
         a = queries[:int(len(queries)/2)]
         a = sorted(a, key=lambda x: x.first_scores[-1], reverse=True)
         
-        self.current_queries = a
+        #        self.current_queries = a
         
-        # TODO: replace sorted_keys by current_queries and try again!
-        #        if len(queries)%2 == 0:
-        #            b = queries[int(len(queries)/2):]
-        #            c = []
-        #        else:
-        #            b = queries[int(len(queries)/2):-1]
-        #            c = [queries[-1]]
-        #            
-        #        # d_q = self._default_query()
-        #        self.sorted_keys = [x for x in list(itertools.chain(*zip(a, b)))] + [c]    
+        if len(queries)%2 == 0:
+            b = queries[int(len(queries)/2):]
+            c = []
+        else:
+            b = queries[int(len(queries)/2):-1]
+            c = [queries[-1]]
+            
+        # d_q = self._default_query()
+        self.current_queries = [x for x in list(itertools.chain(*zip(a, b)))] + c
 
 
     def previous(self):
@@ -900,13 +934,25 @@ class Labeller():
         # Re-place current values in todo-stack
         s_elem = (self.current_source_idx, self.current_source_item)
         r_elem = (self.current_ref_idx, self.current_ref_item, self.current_es_score)
-        self.source_gen = itertools.chain([s_elem], self.source_gen)
-        self.ref_gen = itertools.chain([r_elem], self.ref_gen)
+        
+        # If going to previous 
+        # Re-put the current state in the generator
+        
+        
+        og_num_rows_labelled = self._nrl()
+    
         
         # TODO: test that previous is possible
+        # Update the current state
         (self.current_source_idx, self.current_ref_idx) = self.labelled_pairs.pop()
         self.labels.pop()
         num_rows_labelled = self.num_rows_labelled.pop()
+        self.num_positive_rows_labelled.pop()
+        
+        # Remove from labelled pairs match if there was a change of line
+        if (self.num_rows_labelled and (num_rows_labelled > self.num_rows_labelled[-1])) \
+                or ((not self.num_rows_labelled) and bool(num_rows_labelled)):
+            self.labelled_pairs_match.pop()
     
         # self.labelled_pairs_match = self.labelled_pairs_match[:num_rows_labelled] # For each row, the resulting match: (A, B) / no-match: (A, None) or forgotten: None
             
@@ -917,10 +963,14 @@ class Labeller():
         
         # Previous on all queries
         for query in self.current_queries:
-            query.previous(num_rows_labelled)
-            
-            
-        
+            query.previous(num_rows_labelled)           
+
+        # If we just changed source row
+        if self._nrl() < og_num_rows_labelled:
+            self.source_gen = itertools.chain([s_elem], self.source_gen)
+            self._init_ref_gen()
+        else:
+            self.ref_gen = itertools.chain([r_elem], self.ref_gen)        
 
 
     def _auto_label_pair(self, source_item, ref_item):
@@ -981,6 +1031,8 @@ class Labeller():
         # TODO: look into keeping more data than just this round
         self.ref_id_to_data = dict()
         
+        assert len(self.current_queries) == len(results)
+        
         for query, ref_result in zip(self.current_queries, results):
             if ref_result:
                 score = ref_result[0]['_score']
@@ -991,7 +1043,17 @@ class Labeller():
             for res in ref_result:
                 if res['_id'] not in self.ref_id_to_data:
                     self.ref_id_to_data[res['_id']] = res
-            
+
+
+    def _update_row_count(self, at_new_row, last_is_match):
+        assert at_new_row or (not last_is_match)
+        
+        if self.num_rows_labelled:
+            self.num_rows_labelled.append(self.num_rows_labelled[-1] + int(at_new_row))
+            self.num_positive_rows_labelled.append(self.num_rows_labelled[-1] + int(last_is_match))
+        else:
+            self.num_rows_labelled = [int(at_new_row)]
+            self.num_positive_rows_labelled = [int(last_is_match)]            
 
     def update(self, user_input):
         '''
@@ -1056,10 +1118,8 @@ class Labeller():
                 (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
 
                 # If iterator runs out: next_row = True
-                if self.num_rows_labelled:
-                    self.num_rows_labelled.append(self.num_rows_labelled[-1])
-                else:
-                    self.num_rows_labelled = [0]
+                self._update_row_count(False, yes)
+
                                 
             except StopIteration:
                 # If no match was found
@@ -1069,11 +1129,9 @@ class Labeller():
         # NB: not using "else" because there is a chance for next_row to chang in previous "if"    
         if next_row:
             # Add rows_labelled_counts
-            if self.num_rows_labelled:
-                self.num_rows_labelled.append(self.num_rows_labelled[-1] + 1)
-            else:
-                self.num_rows_labelled = [1] # TODO: check this ?
-
+            self._update_row_count(True, yes)
+            
+            
             # Re-score and sort metrics
             self.add_labelled_pair(labelled_pair)
             
@@ -1085,54 +1143,72 @@ class Labeller():
             
             # Update metrics
             if labelled_pair is not None:
-                self._compute_metrics()
-                if True: # TODO: use sort_queries
-                    self._sorta_sort_queries()
-                    self._sort_queries()
-                self._filter_queries() # TODO: implement this
-            
-            # Update queries
-            self.filter_()
-            self.expand()
-            
+                
+                if self.num_positive_rows_labelled[-1]:                
+                    if True: # TODO: use sort_queries
+                        self._compute_metrics()
+                        self._sorta_sort_queries()
+                        self._sort_queries()
+                
+                        # Update queries
+                        self.filter_()
+                        self.expand()
+                        
             # Get new pair
-            self._next()
+            self._next_row()
 
 
     def _re_score_history(self):        
         # TODO: choose between keeping old or full re-initialisation
-        print('WARNING: re-scoring history')
+       
+        # Re-initialize queries
+        for query in self.current_queries:
+            query.reset()
         
-        self._init_queries(self.match_cols, self.columns_to_index)
-        
-        og_labelled_pairs = list(self.labelled_pairs_match)
-        self.labelled_pairs_match = []
-        for labelled_pair in og_labelled_pairs:
-            (source_idx, ref_idx) = labelled_pair
-            if (labelled_pair is not None) and (ref_idx is not None): # TODO: not re_labelling Nones
-                self.current_source_idx = source_idx
-                self.current_ref_idx = ref_idx
-                
-                self.current_source_item = self._fetch_source_item(source_idx)
-                self.current_ref_item = self._fetch_ref_item(ref_idx)
-                
-                self.current_es_score = None
-                
-                # Fetch data for next row
-                results = self.pruned_bulk_search(self.current_queries, 
-                                        self.current_source_item, 1) #self.NUM_RESULTS)
-                self.add_results(results)
-                
-                self.add_labelled_pair(labelled_pair)
-
-
-        # Re-score metrics
-        self._compute_metrics()
-        if True: # TODO: use sort_queries
-            self._sorta_sort_queries()
-            self._sort_queries()
-        
-        self._next()
+        if self.num_positive_rows_labelled[-1]:
+            print('WARNING: re-scoring history')
+            # self._init_queries(self.match_cols, self.columns_to_index)
+            
+            og_labelled_pairs_match = list(self.labelled_pairs_match)
+            
+            
+            # TODO: discrepancy between length of self.labels and self.num_rows_labelled
+            # TODO: NRL doesn't increase once you have no results once
+            
+            self.labelled_pairs_match = []
+            self.num_rows_labelled = []
+            self.num_positive_rows_labelled = []            
+            for labelled_pair in og_labelled_pairs_match:
+                (source_idx, ref_idx) = labelled_pair
+                if (labelled_pair is not None) and (ref_idx is not None): # TODO: not re_labelling Nones
+                    self.current_source_idx = source_idx
+                    self.current_ref_idx = ref_idx
+                    
+                    self.current_source_item = self._fetch_source_item(source_idx)
+                    self.current_ref_item = self._fetch_ref_item(ref_idx)
+                    
+                    self.current_es_score = None
+                    
+                    # Fetch data for next row
+                    results = self.pruned_bulk_search(self.current_queries, 
+                                            self.current_source_item, 1) #self.NUM_RESULTS)
+                    self.add_results(results)
+                    
+                    self.add_labelled_pair(labelled_pair)
+    
+                    self._update_row_count(True, True)
+    
+    
+            # Re-score metrics
+            self._compute_metrics()
+            if True: # TODO: use sort_queries
+                self._sorta_sort_queries()
+                self._sort_queries()
+            
+            self._next_row()
+            
+        else:
+            print('WARNING: No labels for re-scoring')
 
 
     def _filter_queries(self):
@@ -1161,16 +1237,23 @@ class Labeller():
         return user_input in self.VALID_ANSWERS
     
     def filter_(self):
-        print('FILTERING')
+        print('FILTERING !')
         self.filter_by_precision()
         self.filter_by_num_keys()
+
+        if not self.current_queries:
+            raise RuntimeError('No more queries after filtering')
         
     def expand(self):
         EXPAND_FREQ = 2 # TODO: smarter than that
         
-        print('NRL -->', self._nrl())
-        if self._nrl() + 1 % EXPAND_FREQ == 0:
-            if self._nrl() + 1 % (EXPAND_FREQ*2) == 0:
+        print('Num positive rows labelled -->', self._nprl())
+        
+        
+        if self._nprl() + 1 % EXPAND_FREQ == 0:
+            print('EXPANDING !')
+            
+            if self._nprl() + 1 % (EXPAND_FREQ*2) == 0:
                 self.expand_by_boost()
             else:
                 self.expand_by_core()
@@ -1179,11 +1262,23 @@ class Labeller():
             self.filter_()
     
     def _nrl(self):
+        '''Current number of rows labelled'''
         # TODO: num rows_labelled, take care of this
         if self.num_rows_labelled:
             return self.num_rows_labelled[-1]
         else:
             return 0   
+    
+    def _nprl(self):
+        '''Current number of positive matches labelled'''
+        # TODO: num rows_labelled, take care of this
+        if self.num_rows_labelled:
+            return self.num_positive_rows_labelled[-1]
+        else:
+            return 0   
+   
+    
+    
     
     def filter_by_precision(self):
         
@@ -1193,11 +1288,12 @@ class Labeller():
             Return the minimum precision to keep a query template, according to 
             the number of rows currently labelled
             '''
-            
-            min_precision = 0
+
             for min_idx, min_precision in MIN_PRECISION_TAB:
-                if self._nrl() >= min_idx:
+                if self._nprl() >= min_idx:
                     break    
+            else:
+                min_precision = 0
             return min_precision        
         
         l1 = len(self.current_queries)
@@ -1216,10 +1312,11 @@ class Labeller():
             Max number of labels based on the number of rows currently labelled
             '''
             
-            max_num_keys = MAX_NUM_KEYS_TAB[-1][1]
             for min_idx, max_num_keys in MAX_NUM_KEYS_TAB[:-1]:
-                if self._nrl() >= min_idx:
-                    break    
+                if self._nprl() >= min_idx:
+                    break
+            else:
+                max_num_keys = MAX_NUM_KEYS_TAB[-1][1]
             return max_num_keys    
         
         l2 = len(self.current_queries)
@@ -1230,15 +1327,24 @@ class Labeller():
     
     def expand_by_core(self):
         print('EXPANDING BY CORE')
+        l1 = len(self.current_queries)
+        
         cores = [q for q in self.single_core_queries if q.score >= 0.7]
         self.current_queries = [x for query in self.current_queries \
                                 for x in query.multiply_by_core(cores, ['must'])]
+
+        l2 = len(self.current_queries)
+        print('expand_by_core: added {0} queries; {1} left'.format(l2-l1, l2))
         
     def expand_by_boost(self):
         print('EXPANDING BY BOOST')
+        l1 = len(self.current_queries)
+        
         self.current_queries = [x for query in self.current_queries \
                                 for x in query.multiply_by_boost(2)]
     
+        l2 = len(self.current_queries)
+        print('expand_by_core: added {0} queries; {1} left'.format(l2-l1, l2))
 
     def export_best_params(self, p):
         '''Returns a dictionnary with the best parameters (input for es_linker)''' # DONE

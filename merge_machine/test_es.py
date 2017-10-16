@@ -32,7 +32,7 @@ if test_num == 0:
     source_sep = ','
     source_encoding = 'utf-8'
     
-    ref_table_name = '123vivalalgerie3'
+    ref_table_name = '123vivalalgerie'
     
 elif test_num == 1:
     source_file_path = 'local_test_data/integration_5/data_ugly.csv'
@@ -169,7 +169,7 @@ for i in range(100):
     if i == 15:
         print('Updating musts')
         labeller.update_musts({'NOMEN_LONG': ['lycee']},
-                              {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']})
+                              {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer', 'maison', 'amicale']})
 
 #for i in range(100):
 #    (source_item, ref_item) = labeller.new_label()
