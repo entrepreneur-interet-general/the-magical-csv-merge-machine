@@ -38,16 +38,21 @@ echo "mmm" > secret_key.txt
 
 pip3 install uwsgi
 
-# Préparation (installation + configuration) d'elasticsearch
+# Installation + configuration d'elasticsearch
 
 wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.6.2.deb
 sudo dpkg -i elasticsearch-5.6.2.deb
 
 
+# Préparation des données nécessaires à elasticsearch
+
+mkdir -p merge_machine/resource/es_linker
+wget "https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000@public/download/?format=json&timezone=Europe/Berlin" -O merge_machine/resource/es_linker/geonames-all-cities-with-a-population-1000.json
+python3 merge_machine/es_gen_resource.py
+
 # Ici, éditer le fichier de config /etc/default/elasticsearch et décommenter les lignes :
 # LOG_DIR=/var/log/elasticsearch
 # RESTART_ON_UPGRADE=true
-
 
 # Ici, éditer le fichier d'options /etc/elasticsearch/jvm.options et ajouter la ligne :
 # -Xms4g -Xmx4g
