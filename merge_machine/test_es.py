@@ -24,7 +24,7 @@ chunksize = 3000
 file_len = 10*10**6
 
 
-test_num = 0
+test_num = 2
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
     match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},
@@ -100,32 +100,32 @@ if test_num in [0,1,2]:
         'SIREN': {},
         'NIC': {},
         'L1_NORMALISEE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
+            'french', 'integers', 'n_grams', 'city'
         },
         'L4_NORMALISEE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
+            'french', 'integers', 'n_grams', 'city'
         },
         'L6_NORMALISEE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
+            'french', 'integers', 'n_grams', 'city'
         },
         'L1_DECLAREE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
+            'french', 'integers', 'n_grams', 'city'
         },
         'L4_DECLAREE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
+            'french', 'integers', 'n_grams', 'city'
         },
         'L6_DECLAREE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
+            'french', 'integers', 'n_grams', 'city'
         },
         'LIBCOM': {
-            'french', 'whitespace', 'end_n_grams', 'n_grams', 'city'
+            'french', 'n_grams', 'city'
         },
         'CEDEX': {},
         'ENSEIGNE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
+            'french', 'integers', 'n_grams', 'city'
         },
         'NOMEN_LONG': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
+            'french', 'integers', 'n_grams', 'city'
         },
         #Keyword only 'LIBNATETAB': {},
         'LIBAPET': {},
@@ -156,8 +156,6 @@ else:
 #                      {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']})
 
 for i in range(100):
-    print(labeller.to_emit())
-
     for x in range(10):
         user_input = labeller.console_input()
         if labeller.answer_is_valid(user_input):

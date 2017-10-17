@@ -148,7 +148,7 @@ if __name__ == '__main__':
     if testing:
         table_name = '123vivalalgerie4'
     else:
-        table_name = '123vivalalgerie'
+        table_name = '123vivalalgerie2'
     
     es = Elasticsearch(timeout=60, max_retries=10, retry_on_timeout=True)
     

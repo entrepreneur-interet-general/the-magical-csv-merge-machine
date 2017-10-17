@@ -136,12 +136,13 @@ analyzers = {
         'tokenizer': 'integers'
     },
     "n_grams": {
-        'tokenizer': 'n_grams'
+        'tokenizer': 'n_grams',
+        "filter": ["lowercase"]
     },
-    "end_n_grams": {
-        'tokenizer': 'keyword',
-        "filter": ["reverse", "my_edgeNGram", "reverse"]
-    },
+#    "end_n_grams": {
+#        'tokenizer': 'keyword',
+#        "filter": ["lowercase", "reverse", "my_edgeNGram", "reverse"]
+#    },
     'city': {
         "tokenizer": "standard", # TODO: problem with spaces in words
         "filter": ["my_city_keep", "my_city_synonym", "my_length"] # TODO: shingle ?
