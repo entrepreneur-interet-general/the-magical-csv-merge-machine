@@ -1,4 +1,4 @@
-# The fichier contient l'ensemble des commande nécessaires à une installation manuelle du backend applicatif
+# Ce fichier contient l'ensemble des commande nécessaires à une installation manuelle du backend applicatif
 # sur un serveur dédié ou une machine virtuelle. L'alternative consiste à utiliser les fichiers de config Docker
 # qui évitent d'avoir à exécuter ces instructions en ligne de commande.
 
