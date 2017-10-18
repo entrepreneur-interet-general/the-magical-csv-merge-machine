@@ -501,12 +501,12 @@ class CoreScorerQueryTemplate(SingleQueryTemplate):
         
     def analyze_pair_items(self, es, index_name, source_item, ref_item):
         '''Count tokens for source, ref and the intersection fof both'''  
-        text_source = ' '.join(source_item[col] for col in self.source_col)
-        text_ref = ' '.join(ref_item[col] for col in self.ref_col)
-        
         analyzer = self.analyzer_suffix.strip('.')
         
+        text_source = ' '.join(source_item[col] for col in self.source_col if source_item[col] is not None)
         tokens_source = {x['token'] for x in self._analyze(es, index_name, analyzer, text_source)['tokens']}
+        
+        text_ref = ' '.join(ref_item[col] for col in self.ref_col  if ref_item[col] is not None)
         tokens_ref = {x['token'] for x in self._analyze(es, index_name, analyzer, text_ref)['tokens']}
 
         return len(tokens_source), len(tokens_ref), len(tokens_source & tokens_ref)
@@ -1275,7 +1275,7 @@ class Labeller():
         # self._init_queries(self.match_cols, self.columns_to_index)
         
         og_labelled_pairs_match = list(self.labelled_pairs_match)
-        
+    
         
         # TODO: discrepancy between length of self.labels and self.num_rows_labelled
         # TODO: NRL doesn't increase once you have no results once
@@ -1525,9 +1525,8 @@ class Labeller():
         
     def _best_query_template(self):
         """Return query template with the best score (ratio)"""
-        if self.query_metrics:
-            return sorted(self.metrics.keys(), key=lambda x: \
-                          self.metrics[x]['ratio'], reverse=True)[0]
+        if self.current_queries:
+            return self.current_queries[0]._as_tuple()
         else:
             return None
  

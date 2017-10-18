@@ -156,18 +156,33 @@ else:
 #                      {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']})
 
 for i in range(100):
-    for x in range(10):
-        user_input = labeller.console_input()
-        if labeller.answer_is_valid(user_input):
-            break
+    
+    if test_num == 2:
+        a = labeller.current_source_item['SIRET']
+        b = labeller.current_ref_item['SIREN']
+        c = labeller.current_ref_item['NIC']
+        if a == b+c:
+            user_input = 'y'
         else:
-            print('Invalid answer ("y"/"1", "n"/"0", "u" or "p")')
+            user_input = 'n'
+    else:        
+        for x in range(10):
+            user_input = labeller.console_input()
+            if labeller.answer_is_valid(user_input):
+                break
+            else:
+                print('Invalid answer ("y"/"1", "n"/"0", "u" or "p")')
+            
     labeller.update(user_input)
+    
+    
     
     if i == 15:
         print('Updating musts')
-        labeller.update_musts({'NOMEN_LONG': ['lycee']},
-                              {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer', 'maison', 'amicale']})
+        if test_num == 0:
+            labeller.update_musts({'NOMEN_LONG': ['lycee']},
+                                  {'NOMEN_LONG': ['ass', 'association', 'sportive', 
+                                                  'foyer', 'maison', 'amicale']})
 
 #for i in range(100):
 #    (source_item, ref_item) = labeller.new_label()
