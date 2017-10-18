@@ -312,7 +312,8 @@ class Normalizer(ESAbstractDataProject):
         self.mem_data_info = {
                                 'file_name': file_name,
                                 'og_file_name': og_file_name,
-                                'module_name': 'INIT'
+                                'module_name': 'INIT',
+                                'data_was_transformed': True
                              }
         
         # Check that file name is not already present 
@@ -506,6 +507,8 @@ class Normalizer(ESAbstractDataProject):
         '''
         self._check_mem_data()
         
+        print('mem_data_info:\n', self.mem_data_info)
+        
         all_run_infos = {}
         # Only run all if there is a MINI version of the file # TODO: check that this is valid
         if self.metadata['has_mini']:
@@ -519,6 +522,8 @@ class Normalizer(ESAbstractDataProject):
                             params = self.read_config_data(module_name, run_info_name)['params']
                         else:
                             params = None
+                        
+                        print('params:\n', self.params)
                         
                         # Load parameters from config files
                         _, run_info = self.transform(module_name, params)

@@ -121,6 +121,9 @@ class AbstractDataProject(AbstractProject):
             
         module_name = log['module_name']
         file_name = log['file_name']        
+        
+        print('LAST WRITTEN:', module_name, file_name, before_module)
+        
         return (module_name, file_name)
 
 
@@ -206,8 +209,19 @@ class AbstractDataProject(AbstractProject):
         return log
     
     def set_skip(self, module_name, file_name, skip_value):
-        '''Sets the "skipped value to True in log"'''
-        self.metadata['log'][file_name][module_name]['skipped'] = skip_value
+        '''Sets the "skipped value to True in log'''
+        
+        # Set skipped for MINI version / full version of file
+        file_names = [file_name]
+        if self.metadata['has_mini']:
+            if self._is_mini(file_name):
+                file_names.append(self._og_from_mini(file_name))
+            else:
+                file_names.append(self._mini_from_og(file_name))
+        
+        # Set values
+        for file_name in file_names:
+            self.metadata['log'][file_name][module_name]['skipped'] = skip_value
         self._write_metadata() #TODO: Do we write meta"data?
 
     def _check_mem_data(self):
@@ -263,7 +277,8 @@ class AbstractDataProject(AbstractProject):
         self.mem_data_info = {'file_name': file_name,
                               'module_name': module_name,
                               'nrows': nrows, 
-                              'columns': columns}
+                              'columns': columns,
+                              'data_was_transformed': False}
 
     def reload(self):
         '''
@@ -379,6 +394,11 @@ class AbstractDataProject(AbstractProject):
         '''Returns the original file name from the MINI version'''
         return file_name[len(MINI_PREFIX):]
     
+    @staticmethod
+    def _mini_from_og(file_name):
+        '''Returns the name for the MINI version from the original name'''
+        return MINI_PREFIX + file_name
+    
     def make_mini(self, params):
         '''
         Creates a smaller version of the table in memory. 
@@ -396,7 +416,7 @@ class AbstractDataProject(AbstractProject):
         # Set defaults
         sample_size = params.get('sample_size', self.CHUNKSIZE - 1)
         randomize = params.get('randomize', True)       
-        new_file_name = MINI_PREFIX + self.mem_data_info['file_name']
+        new_file_name = self._mini_from_og(self.mem_data_info['file_name'])
 
         
         if self.mem_data_info['module_name'] != 'INIT':
@@ -502,26 +522,37 @@ class AbstractDataProject(AbstractProject):
         file_path = self.path_to(self.mem_data_info['module_name'], 
                                  self.mem_data_info['file_name'])
 
+        print(self.mem_data_info)
         nrows = 0
         with open(file_path, 'w') as w:
-            # Enumerate to know whether or not to write header (i==0)
-            try:
+            
+            # If any data was transformed: write the transformed data
+            if self.mem_data_info['data_was_transformed']:
+                try:
+                    # Enumerate to know whether or not to write header (i==0)
+                    for i, part_tab in enumerate(self.mem_data):
+                        logging.debug('At part {0}'.format(i))
+                        part_tab.to_csv(w, encoding='utf-8', 
+                                             index=False,  
+                                             header=i==0)
+                                             #quoting=csv.QUOTE_NONNUMERIC)
+                        nrows += len(part_tab)
+                        
+                except KeyboardInterrupt as e:
+                    logging.error(e)
+            # Otherwise, just count rows
+            else:
                 for i, part_tab in enumerate(self.mem_data):
-                    logging.debug('At part {0}'.format(i))
-                    part_tab.to_csv(w, encoding='utf-8', 
-                                         index=False,  
-                                         header=i==0)
-                                         #quoting=csv.QUOTE_NONNUMERIC)
                     nrows += len(part_tab)
-                    
-            except KeyboardInterrupt as e:
-                logging.error(e)
 
 
         logging.info('Wrote to: {0}'.format(file_path))
-        self._write_log_buffer(True)
+        self._write_log_buffer(written=self.mem_data_info['data_was_transformed'])
         self._write_run_info_buffer()
 
+        # Reset data_was_transformed
+        self.mem_data_info['data_was_transformed'] = False
+    
         if nrows == 0:
             raise Exception('No data was written, make sure you loaded data before'
                            + ' calling write_data')
@@ -645,6 +676,7 @@ class AbstractDataProject(AbstractProject):
         self.mem_data = (self.run_transform_module(module_name, data, params) \
                                                  for data in self.mem_data)
         self.mem_data_info['module_name'] = module_name
+        self.mem_data_info['data_was_transformed'] = True
 
         # Complete log
         log = self._end_active_log(log, error=False)

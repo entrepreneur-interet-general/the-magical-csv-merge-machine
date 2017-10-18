@@ -282,8 +282,8 @@ def replace_mvs(tab, params):
             val, score = mv['val'], mv['score']
             if score >= thresh:
                 # Metrics
-                modified[col] = modified[col] | (tab[col] == val)
-                
+                if tab[col].notnull().any():
+                    modified[col] = modified[col] | (tab[col] == val)
                 # Do transformation
                 tab[col].replace(val, np.nan, inplace=True)
     

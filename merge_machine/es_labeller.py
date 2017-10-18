@@ -41,7 +41,7 @@ from elasticsearch import Elasticsearch, client
 import numpy as np
 
 from es_helpers import _gen_body, _bulk_search
-
+from my_json_encoder import MyEncoder
 
 # =============================================================================
 # Dev decorators

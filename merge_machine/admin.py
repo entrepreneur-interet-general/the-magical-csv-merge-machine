@@ -141,7 +141,7 @@ class Admin():
             res.append(self.delete_index(index_name))
         return res
     
-    def delete_unused_indices(self, exclude={'123vivalalgerie', '123vivalalgerie4'}):
+    def delete_unused_indices(self, exclude={'123vivalalgerie', '123vivalalgerie2', '123vivalalgerie3', '123vivalalgerie4'}):
         '''
         Delete ES indices whose name are not present among the normalisation
         projects names.
@@ -158,12 +158,12 @@ class Admin():
 if __name__ == '__main__':
     admin = Admin()
     admin.remove_project_by_time('link', 
-                                 project_access='public',
+                                 project_access='all',
                                  action='created', 
                                  when='before', 
                                  hours_from_now=24*0)
     admin.remove_project_by_time('normalize', 
-                                 project_access='public',
+                                 project_access='all',
                                  action='created', 
                                  when='before', 
                                  hours_from_now=24*0)            

@@ -187,6 +187,8 @@ def _parse_request():
         req = request.json
         assert isinstance(req, dict)
     
+        print(req)
+    
         if 'data_params' in req:
             data_params = req['data_params']
             
@@ -409,6 +411,8 @@ def get_last_written(project_type, project_id):
     (module_name, file_name) = proj.get_last_written(request.json.get('module_name'), 
                           request.json.get('file_name'), 
                           request.json.get('before_module'))
+    
+    print(project_type, project_id, module_name, file_name)
     return jsonify(project_type=project_type, 
                    project_id=project_id, 
                    module_name=module_name, 
@@ -536,6 +540,8 @@ def get_sample(project_type, project_id):
     '''
     proj = _init_project(project_type=project_type, project_id=project_id)    
     data_params, all_params = _parse_request() # TODO: add size limit on params
+    
+    print(data_params)
     
     if all_params is None:
         all_params = dict()
