@@ -207,8 +207,8 @@ for i in range(100):
 #        labeller.re_score_history()
 
 print('best_query:\n', labeller._best_query_template())
-print('must:\n', labeller.must)
-print('must_not:\n', labeller.must_not)
+print('must:\n', labeller.must_filters)
+print('must_not:\n', labeller.must_not_filters)
 
 assert False
 
