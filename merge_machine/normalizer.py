@@ -12,6 +12,7 @@ import itertools
 import json
 import logging
 import os
+import re
 import time
 
 from elasticsearch import Elasticsearch, client
@@ -42,7 +43,7 @@ class Normalizer(ESAbstractDataProject):
     MODULES = NORMALIZE_MODULES
     MODULE_ORDER = NORMALIZE_MODULE_ORDER
     MODULE_ORDER_log = NORMALIZE_MODULE_ORDER_log
-    CHARS_TO_REPLACE = [' ', ',', '.', '(', ')', '\'', '\"', '/']
+    CHARS_TO_REPLACE = ['\(', '\)', '\\', '\"', '/'] # Format for regex
     
 #==============================================================================
 # Actual class
@@ -145,7 +146,24 @@ class Normalizer(ESAbstractDataProject):
         assert file_name[-len(ext):] == ext
         return secure_filename(file_name)
 
-    def read_csv(self, file, chars_to_replace):
+    def _clean_column_names(self, column_names):
+        return [re.sub('|'.join(self.CHARS_TO_REPLACE), '_', col) \
+                            for col in column_names]
+
+    def _clean_header(self, tab_part):
+        try:
+            tab_part.columns = self._clean_column_names(tab_part.columns)
+        except:
+            import pdb; pdb.set_trace()
+        return tab_part
+
+    @staticmethod
+    def assign_columns(tab_part, columns):
+        '''Replaces columns in tab_part'''
+        tab_part.columns = columns
+        return tab_part
+
+    def read_csv(self, file):
         '''
         Read CSV and perform inference on streaming file
         
@@ -206,9 +224,13 @@ class Normalizer(ESAbstractDataProject):
             tab = itertools.chain([tab_part], tab_next)
         except:
             tab = itertools.chain([tab_part])  
-            
-        print(tab, best_sep, encoding, best_columns)
-        return tab, best_sep, encoding, best_columns
+        
+        
+        
+        tab = (self._clean_header(self.assign_columns(tab_part, best_columns)) for tab_part in tab)
+        
+        print(tab, best_sep, encoding, self._clean_column_names(best_columns))
+        return tab, best_sep, encoding, self._clean_column_names(best_columns)
                     
 #                try:
 #                    # Just read column name and first few lines for encoding and separator
@@ -244,7 +266,7 @@ class Normalizer(ESAbstractDataProject):
         
 #        return tab, sep, encoding, columns
     
-    def read_excel(self, file, chars_to_replace):
+    def read_excel(self, file):
         # TODO: add iterator and return columns
         excel_tab = pd.read_excel(file, dtype=str)
         columns = excel_tab.columns
@@ -258,7 +280,9 @@ class Normalizer(ESAbstractDataProject):
                 chunk = excel_tab.iloc[cursor:cursor+chunksize]
         tab = make_gen(excel_tab, self.CHUNKSIZE) 
     
-        return tab, None, None, columns
+        tab = (self._clean_header(tab_part) for tab_part in tab)
+    
+        return tab, None, None, self._clean_column_names(columns)
 
 
     def upload_init_data(self, file, file_name, user_given_name=None):
@@ -270,7 +294,6 @@ class Normalizer(ESAbstractDataProject):
         The file will be re-coded in utf-8 with a "," separator. Also, chars
         specified in CHARS_TO_REPLACE will be replaced by "_" in the header.
         """
-        chars_to_replace = self.CHARS_TO_REPLACE
         
         # Check that 
         if self.metadata['files']:
@@ -300,11 +323,11 @@ class Normalizer(ESAbstractDataProject):
         log = self._init_active_log('INIT', 'transform')
 
         if extension == 'csv':
-            self.mem_data, sep, encoding, columns = self.read_csv(file, chars_to_replace)
+            self.mem_data, sep, encoding, columns = self.read_csv(file)
             file_type = 'csv'
 
         else:
-            self.mem_data, sep, encoding, columns = self.read_excel(file, chars_to_replace)
+            self.mem_data, sep, encoding, columns = self.read_excel(file)
             file_type = 'excel'
         
         if len(set(columns)) != len(columns):

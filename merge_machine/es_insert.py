@@ -20,7 +20,21 @@ import pandas as pd
 
 from es_config import gen_index_settings
 
-es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
+import CONFIG
+if CONFIG.PRODUCTION_MODE:
+    for i in range(0, 3): # Max retries
+        while True:
+            try:
+                es = Elasticsearch('http://elasticsearch:9200', http_auth=('elastic', 'changeme'),
+                    timeout=30, max_retries=10, retry_on_timeout=True)
+                if not es.ping():
+                    raise ValueError("ElasticSearch connection failed!")
+            except:
+                time.sleep(30)
+                continue
+            break
+else:
+    es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
 es_version = es.info()['version']['number']
 
 if LooseVersion(es_version) < LooseVersion('5.6.1'):
