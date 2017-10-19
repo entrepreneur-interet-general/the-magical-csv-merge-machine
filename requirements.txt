@@ -16,3 +16,4 @@ python-stdnum
 numpy
 cython
 elasticsearch
+xlrd
