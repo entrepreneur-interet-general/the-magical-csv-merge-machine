@@ -7,3 +7,4 @@ flask-session
 flask-socketio
 redis
 rq
+xlrd
