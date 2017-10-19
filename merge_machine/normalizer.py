@@ -514,22 +514,29 @@ class Normalizer(ESAbstractDataProject):
         if self.metadata['has_mini']:
             for module_name in self.MODULE_ORDER:
                 if self.MODULES['transform'][module_name].get('use_in_full_run', False):
-                    try:
-                        run_info_name = MINI_PREFIX + self.mem_data_info['file_name'] + '__run_info.json'
-                        
-                        # TODO: deal with this
-                        if module_name != 'concat_with_init':
-                            params = self.read_config_data(module_name, run_info_name)['params']
-                        else:
-                            params = None
-                        
-                        print('params:\n', self.params)
-                        
-                        # Load parameters from config files
-                        _, run_info = self.transform(module_name, params)
-                    except: 
+                    
+                    # Module will be skipped if it has no __run_info.json
+                    # OR IF it has "skipped" set to true in the log
+                    if self.metadata['log'][self.mem_data_info['file_name']][module_name]['skipped']:
                         run_info = {'skipped': True, }
                         logging.warning('WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
+                    else:
+                        try:                        
+                            run_info_name = MINI_PREFIX + self.mem_data_info['file_name'] + '__run_info.json'
+                            
+                            # TODO: deal with this
+                            if module_name != 'concat_with_init':
+                                params = self.read_config_data(module_name, run_info_name)['params']
+                            else:
+                                params = None
+                            
+                            print('params:\n', self.params)
+                            
+                            # Load parameters from config files
+                            _, run_info = self.transform(module_name, params)
+                        except: 
+                            run_info = {'skipped': True, }
+                            logging.warning('WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
                     all_run_infos[module_name] = run_info
 
 
