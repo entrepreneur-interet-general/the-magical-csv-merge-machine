@@ -77,7 +77,7 @@ def get_resp(url_to_append):
         #        _print(url_to_append,  parsed_resp)
         return parsed_resp
     else: 
-        my_error_print()
+        # my_error_print()
         raise Exception('Problem:\n', resp)
 
 
@@ -91,7 +91,7 @@ def post_resp(url_to_append, body, **kwargs):
         #        _print(url_to_append, parsed_resp)
         return parsed_resp
     else: 
-        my_error_print()
+#        my_error_print()
         raise Exception('Problem:\n', resp)
 
 @my_print
@@ -102,7 +102,7 @@ def post_download(url_to_append, body, **kwargs):
     if resp.ok:
         return resp
     else: 
-        my_error_print()
+#        my_error_print()
         raise Exception('Problem:\n', resp)    
 
 def wait_get_resp(url_to_append, max_wait=30):
@@ -114,7 +114,7 @@ def wait_get_resp(url_to_append, max_wait=30):
         if resp.ok:
             parsed_resp = json.loads(resp.content.decode())
         else: 
-            my_error_print()
+#            my_error_print()
             raise Exception('Problem:\n', resp)
             
         if parsed_resp['completed']:

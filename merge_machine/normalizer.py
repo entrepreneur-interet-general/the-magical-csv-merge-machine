@@ -493,24 +493,24 @@ class Normalizer(ESAbstractDataProject):
                         run_info = {'skipped': True}
                         logging.warning('WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
                     else:
-                        try:                        
-                            run_info_name = MINI_PREFIX + self.mem_data_info['file_name'] + '__run_info.json'
-                            
-                            # TODO: deal with this
-                            if module_name != 'concat_with_init':
-                                params = self.read_config_data(module_name, run_info_name)['params']
-                            else:
-                                params = None
-                            
-                            print('params:\n', self.params)
-                            
-                            # Load parameters from config files
-                            print('run_all at', module_name)
-                            _, run_info = self.transform(module_name, params)
-                            print('run_all finished', module_name)
-                        except: 
-                            run_info = {'skipped': True}
-                            logging.warning('WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
+#                        try:                        
+                        run_info_name = MINI_PREFIX + self.mem_data_info['file_name'] + '__run_info.json'
+                        
+                        # TODO: deal with this
+                        if module_name != 'concat_with_init':
+                            params = self.read_config_data(module_name, run_info_name)['params']
+                        else:
+                            params = None
+                        
+                        print('params:\n', params)
+                        
+                        # Load parameters from config files
+                        print('run_all at', module_name)
+                        _, run_info = self.transform(module_name, params)
+                        print('run_all finished', module_name)
+#                        except: 
+#                            run_info = {'skipped': True}
+#                            logging.warning('WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
                     all_run_infos[module_name] = run_info
         else:
             logging.warning('run_all_transforms was called on a project without' \
