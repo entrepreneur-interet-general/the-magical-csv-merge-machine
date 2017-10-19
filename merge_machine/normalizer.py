@@ -231,40 +231,6 @@ class Normalizer(ESAbstractDataProject):
         
         print(tab, best_sep, encoding, self._clean_column_names(best_columns))
         return tab, best_sep, encoding, self._clean_column_names(best_columns)
-                    
-#                try:
-#                    # Just read column name and first few lines for encoding and separator
-#                    first_lines_io = io.BytesIO(first_lines)
-#                    if sep_arg is None:
-#                        sep = pd.read_csv(first_lines_io, 
-#                                               sep=sep_arg, 
-#                                               encoding=encoding,
-#                                               iterator=True,
-#                                               dtype=str)._engine.data.dialect.delimiter
-#                    else:
-#                        sep = sep_arg
-#                            
-#                    first_lines_io = io.BytesIO(first_lines)
-#                    tab_part = pd.read_csv(first_lines_io, 
-#                                           sep=sep, 
-#                                           encoding=encoding, 
-#                                           dtype=str)
-#                    columns = tab_part.columns
-#        
-#                    could_read = True
-#                    break
-#                except Exception as e:
-#                    logging.info(e)
-                    
-#        if could_read:
-#            # Create actual generator
-#
-#            
-#        if not could_read:
-#            raise Exception('Separator and/or Encoding not detected. Try uploading' \
-#                          + ' a csv with "," as separator with utf-8 encoding')            
-        
-#        return tab, sep, encoding, columns
     
     def read_excel(self, file):
         # TODO: add iterator and return columns
@@ -440,7 +406,14 @@ class Normalizer(ESAbstractDataProject):
         
         TODO: merge with transform
         '''
+        import pdb; pdb.set_trace()
+        
         self._check_mem_data()
+        
+        # If data is in INIT, skip this step overall
+        if self.mem_data_info['module_name'] == 'INIT':
+            self.set_skip('concat_with_init', self.mem_data_info['file_name'], True)
+            return {'TRUE DAT': 'real talk'}, {'yolo': 'yes indeed'}
         
         # Initiate log
         log = self._init_active_log('concat_with_init', 'transform')
@@ -450,14 +423,14 @@ class Normalizer(ESAbstractDataProject):
 
         og_tab = self._static_load_data(og_file_path, None, None)
         
-        def rename_column(col):
+        def _rename_column(col):
             if '__' in col:
                 return col
             else:
                 return col + '__NORMALIZED'
     
-        def my_concat(og_data, data):
-            data.columns = [rename_column(col) for col in data.columns]
+        def _my_concat(og_data, data):
+            data.columns = [_rename_column(col) for col in data.columns]
             data = pd.concat([og_data, data], 1)
         
             # This should be same as selected columns: TODO: replace here
@@ -474,7 +447,7 @@ class Normalizer(ESAbstractDataProject):
             data = data[columns]
             return data
         
-        self.mem_data = (my_concat(og_data, data) for og_data, data in zip(og_tab, self.mem_data))
+        self.mem_data = (_my_concat(og_data, data) for og_data, data in zip(og_tab, self.mem_data))
         
         self.mem_data_info['module_name'] = 'concat_with_init'
         
@@ -510,7 +483,7 @@ class Normalizer(ESAbstractDataProject):
         print('mem_data_info:\n', self.mem_data_info)
         
         all_run_infos = {}
-        # Only run all if there is a MINI version of the file # TODO: check that this is valid
+        # Only run all if there is a MINI version of the file
         if self.metadata['has_mini']:
             for module_name in self.MODULE_ORDER:
                 if self.MODULES['transform'][module_name].get('use_in_full_run', False):
@@ -518,7 +491,7 @@ class Normalizer(ESAbstractDataProject):
                     # Module will be skipped if it has no __run_info.json
                     # OR IF it has "skipped" set to true in the log
                     if self.metadata['log'][self.mem_data_info['file_name']][module_name]['skipped']:
-                        run_info = {'skipped': True, }
+                        run_info = {'skipped': True}
                         logging.warning('WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
                     else:
                         try:                        
@@ -533,11 +506,16 @@ class Normalizer(ESAbstractDataProject):
                             print('params:\n', self.params)
                             
                             # Load parameters from config files
+                            print('run_all at', module_name)
                             _, run_info = self.transform(module_name, params)
+                            print('run_all finished', module_name)
                         except: 
-                            run_info = {'skipped': True, }
+                            run_info = {'skipped': True}
                             logging.warning('WARNING: MODULE {0} WAS NOT RUN'.format(module_name))
                     all_run_infos[module_name] = run_info
+        else:
+            logging.warning('run_all_transforms was called on a project without' \
+                            ' a mini version. Nothing was done...')
 
 
 

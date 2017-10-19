@@ -115,8 +115,6 @@ class AbstractDataProject(AbstractProject):
             if (not log.get('error', False)) and (log.get('written', False)):
                 break
         else:
-            import pdb
-            pdb.set_trace()
             raise Exception('No written data could be found in logs')
             
         module_name = log['module_name']
@@ -454,6 +452,7 @@ class AbstractDataProject(AbstractProject):
     
             # Complete log
             log = self._end_active_log(log, error=False) 
+        
             # TODO: Make sure that run_info_buffer should not be extended
             return log
         
@@ -515,6 +514,9 @@ class AbstractDataProject(AbstractProject):
         '''Write data stored in memory to proper module'''
         self._check_mem_data()
             
+        if self.mem_data_info['module_name'] == 'INIT':
+            print('WTF ARE U SERIOUS !!!???')
+        
         # Write data
         dir_path = self.path_to(self.mem_data_info['module_name'])
         if not os.path.isdir(dir_path):
@@ -527,27 +529,27 @@ class AbstractDataProject(AbstractProject):
         with open(file_path, 'w') as w:
             
             # If any data was transformed: write the transformed data
-            if self.mem_data_info['data_was_transformed']:
-                try:
-                    # Enumerate to know whether or not to write header (i==0)
-                    for i, part_tab in enumerate(self.mem_data):
-                        logging.debug('At part {0}'.format(i))
-                        part_tab.to_csv(w, encoding='utf-8', 
-                                             index=False,  
-                                             header=i==0)
-                                             #quoting=csv.QUOTE_NONNUMERIC)
-                        nrows += len(part_tab)
-                        
-                except KeyboardInterrupt as e:
-                    logging.error(e)
-            # Otherwise, just count rows
-            else:
+#            if self.mem_data_info['data_was_transformed']:
+            try:
+                # Enumerate to know whether or not to write header (i==0)
                 for i, part_tab in enumerate(self.mem_data):
+                    logging.debug('At part {0}'.format(i))
+                    part_tab.to_csv(w, encoding='utf-8', 
+                                         index=False,  
+                                         header=i==0)
+                                         #quoting=csv.QUOTE_NONNUMERIC)
                     nrows += len(part_tab)
+                    
+            except KeyboardInterrupt as e:
+                logging.error(e)
+            # Otherwise, just count rows
+#            else:
+#                for i, part_tab in enumerate(self.mem_data):
+#                    nrows += len(part_tab)
 
 
         logging.info('Wrote to: {0}'.format(file_path))
-        self._write_log_buffer(written=self.mem_data_info['data_was_transformed'])
+        self._write_log_buffer(written=True)
         self._write_run_info_buffer()
 
         # Reset data_was_transformed
