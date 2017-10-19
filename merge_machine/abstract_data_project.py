@@ -690,7 +690,7 @@ class AbstractDataProject(AbstractProject):
         return log, run_info
     
 class ESAbstractDataProject(AbstractDataProject):
-    es_insert_chunksize = 100
+    es_insert_chunksize = 40000
     es = Elasticsearch(timeout=60, max_retries=10, retry_on_timeout=True)
     ic = client.IndicesClient(es)
 

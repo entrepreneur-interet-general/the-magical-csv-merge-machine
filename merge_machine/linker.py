@@ -419,7 +419,7 @@ class Linker(ESAbstractDataProject):
         '''
         self._check_select()
         
-        chunksize = 100
+        chunksize = 40000
         
         col_matches_tmp = self.read_col_matches()
         col_matches = []

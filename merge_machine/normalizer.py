@@ -406,7 +406,6 @@ class Normalizer(ESAbstractDataProject):
         
         TODO: merge with transform
         '''
-        import pdb; pdb.set_trace()
         
         self._check_mem_data()
         
