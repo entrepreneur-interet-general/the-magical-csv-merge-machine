@@ -206,8 +206,19 @@ class AbstractDataProject(AbstractProject):
         return log
     
     def set_skip(self, module_name, file_name, skip_value):
-        '''Sets the "skipped value to True in log"'''
-        self.metadata['log'][file_name][module_name]['skipped'] = skip_value
+        '''Sets the "skipped value to True in log'''
+        
+        # Set skipped for MINI version / full version of file
+        file_names = [file_name]
+        if self.metadata['has_mini']:
+            if self._is_mini(file_name):
+                file_names.append(self._og_from_mini(file_name))
+            else:
+                file_names.append(self._mini_from_og(file_name))
+        
+        # Set values
+        for file_name in file_names:
+            self.metadata['log'][file_name][module_name]['skipped'] = skip_value
         self._write_metadata() #TODO: Do we write meta"data?
 
     def _check_mem_data(self):
@@ -378,6 +389,12 @@ class AbstractDataProject(AbstractProject):
     def _og_from_mini(file_name):
         '''Returns the original file name from the MINI version'''
         return file_name[len(MINI_PREFIX):]
+    
+    @staticmethod
+    def _mini_from_og(file_name):
+        '''Returns the name for the MINI version from the original name'''
+        return MINI_PREFIX + file_name
+
     
     def make_mini(self, params):
         '''
