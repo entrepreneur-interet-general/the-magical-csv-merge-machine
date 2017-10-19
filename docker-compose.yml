@@ -12,9 +12,14 @@ services:
     links:
      - elasticsearch
      - redis
+    depends_on:
+      - elasticsearch
+      - redis
     logging:
       driver: "json-file"
-    #command: ["./wait-for-it.sh", "elasticsearch:9200", "--", "uwsgi",  "--http", "0.0.0.0:5000", "-b", "32768", "--wsgi-file", "merge_machine/api.py", "--callable", "app", "--processes", "4", "--threads","2"] 
+    # command: ["./wait-for-it.sh", "elasticsearch:9200", "--", "uwsgi",  "--http", "0.0.0.0:5000", "-b", "32768", "--wsgi-file", "merge_machine/api.py", "--callable", "app", "--processes", "4", "--threads","2"] 
+    # command: ["./wait-for-es.sh", "uwsgi",  "--http", "0.0.0.0:5000", "-b", "32768", "--wsgi-file", "merge_machine/api.py", "--callable", "app", "--processes", "4", "--threads","2"] 
+    command: /bin/bash -c "while ! netcat -z elasticsearch 9200; do echo Sleeping; sleep 1; done; echo Connected; uwsgi --http 0.0.0.0:5000 -b 32768 --wsgi-file merge_machine/api.py --callable app  --master --processes 4 --threads 2"
   laundry_worker:
     container_name: laundry_worker
     build:
@@ -25,14 +30,18 @@ services:
     links:
      - elasticsearch
      - redis
+    depends_on:
+      - elasticsearch
+      - redis
     logging:
       driver: "json-file"
-    command: ["./wait-for-it.sh", "elasticsearch:9200", "--", "python3", "merge_machine/worker.py"]
+    # command: ["./wait-for-it.sh", "elasticsearch:9200", "--", "python3", "merge_machine/worker.py"]
+    # command: ["./wait-for-es.sh", "python3", "merge_machine/worker.py"]
+    command: /bin/bash -c "while ! netcat -z elasticsearch 9200; do echo Sleeping; sleep 1; done; echo Connected; python3 merge_machine/worker.py"
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:5.6.2
     container_name: elasticsearch
     environment:
-      - cluster.name=docker-cluster
       - bootstrap.memory_lock=true
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
       - discovery.type=single-node
@@ -51,4 +60,3 @@ services:
       placement:
         constraints: [node.role == manager]
     command: redis-server --appendonly yes
-
