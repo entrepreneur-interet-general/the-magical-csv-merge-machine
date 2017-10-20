@@ -498,7 +498,6 @@ def download(project_type, project_id):
         compression = zipfile.ZIP_DEFLATED
         zf.write(file_path, compress_type=compression, arcname=new_file_name)
         zf.close()
-        
         return send_file(zip_file_path, as_attachment=True, attachment_filename=zip_file_name)
 
     else:

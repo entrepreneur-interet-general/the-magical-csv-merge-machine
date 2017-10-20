@@ -29,8 +29,7 @@ for query in labeller.current_queries:
 
 
 TODO: check why precision is 1 even after no/yes
- 
-    
+
 """
 import copy
 import itertools
@@ -134,11 +133,6 @@ class SingleQueryTemplate():
     
     def _as_tuple(self):
         return (self.bool_lvl, self.source_col, self.ref_col, self.analyzer_suffix, self.boost)
-    
-    #    def __eq__(self, other):
-    #        if not isinstance(other, type(self)):
-    #            return False
-    #        return (self.bool_lvl, self.source_col, self.ref_col, self.analyzer_suffix, self.boost)
 
 
 class CompoundQueryTemplate():

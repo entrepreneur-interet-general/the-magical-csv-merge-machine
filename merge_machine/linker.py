@@ -5,10 +5,8 @@ Created on Mon Apr 24 15:46:00 2017
 
 @author: leo
 """
-import gc
-import logging
+from collections import  defaultdict
 import os
-import pickle
 
 import pandas as pd
 
@@ -32,7 +30,8 @@ class Linker(ESAbstractDataProject):
                  description=None,
                  public=False):
         
-        super().__init__(project_id, create_new, display_name=display_name, description=description, public=public)
+        super().__init__(project_id, create_new, display_name=display_name, 
+                                         description=description, public=public)
         
         # Add source and ref if the were selected
         if (self.metadata['files']['source'] is not None) \
@@ -158,14 +157,6 @@ class Linker(ESAbstractDataProject):
         
         if not config:
             config = []
-        #        def expand(cols_to_expand, ref_cols, sep='___'):
-        #            new_cols = []
-        #            for col in cols_to_expand:
-        #                expanded_ver
-        #        
-        #        # If ___ is found (transformed columns: use that instead)
-        #        new_config = []
-        #        for match in config:
             
         return config
 
@@ -569,7 +560,6 @@ class ESLinker(Linker):
     
 
 if __name__ == '__main__':
-    import json
     
     source_file_name = 'source.csv'
     source_user_given_name = 'my_source.csv'
@@ -595,7 +585,7 @@ if __name__ == '__main__':
     
 
     # Try deduping
-    proj = UserLinker(create_new=True)
+    proj = ESLinker(create_new=True)
     
     proj.add_selected_project('source', False, source_proj_id)
     proj.add_selected_project('ref', False, ref_proj_id)

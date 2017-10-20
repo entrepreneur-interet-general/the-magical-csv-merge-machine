@@ -17,6 +17,10 @@ METHODS:
     - remove(self, module_name='', file_name='')
     - delete_project(self)
 
+# TODO: custom error:
+    - Hidden error
+    - Return to user
+
 """
 
 import hashlib
