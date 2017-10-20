@@ -865,6 +865,28 @@ def add_columns_to_return(project_id, file_role):
     return jsonify(error=False)
 
 
+@app.route('/api/link/label_pair/<project_id>/', methods=['POST'])
+def label_pair(project_id):
+    '''
+    Assign a label to a (source_id, ref_id) pair
+    
+    GET:
+        project_id: ID for "link" project
+    
+    POST:
+        source_id: ID of the source element within source
+        ref_id: ID of ref element in elasticsearch
+        label: label to assign to pair ('yes', 'no', 'forget')
+    '''
+    _, module_params = _parse_request()   
+    proj = ESLinker(project_id=project_id)    
+    
+    source_id = module_params['source_id']
+    ref_id = module_params['ref_id']
+    label = module_params['label']
+    
+    pass
+
 # =============================================================================
 # Socket methods
 # =============================================================================
