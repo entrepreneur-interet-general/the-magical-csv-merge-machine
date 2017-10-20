@@ -666,7 +666,7 @@ class Labeller():
         self._init_es()
         
         self.labelled_pairs = [] # Flat list of labelled pairs
-        self.labels = [] # Flat list of labels
+        self.labels = {} # Flat list of labels
         self.num_rows_labelled = [] # Flat list: at given label, how many were labelled. NB: starts at 0, becomes 1 at first yes/forgotten, or when next_row
         self.num_positive_rows_labelled = [] # Flat list: at given label, how_many were matches
         self.labelled_pairs_match = [] # For each row, the resulting match: (A, B) / no-match: (A, None) or forgotten: None
@@ -994,7 +994,7 @@ class Labeller():
         # TODO: test that previous is possible
         # Update the current state
         (self.current_source_idx, self.current_ref_idx) = self.labelled_pairs.pop()
-        self.labels.pop()
+        del self.labels[(self.current_source_idx, self.current_ref_idx)]
         num_rows_labelled = self.num_rows_labelled.pop()
         self.num_positive_rows_labelled.pop()
         
@@ -1157,7 +1157,7 @@ class Labeller():
         pair = (self.current_source_idx, self.current_ref_idx)
         
         self.labelled_pairs.append(pair)
-        self.labels.append(user_input)
+        self.labels[pair] = user_input
 
         print('in update')
         
@@ -1466,9 +1466,9 @@ class Labeller():
         params['expected_precision'] = best_query.precision
         params['expected_recall'] = best_query.recall
         
-        params['exact_pairs'] = [p for (p, l) in zip(self.labelled_pairs, self.labels) if l == 'y']
-        params['non_matching_pairs'] = [p for (p, l) in zip(self.labelled_pairs, self.labels) if l == 'n']
-        params['forgotten_pairs'] = [p for (p, l) in zip(self.labelled_pairs, self.labels) if l == 'f']
+        params['exact_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'y']
+        params['non_matching_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'n']
+        params['forgotten_pairs'] = [p for p in self.labelled_pairs if self.labels[p] == 'f']
         
         return params
     
