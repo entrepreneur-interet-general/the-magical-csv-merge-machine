@@ -499,9 +499,6 @@ def download(project_type, project_id):
         zf.write(file_path, compress_type=compression, arcname=new_file_name)
         zf.close()
         
-        print('yagedoo: ', zip_file_path, ' / ', zip_file_name)
-        zip_file_path = '/home/m75380/Documents/eig/the-magical-csv-merge-machine/merge_machine/CONFIG.py'
-        zip_file_name = 'samba.'
         return send_file(zip_file_path, as_attachment=True, attachment_filename=zip_file_name)
 
     else:
