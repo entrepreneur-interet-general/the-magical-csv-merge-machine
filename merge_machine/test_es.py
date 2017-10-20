@@ -92,9 +92,6 @@ source = pd.read_csv(source_file_path,
 source = source.where(source.notnull(), '')
 
 
-
-
-
 if test_num in [0,1,2]:
     columns_to_index = {
         'SIREN': {},
