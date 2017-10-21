@@ -711,6 +711,31 @@ class Labeller():
         '''Initiate the elasticsearch connectiion'''
         self.es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
     
+    def to_dict(self):
+        ''' '''    
+        # source and ref_index_name, es, source_gen, ref_gen, and all current 
+        # except for queries are not included
+        
+        dict_ = dict()
+        
+        dict_['match_cols'] = self.match_cols      
+        dict_['columns_to_index'] = self. columns_to_index
+        
+        dict_['labelled_pairs'] = self.labelled_pairs
+        dict_['labels'] = self.labels
+        dict_['num_rows_labelled'] = self.num_rows_labelled
+        dict_['num_positive_rows_labelled'] = self.num_positive_rows_labelled
+        dict_['labelled_pairs_match'] = self.labelled_pairs_match
+
+        dict_['must_filters'] = self.must_filters
+        dict_['must_not_filters'] = self.must_not_filters
+        
+        dict_['current_queries'] = [query.to_dict() for query in self.current_queries()]   
+        dict_['single_core_queries'] = [query.to_dict() for query in self.single_core_queries()]   
+        
+        
+    
+    
     def to_pickle(self, file_path):
         '''Pickle the current object'''
         temp_source_gen = self.source_gen
@@ -788,15 +813,23 @@ class Labeller():
                                        
                     yield (idx, item)
         self.source_gen = temp()
-        
-    def _init_ref_gen(self):
-        '''Generator of results for the current source element'''
-
-        # Fetch data for next row
+    
+    def _fetch_results_for_row(self):
+        '''
+        Fetch data for all current queries for the current queries and the 
+        current source item, and append to each query
+        '''
         if self.current_source_idx not in self.current_queries[0].history_pairs:
             results = self.pruned_bulk_search(self.current_queries, 
                             self.current_source_item, self.NUM_RESULTS)
-            self.add_results(results)        
+            self.add_results(results)   
+
+    
+    def _init_ref_gen(self):
+        '''Generator of results for the current source element'''
+
+        # Fetch data for current row
+        self._fetch_results_for_row()
         
         def temp():
             for i, query in enumerate(self.current_queries):
@@ -811,9 +844,11 @@ class Labeller():
                     if pair[0] not in [x[0] for x in  self.labelled_pairs_match if x is not None]:
                         # Check that pair was not already labelled                        
                         if pair not in self.labelled_pairs:
+                            # If the data associated to id is in memory
                             if pair[1] in self.ref_id_to_data:
                                 item = self.ref_id_to_data[pair[1]]['_source'] # TODO: get item if it is not in ref_id_to_data
                                 es_score = self.ref_id_to_data[pair[1]]['_score']
+                            # If the data is not in memory, fetch by ID
                             else:
                                 item = self._fetch_ref_item(pair[1])
                                 es_score = 1.23456789
@@ -1020,47 +1055,106 @@ class Labeller():
         else:
             self.ref_gen = itertools.chain([r_elem], self.ref_gen)        
 
-
-    def _auto_label_pair(self, source_item, ref_item):
-        '''
-        Try to automatically generate the label for the pair source_item, ref_item
-        '''
-        # TODO: check format of exact match cols
-        source_cols = self.certain_column_matches['source']
-        ref_cols = self.certain_column_matches['ref']
         
-        # If no values are None, check if concatenation is an exact match
-        if all(source_item['_source'][col] is not None for col in source_cols) \
-                and all(ref_item['_source'][col] is not None for col in ref_cols):
-                    
-            is_match = ''.join(source_item['_source'][col] for col in source_cols) \
-                        == ''.join(ref_item['_source'][col] for col in ref_cols)
-                        
-            if is_match:
-                return 'y'
-            else:
-                return 'n'
-        else:
-            return None
+    def re_train(self):
         
-    def auto_label(self):
-        for i in range(len(self.source)):
-            (source_item, ref_item) = self.new_label()
-            if ref_item is None:
+        # Fetch data for which data is missing.
+        
+        # OPTION 1: Go through add_labelled_data expand, filter
+        
+        # OPTION 2: Use only current queries
+        
+        pass
+        
+    def auto_label(self, certain_column_matches):
+        '''
+        For pairs that can be found with certain_columns_matches,
+        '''
+        KEYWORD_ANALYZER = ''
+        
+        assert len(certain_column_matches['ref']) == 1
+        
+        if isinstance(certain_column_matches['source'], str):
+            certain_column_matches['source'] = [certain_column_matches['source']]
+        
+        query_to_perform = CompoundQueryTemplate((('must', 
+                            certain_column_matches['source'], 
+                            certain_column_matches['ref'],
+                            KEYWORD_ANALYZER,
+                            1),))
+        
+        # TODO: Check that certain_column_matches is not_match_cols
+        
+        # Iterate on rows 
+        
+        self._init_source_gen()
+        
+        # Iterate on results 
+        while True:
+            try:
+                self.current_source_idx, self.current_source_item = next(self.source_gen)
+            except StopIteration:
+                print('WARNING: No more rows for Auto-Labelling')
                 break
             
-            label = self._auto_label_pair(source_item, ref_item)
+            # If certain_column_matches do not have values in source, don't auto-label
+            if not any(bool(x) for x in [self.current_source_item[col] \
+                           for col in certain_column_matches['source']]):
+                continue
             
-            self._print_pair(source_item, ref_item, 0)
-            print('AUTO LABEL: {0}'.format(label))
+            # Search for the exact match in ref if 
+            # TODO: No reason to bulk search here; regular search should work
+            results = self._bulk_search([query_to_perform], self.current_source_item, 2)
+            assert len(results) == 1
             
-            if label is not None:
-                self.update(label, ref_item['_id'])    
+            if len(results[0]) == 0:
+                continue
+                
+            if len(results[0]) > 1:
+                raise RuntimeError('Results in auto-label got more than one'
+                       ' in result where it expected at most one result '
+                       '(certain_column_matches should be a unique identifier)')
+            
+            self.current_ref_idx = results[0][0]['_id']
+            self.current_ref_item = results[0][0]['_source']  
+            
+            pair = (self.current_source_idx, self.current_ref_idx)
+            
+            # If there are any results
+            # Fetch results for all query of this row
+            self._fetch_results_for_row()
         
-        self.row_idxs = list(idx for idx in random.sample(list(self.source.index), 
-                                                          self.MAX_NUM_SAMPLES))
-        self.next_row = True
+            # > Update             
+            self.labelled_pairs.append(pair)
+            self.labels[pair] = 'y'
+            
+            # Add rows_labelled_counts
+            self._update_row_count(True, True)            
+            
+            # Re-score and sort metrics
+            self.add_labelled_pair(pair)
+            
+            # Update metrics
+            self._compute_metrics()
+            self._sorta_sort_queries()
+            self._sort_queries()
+            
+            
+            # Update core queries
+            # TODO: look into batching this
+            for query in self.single_core_queries:
+                query.add_labelled_pair_items(self.es, self.ref_index_name, 
+                                self.current_source_item, self.current_ref_item)
+            
+            # Filter queries
+            self.filter_()
+            
+            # Expand queries
+            self.expand()
         
+        # Re-initiate labeller
+        self._init_source_gen()
+        self._next_row()
 
     @print_name
     def add_labelled_pair(self, labelled_pair):
@@ -1499,6 +1593,8 @@ class Labeller():
         else:
             return None
  
+
+    
     def to_emit(self):
         '''Creates a dict to be sent to the template #TODO: fix this''' # DONE-ISH
         dict_to_emit = dict()

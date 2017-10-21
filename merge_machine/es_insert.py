@@ -98,35 +98,36 @@ def index(ref_gen, table_name, testing=False, file_len=0):
 
 if __name__ == '__main__':
     columns_to_index = {
+        'SIRET': {},
         'SIREN': {},
         'NIC': {},
         'L1_NORMALISEE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
+            'french', 'whitespace', 'integers', 'n_grams', 'city'
         },
         'L4_NORMALISEE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'french', 'whitespace', 'integers', 'n_grams'
         },
         'L6_NORMALISEE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'french', 'whitespace', 'integers', 'n_grams'
         },
         'L1_DECLAREE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
+            'french', 'whitespace', 'integers', 'n_grams', 'city'
         },
         'L4_DECLAREE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'french', 'whitespace', 'integers', 'n_grams'
         },
         'L6_DECLAREE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
+            'french', 'whitespace', 'integers', 'n_grams'
         },
         'LIBCOM': {
-            'french', 'whitespace', 'end_n_grams', 'n_grams', 'city'
+            'french', 'whitespace', 'n_grams', 'city'
         },
         'CEDEX': {},
         'ENSEIGNE': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
+            'french', 'whitespace', 'integers', 'n_grams', 'city'
         },
         'NOMEN_LONG': {
-            'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
+            'french', 'whitespace', 'integers', 'n_grams', 'city'
         },
         #Keyword only 'LIBNATETAB': {},
         'LIBAPET': {},
@@ -143,10 +144,10 @@ if __name__ == '__main__':
     do_indexing = True
     chunksize = 2000
     
-    ref_file_name = 'sirc-17804_9075_14209_201612_L_M_20170104_171522721.csv' # 'petit_sirene.csv'
+    ref_file_name = 'sirene_filtered.csv' # 'petit_sirene.csv'
     # ref_file_name = 'petit_sirene.csv'
-    ref_sep = ';'
-    ref_encoding = 'windows-1252'
+    ref_sep = ',' #';'
+    ref_encoding = 'utf-8' #'windows-1252'
     
     if testing:
         nrows = 10000

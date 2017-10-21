@@ -24,7 +24,7 @@ chunksize = 3000
 file_len = 10*10**6
 
 
-test_num = 0
+test_num = 2
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
     match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},
@@ -32,7 +32,7 @@ if test_num == 0:
     source_sep = ','
     source_encoding = 'utf-8'
     
-    ref_table_name = '123vivalalgerie3'
+    ref_table_name = '123vivalalgerie2'
     
 elif test_num == 1:
     source_file_path = 'local_test_data/integration_5/data_ugly.csv'
@@ -41,7 +41,7 @@ elif test_num == 1:
     source_sep = ';'
     source_encoding = 'windows-1252'
     
-    ref_table_name = '123vivalalgerie3'
+    ref_table_name = '123vivalalgerie2'
     
 elif test_num == 2:
     # ALIM to SIRENE
@@ -55,7 +55,7 @@ elif test_num == 2:
     source_sep = ';'
     source_encoding = 'utf-8'
     
-    ref_table_name = '123vivalalgerie3'
+    ref_table_name = '123vivalalgerie2'
     
 elif test_num == 3:
     # HAL to GRID
@@ -94,6 +94,7 @@ source = source.where(source.notnull(), '')
 
 if test_num in [0,1,2]:
     columns_to_index = {
+        'SIRET': {},
         'SIREN': {},
         'NIC': {},
         'L1_NORMALISEE': {
@@ -140,11 +141,12 @@ elif test_num in [3, 4]:
             }
 
 if test_num == 2:
-    columns_certain_match = {'source': ['SIRET'], 'ref': ['SIREN', 'NIC']}
-    labeller = Labeller(source, ref_table_name, match_cols, columns_to_index, columns_certain_match)
+    columns_certain_match = {'source': ['SIRET'], 'ref': ['SIRET']}
+    labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
+    labeller.auto_label(columns_certain_match)
 elif test_num == 4:
     columns_certain_match = {'source': ['grid'], 'ref': ['ID']}
-    labeller = Labeller(source, ref_table_name, match_cols, columns_to_index, columns_certain_match)
+    labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
 else:
     labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
 
