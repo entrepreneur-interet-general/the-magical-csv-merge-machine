@@ -55,7 +55,7 @@ def mv_from_len_diff(top_values, score=0.3):
     # Compute lengths of values
     lengths = pd.Series([len(x) for x in top_values.index], index=top_values.index)
     # Check if all values have the same length except one:
-    if (lengths.nunique() == 2) & (len(top_values) >= 4):
+    if (lengths.nunique() == 2) & (len(top_values) >= 4):  # TODO: why ???
         
         if lengths.value_counts().iloc[-1] == 1:
             abnormal_length = lengths.value_counts().index[-1]
@@ -361,4 +361,4 @@ if __name__ == '__main__':
     # Replace in original table
     params = {'mvs_dict': infered_params['mvs_dict'],
               'thresh': 0.6}
-    tab = replace_mvs(tab, params)
+    tab, modified = replace_mvs(tab, params)

@@ -24,6 +24,8 @@ chunksize = 3000
 file_len = 10*10**6
 
 
+sirene_index_name = '123vivalalgerie2'
+
 test_num = 2
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
@@ -32,7 +34,7 @@ if test_num == 0:
     source_sep = ','
     source_encoding = 'utf-8'
     
-    ref_table_name = '123vivalalgerie2'
+    ref_table_name = sirene_index_name
     
 elif test_num == 1:
     source_file_path = 'local_test_data/integration_5/data_ugly.csv'
@@ -41,7 +43,7 @@ elif test_num == 1:
     source_sep = ';'
     source_encoding = 'windows-1252'
     
-    ref_table_name = '123vivalalgerie2'
+    ref_table_name = sirene_index_name
     
 elif test_num == 2:
     # ALIM to SIRENE
@@ -55,7 +57,7 @@ elif test_num == 2:
     source_sep = ';'
     source_encoding = 'utf-8'
     
-    ref_table_name = '123vivalalgerie2'
+    ref_table_name = sirene_index_name
     
 elif test_num == 3:
     # HAL to GRID
@@ -148,30 +150,23 @@ elif test_num == 4:
     columns_certain_match = {'source': ['grid'], 'ref': ['ID']}
     labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
 else:
+    
+    
+    
     labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
 
 
 #labeller.update_musts({'NOMEN_LONG': ['lycee']},
 #                      {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']})
 
-for i in range(100):
-    
-    if test_num == 2:
-        a = labeller.current_source_item['SIRET']
-        b = labeller.current_ref_item['SIREN']
-        c = labeller.current_ref_item['NIC']
-        if a == b+c:
-            user_input = 'y'
+for i in range(100):  
+    for x in range(10):
+        user_input = labeller.console_input()
+        if labeller.answer_is_valid(user_input):
+            break
         else:
-            user_input = 'n'
-    else:        
-        for x in range(10):
-            user_input = labeller.console_input()
-            if labeller.answer_is_valid(user_input):
-                break
-            else:
-                print('Invalid answer ("y"/"1", "n"/"0", "u" or "p")')
-            
+            print('Invalid answer ("y"/"1", "n"/"0", "u" or "p")')
+
     labeller.update(user_input)
     
     
