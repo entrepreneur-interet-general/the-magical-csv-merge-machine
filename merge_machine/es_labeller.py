@@ -1717,7 +1717,7 @@ class ConsoleLabeller(Labeller):
         if user_input.lower() in ['l', 'labeller']:
             self.current_tab = 'labeller'
         elif user_input.lower() in ['f', 'filter']:
-            
+            pass
         
     def update(self, user_input):
         
