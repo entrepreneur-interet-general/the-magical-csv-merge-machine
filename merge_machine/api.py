@@ -260,8 +260,37 @@ def page_not_found(error):
 @app.errorhandler(405)
 def method_not_allowed(error):
     app.logger.error('Method not allowed (POST or GET): %s', (error))
-    return jsonify(error=True, message=error.description), 404
+    return jsonify(error=True, message=error.description), 405
 
+def api_error_wrapper(func):
+    """
+    Decorator for API methods that will return the original error message if
+    no error occured and will return {error: True, message: "the error message"}
+    if an error is caught.
+    
+    NB: set PROD to False to disable this
+    
+    TODO: Distinction between showable errors and non-showable
+    TODO: Add decorator to all API methods at once
+    """
+    PROD = True
+    
+    if PROD:
+        def wrapper(*args, **kwargs):
+            try:
+                res = func(*args, **kwargs)
+                return res
+            except Exception as e:
+                return jsonify(error=True, message=e.__str__()) 
+        return wrapper
+    return func
+            
+
+
+@app.route('/api/err/')
+@api_error_wrapper
+def err():
+    raise Exception('Yo lo')
 
 def socket_error_wrapper(func):
     def func_wrapper(*argv, **kwarg):
