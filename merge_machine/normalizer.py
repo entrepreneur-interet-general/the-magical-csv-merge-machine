@@ -479,6 +479,8 @@ class Normalizer(ESAbstractDataProject):
         '''
         self._check_mem_data()
         
+        print(self.metadata['log'][self.mem_data_info['file_name']]['recode_types']['skipped'])
+        
         print('mem_data_info:\n', self.mem_data_info)
         
         all_run_infos = {}

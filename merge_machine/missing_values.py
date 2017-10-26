@@ -54,6 +54,7 @@ def mv_from_len_diff(top_values, score=0.3):
     """Check if all values have the same length except one"""
     # Compute lengths of values
     lengths = pd.Series([len(x) for x in top_values.index], index=top_values.index)
+
     # Check if all values have the same length except one:
     if (lengths.nunique() == 2) & (len(top_values) >= 4):  # TODO: why ???
         

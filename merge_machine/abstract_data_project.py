@@ -152,7 +152,10 @@ class AbstractDataProject(AbstractProject):
                 pass
             
             try:
+                # Retrieve skip info # TODO: rather ugly
+                skip = self.metadata['log'][file_name][iter_module_name].get('skipped', 'False')
                 self.metadata['log'][file_name][iter_module_name] = copy.deepcopy(self.default_module_log)
+                self.metadata['log'][file_name][iter_module_name]['skipped'] = skip
             except:
                 pass
             self._write_metadata()
@@ -216,7 +219,7 @@ class AbstractDataProject(AbstractProject):
                 file_names.append(self._og_from_mini(file_name))
             else:
                 file_names.append(self._mini_from_og(file_name))
-        
+    
         # Set values
         for file_name in file_names:
             self.metadata['log'][file_name][module_name]['skipped'] = skip_value
@@ -513,9 +516,6 @@ class AbstractDataProject(AbstractProject):
     def write_data(self):
         '''Write data stored in memory to proper module'''
         self._check_mem_data()
-            
-        if self.mem_data_info['module_name'] == 'INIT':
-            print('WTF ARE U SERIOUS !!!???')
         
         # Write data
         dir_path = self.path_to(self.mem_data_info['module_name'])
