@@ -297,6 +297,12 @@ class Normalizer(ESAbstractDataProject):
             self.mem_data, sep, encoding, columns = self.read_excel(file)
             file_type = 'excel'
         
+        
+        if any('__' in col for col in columns):
+            raise ValueError('Column names cannot contain "__". Please rename ' \
+                             'your columns and retry upload\n\nWhy?\n' \
+                             '"__" is used internaly to define protected columns')
+        
         if len(set(columns)) != len(columns):
             raise Exception('Column names should all be different')
 
