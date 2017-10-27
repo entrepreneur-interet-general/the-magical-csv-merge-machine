@@ -119,18 +119,6 @@ class Linker(ESAbstractDataProject):
         
         # Select these columns for normalization in source and ref
         
-        # TODO: removed auto selection of columns in normalize project: what are the implications
-        #        try:
-        #            source_cols = list(set(y for x in column_matches for y in x['source']))
-        #            self.source.add_selected_columns(source_cols)
-        #    
-        #            ref_cols = list(set(y for x in column_matches for y in x['ref']))
-        #            self.ref.add_selected_columns(ref_cols)
-        #            
-        #        except Exception as e:
-        #            self.upload_config_data({}, 'es_linker', 'column_matches.json')
-        #            raise Exception(e)
-        
         # TODO: this will cover add_certain_col_matches
         # Add to log
         for file_name in self.metadata['log']:
@@ -225,6 +213,7 @@ class Linker(ESAbstractDataProject):
                     + ' uses the implicit get_last_written'.format(project_id))
  
         # TODO: last written is a bad idea because if we modify normalization then BOOM !
+        # TODO: last_written btw concat_with_initi and init ?
         (module_name, file_name) = proj.get_last_written()
     
         # TODO: add warning for implicit use of mini

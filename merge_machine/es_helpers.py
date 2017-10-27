@@ -19,9 +19,8 @@ def my_unidecode(string):
     else:
         return ''
 
-
 def _remove_words(string, words):
-    # TODO: fix this
+    # Replace this by python equivalent of each analyzer ?
     string = my_unidecode(string).lower()
     for word in words:
         string = string.replace(word, '')
@@ -78,7 +77,7 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
         key = s_q_t[2] + s_q_t[3]
         boost = s_q_t[4]
     '''
-    DEFAULT_MUST_FIELD = '.french'
+    DEFAULT_FILTER_FIELD = '.french' # TODO: replace by word n_grams (with n 1 to 3)
     
     query_template = [_reformat_s_q_t(s_q_t) for s_q_t in query_template]
     
@@ -109,9 +108,9 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
                 },
     
                     **{
-                       'must_not': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' OR '.join(values)}}
+                       'must_not': [{'match': {field + DEFAULT_FILTER_FIELD: {'query': ' OR '.join(values)}}
                                  } for field, values in must_not_filters.items()],
-                       'filter': [{'match': {field + DEFAULT_MUST_FIELD: {'query': ' AND '.join(values)}} # TODO: french?
+                       'filter': [{'match': {field + DEFAULT_FILTER_FIELD: {'query': ' AND '.join(values)}}
                                  } for field, values in must_filters.items()],
                     })               
                   }

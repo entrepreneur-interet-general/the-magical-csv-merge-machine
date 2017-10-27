@@ -125,7 +125,7 @@ from worker import conn, VALID_QUEUES
 
 from admin import Admin
 from my_json_encoder import MyEncoder
-from normalizer import ESNormalizer, ESNormalizer, MINI_PREFIX
+from normalizer import ESNormalizer, MINI_PREFIX
 from linker import ESLinker
 
 #==============================================================================
@@ -341,7 +341,6 @@ def new_project(project_type):
     '''
     _check_project_type(project_type)
     
-    # TODO: include public in form somewhere
     description = request.json.get('description', '')
     display_name = request.json.get('display_name', '')
     public = request.json.get('public', False)
@@ -535,6 +534,7 @@ def download(project_type, project_id):
 
 # TODO: get this from MODULES ?
 API_SAMPLE_NAMES = ['standard', 'sample_mvs', 'sample_types']
+#API_SAMPLE_NAMES = NORMALIZE_MODULES['sample'].keys() + LINK_MODULES['sample'].keys()
 
 @app.route('/api/sample/<project_type>/<project_id>', methods=['POST'])
 @cross_origin()
@@ -910,6 +910,7 @@ def label_pair(project_id):
     ref_id = module_params['ref_id']
     label = module_params['label']
     
+    # TODO: add label_pair
     pass
 
 # =============================================================================
@@ -923,7 +924,6 @@ def socket_load_labeller(message_received):
     message_received = json.loads(message_received)
     project_id = message_received['project_id']
     
-    # TODO: put variables in memory
     # TODO: remove from memory at the end
     proj = ESLinker(project_id=project_id)
     paths = proj._gen_paths_es() 
@@ -947,15 +947,12 @@ def socket_load_labeller(message_received):
 @socketio.on('answer', namespace='/')
 @socket_error_wrapper
 def socket_get_answer(message_received):
-    # TODO: avoid multiple click (front)
-    # TODO: add safeguards  if not enough train (front)
-
+    
     message_received = json.loads(message_received)
     logging.info(message_received)
     project_id = message_received['project_id']
     user_input = message_received['user_input']
-    
-    
+
     message_to_display = ''
     #message = 'Expect to have about 50% of good proposals in this phase. The more you label, the better...'
     if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].answer_is_valid(user_input):
@@ -1073,15 +1070,6 @@ def es_fetch_by_id(project_type, project_id):
 # SCHEDULER
 #==============================================================================
 
-# TODO: job_id does not allow to call all steps of a pipeline at once
-# TODO: put all job schedulers in single api (assert to show possible methods) or use @job   
-
-## TODO: get this from MODULES ?
-#API_MODULE_NAMES = ['infer_mvs', 'replace_mvs', 'infer_types', 'recode_types', 
-#                    'concat_with_init', 'run_all_transforms', 'create_labeller', 
-#                    'infer_restriction', 'perform_restriction',
-#                    'linker', 'link_results_analyzer']
-
 SCHEDULED_JOBS = {
                     'infer_mvs': {'project_type': 'normalize'}, 
                     'replace_mvs': {'project_type': 'normalize'}, 
@@ -1188,8 +1176,6 @@ def get_job_result(job_id):
 def cancel_job(job_id):
     '''
     Remove job from queue
-    
-    
     
     # TODO: make this work
     
