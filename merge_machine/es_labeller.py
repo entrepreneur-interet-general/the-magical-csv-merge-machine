@@ -7,7 +7,6 @@ Created on Wed Oct  4 18:43:40 2017
 
 Directions:
     - Parents do not include filters
-    
 
 Filter by core when should is almost never used
 
@@ -710,6 +709,8 @@ class Labeller():
         self._init_queries(match_cols, columns_to_index) # creates self.current_queries
         self._init_core_queries(match_cols, columns_to_index) # creates self.single_core_queries
         #self._init_history() # creates self.history
+        
+        self.has_labels = True
         self._init_source_gen() # creates self.source_gen
         
         self.current_source_idx = None
@@ -726,11 +727,12 @@ class Labeller():
 
     def _sanity_check(self):
         '''Make sure you are not crazy. Run this after updates'''
-        assert len(self.labelled_pairs) \
-                == len(self.labels)
-                
-        assert len(self.num_rows_labelled) \
-                == len(self.num_positive_rows_labelled)
+        if self.has_labels:
+            assert len(self.labelled_pairs) \
+                    == len(self.labels)
+                    
+            assert len(self.num_rows_labelled) \
+                    == len(self.num_positive_rows_labelled)
                 
         for query in self.current_queries:
             query._sanity_check()
@@ -835,7 +837,8 @@ class Labeller():
         '''Generator of rows of source to label'''
         def temp():
             sources_done = [x[0] for x in self.labelled_pairs_match if x is not None] # TODO: forgotten can be re-labelled
-            for idx in random.sample(list(self.source.index), self.MAX_NUM_SAMPLES):
+            for idx in random.sample(list(self.source.index), 
+                                     min(len(self.source), self.MAX_NUM_SAMPLES)):
                 if idx not in sources_done:
                     item = self._fetch_source_item(idx)
                     
@@ -896,16 +899,20 @@ class Labeller():
         NUM_ROW_TRIES = 10
         
         for _ in range(NUM_ROW_TRIES):
-            self.current_source_idx, self.current_source_item = next(self.source_gen)
-    
-            self._init_ref_gen()
-            try: 
-                (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
+            try:
+                self.current_source_idx, self.current_source_item = next(self.source_gen)
+            except:
+                self.has_labels = False
                 break
-            except StopIteration:
-                print(self.current_source_item)
-                print('WARNING: no results found for this row; skipping')
-                self._update_row_count(True, False) # TODO: not tested! 
+            else:
+                self._init_ref_gen()
+                try: 
+                    (self.current_ref_idx, self.current_ref_item, self.current_es_score) = next(self.ref_gen)
+                    break
+                except StopIteration:
+                    print(self.current_source_item)
+                    print('WARNING: no results found for this row; skipping')
+                    self._update_row_count(True, False) # TODO: not tested! 
         else:
             raise StopIteration('Could not find any resut in {0} consecutive rows'.format(NUM_ROW_TRIES))
         
@@ -1261,9 +1268,6 @@ class Labeller():
         print(self.num_rows_labelled)
         
         print('At pair {0} / {1} ; user input: {2}'.format(self.current_source_idx, self.current_ref_idx, user_input))
-        
-        #        MIN_NUM_KEYS = 9 # Number under which to expand
-        #        EXPAND_FREQ = 9
         
         yes = self.VALID_ANSWERS[user_input] == 'y'
         no = self.VALID_ANSWERS[user_input] == 'n'
@@ -1624,8 +1628,6 @@ class Labeller():
             return self.current_queries[0]._as_tuple()
         else:
             return None
- 
-
     
     def to_emit(self):
         '''Creates a dict to be sent to the template #TODO: fix this''' # DONE-ISH

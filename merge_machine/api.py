@@ -352,8 +352,7 @@ def new_project(project_type):
         proj = ESNormalizer(create_new=True, description=description, display_name=display_name, public=public)
     else:
         proj = ESLinker(create_new=True, description=description, display_name=display_name, public=public)
-
-    
+        
     return jsonify(error=False, 
                    project_id=proj.project_id)
 
