@@ -25,7 +25,8 @@ file_len = 10*10**6
 
 sirene_index_name = '123vivalalgerie2'
 
-test_num = 5
+test_num = 2
+
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
     match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},

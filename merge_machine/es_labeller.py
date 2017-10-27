@@ -29,6 +29,8 @@ for query in labeller.current_queries:
 
 TODO: check why precision is 1 even after no/yes
 
+TODO: try multiple training orders on data
+
 """
 import copy
 import itertools
@@ -840,7 +842,7 @@ class Labeller():
             for idx in random.sample(list(self.source.index), 
                                      min(len(self.source), self.MAX_NUM_SAMPLES)):
                 if idx not in sources_done:
-                    item = self._fetch_source_item(idx)
+                    item = self._fetch_source_item(idx) 
                     
                     self.current_source_idx = idx # Redundency with yield 
                     self.current_source_item = item
@@ -977,13 +979,11 @@ class Labeller():
             for query, res in zip(query_bulk, bulk_results):
                 core_has_results[query.core] = bool(res)
                 
-                
             # 2) Fetch queries when cores have results
             query_bulk = []
             for core, sub_group in itertools.groupby(size_queries, key=lambda x: x.core):
                 if core_has_results[core]:
                     query_bulk.extend(list(sub_group))
-                    
  
             # Perform actual queries
             num_queries_performed += len(query_bulk)
@@ -1103,41 +1103,44 @@ class Labeller():
         # OPTION 2: Use only current queries
         
         pass
-        
-    def auto_label(self, certain_column_matches):
+    
+    
+    def auto_label(self, certain_column_matches, 
+                           num_rows_try=100, 
+                           update_single_queries=True):
         '''
-        For pairs that can be found with certain_columns_matches,
+        Automatically add matching pairs if they have common values in the 
+        fields indicated by certain_column_matches.
+        
+        TODO: Check that certain_column_matches are not in common with column_matches
         '''
         KEYWORD_ANALYZER = ''
         
-        assert len(certain_column_matches['ref']) == 1
-        
+        assert len(certain_column_matches['ref']) == 1        
+
         if isinstance(certain_column_matches['source'], str):
             certain_column_matches['source'] = [certain_column_matches['source']]
         
+        
+        # The exact match query to use for 
         query_to_perform = CompoundQueryTemplate((('must', 
                             certain_column_matches['source'], 
                             certain_column_matches['ref'],
                             KEYWORD_ANALYZER,
                             1),))
         
-        # TODO: Check that certain_column_matches is not_match_cols
-        
-        # Iterate on rows 
         
         self._init_source_gen()
         
-        # Iterate on results (max 100 labels) 
-        for _ in range(100):
-            print(self.num_rows_labelled)
-            print(self.num_positive_rows_labelled)
+        for _ in range(num_rows_try):
             try:
                 self.current_source_idx, self.current_source_item = next(self.source_gen)
             except StopIteration:
                 print('WARNING: No more rows for Auto-Labelling')
-                break
+                break          
             
-            # If certain_column_matches do not have values in source, don't auto-label
+            
+             # If certain_column_matches do not have values in source, don't auto-label
             if not any(bool(x) for x in [self.current_source_item[col] \
                            for col in certain_column_matches['source']]):
                 continue
@@ -1159,44 +1162,121 @@ class Labeller():
             self.current_ref_item = results[0][0]['_source']  
             
             pair = (self.current_source_idx, self.current_ref_idx)
-            
-            # If there are any results
-            # Fetch results for all query of this row
-            self._fetch_results_for_row()
-        
+                  
             # > Update             
             self.labelled_pairs.append(pair)
-            self.labels[pair] = 'y'
+            self.labels[pair] = 'y'     
+            self.labelled_pairs_match.append(pair) # Normally done in add_labelled_pairs_match
             
             # Add rows_labelled_counts
-            self._update_row_count(True, True)            
-            
-            # Re-score and sort metrics
-            self.add_labelled_pair(pair)
-            
-            # Update metrics
-            self._compute_metrics()
-            self._sorta_sort_queries()
-            self._sort_queries()
-            
-            
-            # Update core queries
-            # TODO: look into batching this
-            for query in self.single_core_queries:
-                query.add_labelled_pair_items(self.es, self.ref_index_name, 
-                                self.current_source_item, self.current_ref_item)
-            
-            # Filter queries
-            self.filter_()
-            
-            # Expand queries
-            self.expand()
+            self._update_row_count(True, True)   
+
+
+            if update_single_queries:
+                for query in self.single_core_queries:
+                    query.add_labelled_pair_items(self.es, self.ref_index_name, 
+                                    self.current_source_item, self.current_ref_item)
         
-        # Re-initiate labeller
-        self._init_source_gen()
-        self._next_row()
+
         
-        # TODO: Add run_info ?
+        # TODO: separate learn of auto label ?        
+        # Re-train (learn queries)
+        self._re_score_history(True, learn=True)
+        
+        
+        
+#    def auto_label_and_train(self, certain_column_matches):
+#        '''
+#        For pairs that can be found with certain_columns_matches,
+#        '''
+#        KEYWORD_ANALYZER = ''
+#        
+#        assert len(certain_column_matches['ref']) == 1
+#        if isinstance(certain_column_matches['source'], str):
+#            certain_column_matches['source'] = [certain_column_matches['source']]
+#        
+#        query_to_perform = CompoundQueryTemplate((('must', 
+#                            certain_column_matches['source'], 
+#                            certain_column_matches['ref'],
+#                            KEYWORD_ANALYZER,
+#                            1),))
+#        
+#        # TODO: Check that certain_column_matches is not_match_cols
+#        
+#        # Iterate on rows 
+#        
+#        self._init_source_gen()
+#        
+#        # Iterate on results (max 100 labels) 
+#        for _ in range(100):
+#            print(self.num_rows_labelled)
+#            print(self.num_positive_rows_labelled)
+#            try:
+#                self.current_source_idx, self.current_source_item = next(self.source_gen)
+#            except StopIteration:
+#                print('WARNING: No more rows for Auto-Labelling')
+#                break
+#            
+#            # If certain_column_matches do not have values in source, don't auto-label
+#            if not any(bool(x) for x in [self.current_source_item[col] \
+#                           for col in certain_column_matches['source']]):
+#                continue
+#            
+#            # Search for the exact match in ref if 
+#            # TODO: No reason to bulk search here; regular search should work
+#            results = self._bulk_search([query_to_perform], self.current_source_item, 2)
+#            assert len(results) == 1
+#            
+#            if len(results[0]) == 0:
+#                continue
+#                
+#            if len(results[0]) > 1:
+#                raise RuntimeError('Results in auto-label got more than one'
+#                       ' in result where it expected at most one result '
+#                       '(certain_column_matches should be a unique identifier)')
+#            
+#            self.current_ref_idx = results[0][0]['_id']
+#            self.current_ref_item = results[0][0]['_source']  
+#            
+#            pair = (self.current_source_idx, self.current_ref_idx)
+#            
+#            # If there are any results
+#            # Fetch results for all queries of this row
+#            self._fetch_results_for_row()
+#        
+#            # > Update             
+#            self.labelled_pairs.append(pair)
+#            self.labels[pair] = 'y'
+#            
+#            # Add rows_labelled_counts
+#            self._update_row_count(True, True)            
+#            
+#            # 
+#            self.add_labelled_pair(pair)
+#            
+#            # Re-score and sort metrics
+#            self._compute_metrics()
+#            self._sorta_sort_queries()
+#            self._sort_queries()
+#            
+#            
+#            # Update core queries
+#            # TODO: look into batching this
+#            for query in self.single_core_queries:
+#                query.add_labelled_pair_items(self.es, self.ref_index_name, 
+#                                self.current_source_item, self.current_ref_item)
+#            
+#            # Filter queries
+#            self.filter_()
+#            
+#            # Expand queries
+#            self.expand()
+#        
+#        # Re-initiate labeller
+#        self._init_source_gen()
+#        self._next_row()
+#        
+#        # TODO: Add run_info ?
 
     @print_name
     def add_labelled_pair(self, labelled_pair):
@@ -1356,13 +1436,18 @@ class Labeller():
             self._sanity_check()
 
     @print_name
-    def _re_score_history(self, call_next_row):        
+    def _re_score_history(self, call_next_row, learn=False):        
         '''
         Performes queries on past labels for current_queries, re-scores and sorts.
         Use this after adding self.musts_filters and/or self.must_not_filters 
         or after expansion of current_queries
-        
+                
         NB: this does not deal with generating the new pair (self._next_row)
+        
+        INPUT:
+            call_next_row: #TODO: document
+            learn: (bool) whether or not to filter and expand queries while 
+                adding labels. If not, only the original queries will be kept
         '''
 
         # Do not re-score if no labels
@@ -1393,7 +1478,10 @@ class Labeller():
         self.labelled_pairs_match = []
         self.num_rows_labelled = []
         self.num_positive_rows_labelled = []            
-        for labelled_pair in og_labelled_pairs_match:
+        for i, labelled_pair in enumerate(og_labelled_pairs_match):
+            
+            print('Re-scoring row {0}/{1}'.format(i, len(og_labelled_pairs_match)))
+            
             (source_idx, ref_idx) = labelled_pair
             
             # TODO: not re_labelling Nones
@@ -1401,7 +1489,7 @@ class Labeller():
             self.current_ref_idx = ref_idx
             
             self.current_source_item = self._fetch_source_item(source_idx)
-            # self.current_ref_item is not needed
+            # is not needed
             
             self.current_es_score = None
             
@@ -1414,6 +1502,23 @@ class Labeller():
 
             last_is_match = ref_idx not in ['__FORGET', '__NO_RESULT']
             self._update_row_count(at_new_row=True, last_is_match=last_is_match)
+
+            if learn:
+                # Re-score metrics
+                self._compute_metrics()
+                
+                # if True: # TODO: use sort_queries
+                self._sorta_sort_queries()
+                self._sort_queries()                 
+                
+                # Filter queries
+                self.filter_()
+                
+                # Expand queries
+                self.expand()
+                
+                # Get new pair
+                self._next_row()
 
         # Re-score metrics
         self._compute_metrics()
@@ -1433,6 +1538,9 @@ class Labeller():
             results = self.pruned_bulk_search(self.current_queries, 
                             self.current_source_item, self.NUM_RESULTS)
             self.add_results(results)
+        
+        self._sanity_check()
+
         
     def answer_is_valid(self, user_input):
         '''Check if the user input is valid''' # DONE
