@@ -28,7 +28,7 @@ tokenizers = {
         "pattern": '(\\d+)',
         'group': 1
     },
-    "n_grams": {
+    "char_n_grams": {
         "type": "ngram",
         "min_gram": 3,
         "max_gram": 3,
@@ -135,10 +135,10 @@ analyzers = {
     "integers": {
         'tokenizer': 'integers'
     },
-    "n_grams": {
-        'tokenizer': 'n_grams',
+    "n_grams": { # char_n_grams
+        'tokenizer': 'char_n_grams',
         "filter": ["lowercase"]
-    },
+    },  
 #    "end_n_grams": {
 #        'tokenizer': 'keyword',
 #        "filter": ["lowercase", "reverse", "my_edgeNGram", "reverse"]

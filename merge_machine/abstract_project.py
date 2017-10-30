@@ -183,7 +183,7 @@ class AbstractProject():
         return metadata
     
     def _remove(self, module_name='', file_name=''):
-        '''Removes a file from the project''' # TODO: private method
+        '''Removes a file from the project'''
         file_path = self.path_to(module_name, file_name)
         
         if os.path.isfile(file_path):

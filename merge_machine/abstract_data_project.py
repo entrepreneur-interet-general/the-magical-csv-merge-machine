@@ -195,7 +195,6 @@ class AbstractDataProject(AbstractProject):
             - module_type: 'transform', 'infer', or 'link'
         '''
         # TODO: change this
-        # TODO: look where to load source and ref (linker)
         log = { 
                 # Data being modified
                'file_name': self.mem_data_info.get('file_name'), 
@@ -223,8 +222,8 @@ class AbstractDataProject(AbstractProject):
         # Set values
         for file_name in file_names:
             self.metadata['log'][file_name][module_name]['skipped'] = skip_value
-        self._write_metadata() #TODO: Do we write meta"data?
-
+        self._write_metadata()
+        
     def _check_mem_data(self):
         '''Check that there is data loaded in memory'''
         if self.mem_data is None:
@@ -232,7 +231,20 @@ class AbstractDataProject(AbstractProject):
                         mandatory after dedupe)')
     
     def _static_load_data(self, file_path, nrows=None, columns=None): 
-        ''' #TODO: document this isht '''
+        '''
+        Load a pandas DataFrame into memory from a csv in file_path. dtype will 
+        be str by default except for some column names with '__'. This function 
+        is intended to be used to read results of normalization and/or matching.
+        Only the first rows will be read (the number of rows being self.CHUNKSIZE)
+        
+        INPUT:
+            file_path: path to csv file
+            nrows: number of rows to read
+            columns: columns to load
+        
+        OUTPUT:
+            tab: pandas DataFrame
+        '''
         if columns is None:
             columns = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
                                     nrows=0, usecols=columns).columns
@@ -407,8 +419,9 @@ class AbstractDataProject(AbstractProject):
         
         INPUT:
             - params:
-                sample_size: #TODO: what is this?
-                randomize: chose elements randomly #TODO: how does this work ?
+                sample_size: Number of rows to include in the "MINI" file
+                randomize: chose sample_size elements randomly from the file in
+                            memory
         '''
         # TODO: Change current 
         # TODO: Current for normalize ?        
@@ -445,7 +458,7 @@ class AbstractDataProject(AbstractProject):
             self.metadata['has_mini'] = True
             self.mem_data_info['file_name'] = new_file_name
             
-            # Create new empty log in metadata # TODO: make class method
+            # Create new empty log in metadata
             self.metadata['log'][new_file_name] = self._default_log()
         
             log['og_file_name'] = log['file_name']
@@ -514,7 +527,13 @@ class AbstractDataProject(AbstractProject):
         self.run_info_buffer = dict()
         
     def write_data(self):
-        '''Write data stored in memory to proper module'''
+        '''
+        Write data stored in memory to proper module.
+        
+        The data will be taken from self.mem_data_info. It will be written to 
+        the path corresponding to module self.mem_data_info['module_name'] 
+        and file self.mem_data_info['file_name'].
+        '''
         self._check_mem_data()
         
         # Write data
@@ -529,7 +548,7 @@ class AbstractDataProject(AbstractProject):
         with open(file_path, 'w') as w:
             
             # If any data was transformed: write the transformed data
-#            if self.mem_data_info['data_was_transformed']:
+            # if self.mem_data_info['data_was_transformed']:
             try:
                 # Enumerate to know whether or not to write header (i==0)
                 for i, part_tab in enumerate(self.mem_data):
@@ -542,10 +561,6 @@ class AbstractDataProject(AbstractProject):
                     
             except KeyboardInterrupt as e:
                 logging.error(e)
-            # Otherwise, just count rows
-#            else:
-#                for i, part_tab in enumerate(self.mem_data):
-#                    nrows += len(part_tab)
 
 
         logging.info('Wrote to: {0}'.format(file_path))
@@ -580,7 +595,7 @@ class AbstractDataProject(AbstractProject):
         else:
             self._check_mem_data()
             self.mem_data, tab_gen = tee(self.mem_data)
-            data = next(tab_gen) # pd.concat(tab_gen) # TODO: check that this is what we want
+            data = next(tab_gen) # Selecting the first chunk of data to perform inference
             valid_columns = [col for col in data if '__MODIFIED' not in col]
             data = data[valid_columns]
             
@@ -633,7 +648,7 @@ class AbstractDataProject(AbstractProject):
         '''
         logging.info('At module: {0}'.format(module_name))
         # Apply module transformation
-        valid_columns = [col for col in partial_data if '__MODIFIED' not in col] # TODO: test on upload      
+        valid_columns = [col for col in partial_data if '__MODIFIED' not in col]     
         modified_columns = [col for col in partial_data if '__MODIFIED' in col]
         old_modified = partial_data[modified_columns]
         
@@ -682,10 +697,6 @@ class AbstractDataProject(AbstractProject):
 
         # Complete log
         log = self._end_active_log(log, error=False)
-                          
-        # Add time to run_info (# TODO: is this the best way?) 
-#        run_info['start_timestamp'] = log['start_timestamp']
-#        run_info['end_timestamp'] = log['end_timestamp']
         
         return log, run_info
     
@@ -758,12 +769,9 @@ class ESAbstractDataProject(AbstractDataProject):
         pass
         #TODO: Check if thing is thinged
         
-    #    def add_columns_to_index(self, columns_to_index):
-    #        self.metadata[columns_to_index] = self.columns_to_index
-        
     def gen_default_columns_to_index(self, for_linking=True, columns_to_index=None):
         if for_linking:
-            analyzers = {'french', 'whitespace', 'integers', 'city', 'n_grams'} # TODO: removed end_ngrams
+            analyzers = {'french', 'whitespace', 'integers', 'city', 'n_grams'} # TODO: from config
         else:
             analyzers = {}
         

@@ -156,7 +156,13 @@ elif test_num in [3, 4]:
 if test_num == 2:
     columns_certain_match = {'source': ['SIRET'], 'ref': ['SIRET']}
     labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
-    labeller.auto_label(columns_certain_match)
+    
+    import cProfile
+    cProfile.run("labeller.auto_label(columns_certain_match)", "restats")
+    
+    import pstats
+    p = pstats.Stats('restats')
+    p.strip_dirs().sort_stats(-1).print_stats()
     
 elif test_num == 4:
     columns_certain_match = {'source': ['grid'], 'ref': ['ID']}

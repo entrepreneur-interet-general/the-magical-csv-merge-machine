@@ -26,9 +26,10 @@ def _check_project_access(project_access):
 
 class Admin():
     def __init__(self):
-        self.normalize_project_ids = self.list_projects('normalize')
-        self.link_project_ids = self.list_projects('normalize')
-        self.public_project_ids = [] # TODO: implement this
+        self.normalize_project_ids = self.list_project_ids('normalize')
+        self.link_project_ids = self.list_project_ids('link')
+        self.normalize_public_project_ids = self.list_project_ids('normalize', project_access='public')
+        self.link_public_project_ids = self.list_project_ids('link', project_access='public')
     
     def path_to(self, project_type, project_id=''):
         '''Returns path to directory of project'''
