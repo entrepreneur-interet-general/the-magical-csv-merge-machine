@@ -31,7 +31,8 @@ es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
 
 def es_linker(source, params):
     '''
-    Return concatenation of source and reference with the matches found
+    Link source to reference following instructions in params. Return 
+    concatenation of source and reference with the matches found
     
     INPUT:
         source: pandas.DataFrame containing all source items

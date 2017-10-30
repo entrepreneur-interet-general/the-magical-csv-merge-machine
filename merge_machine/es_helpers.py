@@ -11,6 +11,22 @@ import json
 
 import unidecode
 
+def deduplicate(tab, columns):
+    '''Creates a smaller veri'''
+    
+    
+    # indexes is 
+    
+    return smaller_tab, indexes
+
+
+def re_duplicate(tab, smaller_tab, columns, indexes):
+    '''
+    Takes the output of deduplicate and recreates the table with the original
+    size.
+    '''
+    
+    
 
 def my_unidecode(string):
     '''unidecode or return empty string'''

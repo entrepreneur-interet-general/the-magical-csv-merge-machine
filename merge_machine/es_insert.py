@@ -98,6 +98,7 @@ def index(ref_gen, table_name, testing=False, file_len=0):
 
 if __name__ == '__main__':
     columns_to_index = {
+        'SIEGE': {},
         'SIRET': {},
         'SIREN': {},
         'NIC': {},
