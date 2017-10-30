@@ -307,9 +307,12 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
         assert len(self.first_scores) == len(self.history_pairs)
         
         # If row is forgotten or no matches were found in all queries, mark as unaplicable
-        if labelled_pair[1] in ['__FORGET', '__NO_RESULT']: 
+        if labelled_pair[1] == '__FORGET': 
             self.first_is_match[source_idx] = None # None if does not apply
             self.any_is_match[source_idx] = None # None if does not apply
+        elif labelled_pair[1] == '__NO_RESULT': # Consider that no results <-> False
+            self.first_is_match[source_idx] = False 
+            self.any_is_match[source_idx] = False
         else:
             if self.history_pairs[source_idx]:        
                 self.first_is_match[source_idx] = labelled_pair==self.history_pairs[source_idx][0]
@@ -409,7 +412,12 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
         
         precision = rolling_precision[idx]
         recall = rolling_recall[idx]
+        
+        # Initial version
         score = rolling_score[idx]
+        
+        # Version taking into account the number of matches...
+        
         
         # Compute 
         inclusion_ratio = sum(x['any_is_match'] for x in summaries) / len(summaries)
@@ -670,6 +678,21 @@ class Labeller():
     t_p = 0.95
     t_r = 0.3    
     
+    @staticmethod
+    def _dedupe_source(source, match_cols):
+        '''Dedupe source on columns used for matching to avoid multiple search'''
+         # Dedupe source on matching columns
+        source_cols_for_match = set()
+        for match in match_cols:
+            if isinstance(match['source'], str):
+                source_cols_for_match.add(match['source'])
+            else:
+                source_cols_for_match.update(match['source'])
+        source_cols_for_match = list(source_cols_for_match)       
+        
+        smaller_source = source.drop_duplicates(subset=source_cols_for_match)
+        
+        return smaller_source
     
     def __init__(self, source, ref_index_name, 
                  match_cols, columns_to_index, 
@@ -689,8 +712,9 @@ class Labeller():
                     }
           - must_filters
         '''
+            
+        self.source = self._dedupe_source(source, match_cols)
         
-        self.source = source
         self.ref_index_name = ref_index_name
         self.match_cols = match_cols      
         self.columns_to_index = columns_to_index
