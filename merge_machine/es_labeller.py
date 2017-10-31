@@ -1193,7 +1193,10 @@ class Labeller():
             self.labelled_pairs_match.append(pair) # Normally done in add_labelled_pairs_match
             
             # Add rows_labelled_counts
-            self._update_row_count(True, True)   
+            if pair[1] in ['__FORGET', '__NO_RESULT']:
+                self._update_row_count(True, False)
+            else:
+                self._update_row_count(True, True)   
 
 
             if update_single_queries:
@@ -1433,7 +1436,7 @@ class Labeller():
             self.add_labelled_pair(labelled_pair)
             
             # Update metrics
-            if labelled_pair[1] not in ['__FORGET', '__NO_RESULT']:
+            if labelled_pair[1] != '__FORGET':
                 if self.num_positive_rows_labelled[-1]:                
                     if True: # TODO: use sort_queries
                         self._compute_metrics()
@@ -1525,7 +1528,7 @@ class Labeller():
             self.add_labelled_pair(labelled_pair)
 
             last_is_match = ref_idx not in ['__FORGET', '__NO_RESULT']
-            self._update_row_count(at_new_row=True, last_is_match=last_is_match)
+            self._update_row_count(at_new_row=True, last_is_match=last_is_match) # TODO: No result same behavior in re-score ?
 
             if learn:
                 # Re-score metrics
