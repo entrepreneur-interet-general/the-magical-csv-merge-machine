@@ -352,8 +352,7 @@ def new_project(project_type):
         proj = ESNormalizer(create_new=True, description=description, display_name=display_name, public=public)
     else:
         proj = ESLinker(create_new=True, description=description, display_name=display_name, public=public)
-
-    
+        
     return jsonify(error=False, 
                    project_id=proj.project_id)
 
@@ -807,8 +806,6 @@ def make_mini(project_id):
 @app.route('/api/link/select_file/<project_id>', methods=['POST'])
 def select_file(project_id):
     '''    
-    TODO: FIX THIS MESS  !!!!
-    
     Choose a file to use as source or referential for merging
     send {file_role: "source", project_id: "ABCYOUANDME", public: False}
     
@@ -870,24 +867,24 @@ def add_column_certain_matches(project_id):
 
 
 
-@app.route('/api/link/add_columns_to_return/<project_id>/<file_role>/', methods=['POST'])
-@cross_origin()
-def add_columns_to_return(project_id, file_role):
-    '''
-    Specify columns to be included in download version of file. For link project 
-    
-    # TODO: shouldn't this be for normalize also ?
-    
-    wrapper around ESLinker.add_cols_to_return
-    
-    GET:
-        project_id: ID for "link" project
-        file_role: "ref" or "source"
-    '''
-    columns_to_return = request.json
-    proj = ESLinker(project_id=project_id)
-    proj.add_cols_to_return(file_role, columns_to_return)    
-    return jsonify(error=False)
+#@app.route('/api/link/add_columns_to_return/<project_id>/<file_role>/', methods=['POST'])
+#@cross_origin()
+#def add_columns_to_return(project_id, file_role):
+#    '''
+#    Specify columns to be included in download version of file. For link project 
+#    
+#    # TODO: shouldn't this be for normalize also ?
+#    
+#    wrapper around ESLinker.add_cols_to_return
+#    
+#    GET:
+#        project_id: ID for "link" project
+#        file_role: "ref" or "source"
+#    '''
+#    columns_to_return = request.json
+#    proj = ESLinker(project_id=project_id)
+#    proj.add_cols_to_return(file_role, columns_to_return)    
+#    return jsonify(error=False)
 
 
 @app.route('/api/link/label_pair/<project_id>/', methods=['POST'])
@@ -925,17 +922,14 @@ def socket_load_labeller(message_received):
     project_id = message_received['project_id']
     
     # TODO: remove from memory at the end
-    proj = ESLinker(project_id=project_id)
-    paths = proj._gen_paths_es() 
-    
     # Create flask labeller memory if necessary and add current labeller
     try:
         flask._app_ctx_stack.labeller_mem[project_id] = dict()
     except:
         flask._app_ctx_stack.labeller_mem = {project_id: dict()}
     
-    # Generate dedupe paths and create labeller
-    flask._app_ctx_stack.labeller_mem[project_id]['paths'] = paths
+    # Generate necessary paths and create labeller
+    proj = ESLinker(project_id=project_id)
     flask._app_ctx_stack.labeller_mem[project_id]['labeller'] = proj._read_labeller('es_linker')
     
     encoder = MyEncoder()
@@ -953,7 +947,6 @@ def socket_get_answer(message_received):
     project_id = message_received['project_id']
     user_input = message_received['user_input']
 
-    message_to_display = ''
     #message = 'Expect to have about 50% of good proposals in this phase. The more you label, the better...'
     if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].answer_is_valid(user_input):
         flask._app_ctx_stack.labeller_mem[project_id]['labeller'].update(user_input)
@@ -1006,11 +999,7 @@ def socket_complete_training(message_received):
         logging.info('Deleted labeller for project: {0}'.format(project_id))
     except:
         logging.warning('Could not delete labeller for project: {0}'.format(project_id))
-    try:
-        del flask._app_ctx_stack.labeller_mem[project_id]['paths']
-    except:
-        logging.warning('Could not delete paths for project: {0}'.format(project_id))    
-        
+
     emit('wrote_labeller', {'error': False})
     
 @socketio.on('terminate', namespace='/')
@@ -1025,10 +1014,7 @@ def socket_terminate_labeller_load(message_received):
         logging.info('Deleted labeller for project: {0}'.format(project_id))
     except:
         logging.warning('Could not delete labeller for project: {0}'.format(project_id))
-    try:
-        del flask._app_ctx_stack.labeller_mem[project_id]['paths']
-    except:
-        logging.warning('Could not delete paths for project: {0}'.format(project_id))
+
             
 # =============================================================================
 # ES FETCH
@@ -1129,7 +1115,7 @@ def schedule_job(job_name, project_id):
     assert q_priority in VALID_QUEUES
     
     job_id = project_id + '_' + job_name
-    #TODO: remove and de-comment unfer
+    #TODO: remove and de-comment under
     job = q[q_priority].enqueue_call(
             func='api_queued_modules._' + job_name,
             args=(project_id, data_params, module_params), 

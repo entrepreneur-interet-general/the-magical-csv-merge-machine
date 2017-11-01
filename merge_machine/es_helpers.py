@@ -11,6 +11,22 @@ import json
 
 import unidecode
 
+def deduplicate(tab, columns):
+    '''Creates a smaller veri'''
+    
+    
+    # indexes is 
+    
+    return smaller_tab, indexes
+
+
+def re_duplicate(tab, smaller_tab, columns, indexes):
+    '''
+    Takes the output of deduplicate and recreates the table with the original
+    size.
+    '''
+    
+    
 
 def my_unidecode(string):
     '''unidecode or return empty string'''
@@ -55,6 +71,7 @@ def _reformat_s_q_t(s_q_t):
     assert isinstance(col_lists[2], list) or isinstance(col_lists[2], str)
 
     to_return = (s_q_t[0], col_lists[1], col_lists[2], s_q_t[3], s_q_t[4])
+
     assert len(to_return) == old_len
     return to_return
 
@@ -77,17 +94,17 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
         key = s_q_t[2] + s_q_t[3]
         boost = s_q_t[4]
     '''
-    DEFAULT_FILTER_FIELD = '.french' # TODO: replace by word n_grams (with n 1 to 3)
+    DEFAULT_FILTER_FIELD = '.french' # TODO: replace by standard or whitespace
     
     query_template = [_reformat_s_q_t(s_q_t) for s_q_t in query_template]
-    
+
     body = {
           'size': num_results,
           'query': {
             'bool': dict({
                must_or_should: [
                           {'match': {
-                                  s_q_t[2] + s_q_t[3]: {'query': _remove_words(row[s_q_t[1]].str.cat(sep=' '), must_filters.get(s_q_t[2], [])),
+                                  s_q_t[2] + s_q_t[3]: {'query': _remove_words(' '.join(row[idx] for idx in s_q_t[1]), must_filters.get(s_q_t[2], [])),
                                                         'boost': s_q_t[4]}}
                           } \
                           for s_q_t in query_template if (s_q_t[0] == must_or_should) \
@@ -108,9 +125,9 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
                 },
     
                     **{
-                       'must_not': [{'match': {field + DEFAULT_FILTER_FIELD: {'query': ' OR '.join(values)}}
+                       'must_not': [{'match_phrase': {field + DEFAULT_FILTER_FIELD: {'query': ' OR '.join(values)}}
                                  } for field, values in must_not_filters.items()],
-                       'filter': [{'match': {field + DEFAULT_FILTER_FIELD: {'query': ' AND '.join(values)}}
+                       'filter': [{'match_phrase': {field + DEFAULT_FILTER_FIELD: {'query': ' AND '.join(values)}}
                                  } for field, values in must_filters.items()],
                     })               
                   }

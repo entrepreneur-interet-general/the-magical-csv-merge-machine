@@ -29,7 +29,7 @@ LINK_MODULE_ORDER_log = ['INIT', 'add_selected_columns', 'upload_es_train',
 #                         'upload_train', 'dedupe_linker', 'infer_restriction', 
 #                         'perform_restriction', 'link_results_analyzer']
 
-LINK_MODULE_ORDER = ['es_linker'] # TODO
+LINK_MODULE_ORDER = ['es_linker'] #TODO:
 
 NORMALIZE_MODULES = {
         'transform':{

@@ -15,7 +15,6 @@ $ ./bin/elasticsearch
 
 import pandas as pd
 
-from es_match import es_linker #Labeller
 from es_labeller import Labeller
 
 
@@ -27,6 +26,7 @@ file_len = 10*10**6
 sirene_index_name = '123vivalalgerie2'
 
 test_num = 2
+
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
     match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},
@@ -84,6 +84,16 @@ elif test_num == 4:
     
     ref_table_name = '01c670508e478300b9ab7c639a76c871'
 
+elif test_num == 5:
+    # Test on very short file
+    source_file_path = 'local_test_data/source_5_lines.csv'
+    match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},
+                  {'source': 'lycees_sources', 'ref': 'NOMEN_LONG'}]    
+    source_sep = ','
+    source_encoding = 'utf-8'
+    
+    ref_table_name = sirene_index_name    
+
 else:
     raise Exception('Not a valid test number')
 
@@ -94,7 +104,7 @@ source = pd.read_csv(source_file_path,
 source = source.where(source.notnull(), '')
 
 
-if test_num in [0,1,2]:
+if test_num in [0,1,2,5]:
     columns_to_index = {
         'SIRET': {},
         'SIREN': {},
@@ -132,42 +142,51 @@ if test_num in [0,1,2]:
         'PRODEN': {},
         'PRODET': {}
     }
+        
 elif test_num in [3, 4]:
     columns_to_index = {
             "Name": {
                     'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
-                    }, 
+                    },
             "City": {
                     'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
-                    }      
+                    }
             }
 
 if test_num == 2:
     columns_certain_match = {'source': ['SIRET'], 'ref': ['SIRET']}
     labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
-    labeller.auto_label(columns_certain_match)
+    
+    import cProfile
+    cProfile.run("labeller.auto_label(columns_certain_match)", "restats")
+    
+    import pstats
+    p = pstats.Stats('restats')
+    p.strip_dirs().sort_stats(-1).print_stats()
+    
 elif test_num == 4:
     columns_certain_match = {'source': ['grid'], 'ref': ['ID']}
     labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
-else:
     
-    
-    
+else:    
     labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
 
 
-#labeller.update_musts({'NOMEN_LONG': ['lycee']},
-#                      {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']})
-
 for i in range(100):  
+    if not labeller.has_labels:
+        break
+    
     for x in range(10):
-        user_input = labeller.console_input()
-        if labeller.answer_is_valid(user_input):
-            break
+        if labeller.has_labels:
+            user_input = labeller.console_input()
+            if labeller.answer_is_valid(user_input):
+                labeller.update(user_input)
+                break
+            else:
+                print('Invalid answer ("y"/"1", "n"/"0", "u" or "p")')
         else:
-            print('Invalid answer ("y"/"1", "n"/"0", "u" or "p")')
-
-    labeller.update(user_input)
+            break
+    
     
     
     
@@ -178,238 +197,4 @@ for i in range(100):
                                   {'NOMEN_LONG': ['ass', 'association', 'sportive', 
                                                   'foyer', 'maison', 'amicale']})
 
-#for i in range(100):
-#    (source_item, ref_item) = labeller.new_label()
-#    if not ref_item:
-#        print('No more examples to label')
-#        break
-#    
-#    for x in range(10):
-#        user_input = labeller.console_input(source_item, ref_item, test_num)
-#        if labeller.answer_is_valid(user_input):
-#            break
-#        else:
-#            print('Invalid answer ("y"/"1", "n"/"0", "u" or "p")')
-#    else:
-#        raise ValueError('No valid answer after 10 iterations')
-#           
-#    labeller.update(user_input, ref_item['_id'])
-#    
-#    if (test_num == 0) and i == 3:
-#        labeller.update_musts({'NOMEN_LONG': ['lycee']},
-#                              {'NOMEN_LONG': ['ass', 'association', 'sportive', 'foyer']})
-#        labeller.re_score_history()
-
-print('best_query:\n', labeller._best_query_template())
-print('must:\n', labeller.must_filters)
-print('must_not:\n', labeller.must_not_filters)
-
-assert False
-
-# =============================================================================
-# Match
-# =============================================================================
-
-# TODO: bool levels for fields also (L4 for example)
-
-# query_template is ((source_key, ref_key, analyzer_suffix, boost), ...)
-
-max_num_levels = 3 # Number of match clauses
-bool_levels = {'.integers': ['must', 'should']}
-#len(query_metrics[list(query_metrics.keys())[0]])
-boost_levels = [1]
-
-all_query_templates = gen_all_query_templates(match_cols, columns_to_index, 
-                                              bool_levels, boost_levels, max_num_levels)
-
-query_metrics = dict()
-for q_t in all_query_templates:
-    query_metrics[q_t] = []
-
-import random
-
-num_results_labelling = 3
-
-num_found = 0
-if test_num == 0:
-    num_samples = 0
-else:
-    num_samples = 100
-    
-min_precision_tab = [(20, 0.7), (10, 0.5), (5, 0.3)] # (num_rows_labelled, min_prec)    
-
-sorted_keys = all_query_templates
-
-for num_rows_labelled, idx in enumerate(random.sample(list(source.index), num_samples)):
-    row = source.loc[idx]
-    print('Doing', row)  
-        
-    # Search elasticsearch for all results
-    all_search_templates, full_responses = perform_queries(sorted_keys, [row], num_results_labelling)
-    full_responses = {all_search_templates[idx][1][0]: values for idx, values in full_responses.items()}
-    
-    # Sort keys by score or most promising
-    use_precision = num_found > 2
-    if not use_precision:
-        sorted_keys = random.sample(list(full_responses.keys()), len(full_responses.keys()))
-        # sorted_keys = sorted(full_responses.keys(), key=lambda x: full_responses[x]['hits'].get('max_score') or 0, reverse=True)
-    else:
-        print('Using best precision')
-        if found:
-            agg_query_metrics = calc_agg_query_metrics(query_metrics)
-            
-        # Sort by ratio but label by precision ?
-        sorted_keys = sorted(full_responses.keys(), key=lambda x: agg_query_metrics[x]['precision'], reverse=True)
-        
-        # Remove queries if precision is too low (thresh depends on number of labels)
-        min_precision = 0
-        for min_idx, min_precision in min_precision_tab:
-            if num_rows_labelled >= min_idx:
-                break
-        sorted_keys = list(filter(lambda x: agg_query_metrics[x]['precision'] >= min_precision, sorted_keys))
-    print('Number of keys left', len(sorted_keys))
-    
-    # Make user label data until the match is found
-    found, res = gen_label(full_responses, sorted_keys, row, num_results_labelling, num_rows_labelled)
-
-        
-# TODO: thresholder
-
-# Sort by max score?
-
-# Propose by descending score ?
-# Alternate between my precision score and ES max score (or combination)
-
-# TODO: only on chunksize rows of source
-
-if test_num == 0:
-    best_query_template = (('must', 'commune', 'LIBCOM', '.french', 1),
-     ('must', 'lycees_sources', 'NOMEN_LONG', '.french', 10))
-else:
-    best_query_template = sorted(full_responses.keys(), key=lambda x: agg_query_metrics[x]['ratio'], reverse=True)[0]
-
-
-params = {'query': best_query_template, 'thresh': 6}
-new_source = es_linker(source, best_query_template, 6)# agg_query_metrics[best_query_template]['thresh'])
-new_source['has_match'] = new_source.__CONFIDENCE.notnull()
-
-if test_num == 2:
-    new_source['good'] = new_source.SIRET == (new_source.SIREN + new_source.NIC)
-    print('Precision:', new_source.loc[new_source.has_match, 'good'].mean())
-    print('Recall:', new_source.good.mean())
-
-# Display results
-new_source.sort_values('__CONFIDENCE', inplace=True)
-
-for i, row in new_source.iloc[:100].iterrows(): 
-    print('**** ({0}) / score: {1}\n'.format(i, row['__CONFIDENCE']))
-    for match in match_cols:
-        if isinstance(match['ref'], str):
-            cols = [match['ref']]
-        else:
-            cols = match['ref']
-        for col in cols:
-            print('\n{1}   -> [{0}][source]'.format(match['source'], row[match['source']]))
-            print('> {1}   -> [{0}]'.format(col, row[col]))  
-        
-if test_num == 2:
-    for i, row in new_source[new_source.has_match & ~new_source.good].iloc[:100].iterrows(): 
-        print('**** ({0}) / score: {1}\n'.format(i, row['__CONFIDENCE']))
-        for match in match_cols + [{'source': 'SIRET', 'ref': ('SIREN', 'NIC')}]:
-            if isinstance(match['ref'], str):
-                cols = [match['ref']]
-            else:
-                cols = match['ref']
-            for col in cols:
-                print('\n{1}   -> [{0}][source]'.format(match['source'], row[match['source']]))
-                print('> {1}   -> [{0}]'.format(col, row[col]))  
-#            
-#        for match in match_cols:
-#            print(row[match['source']], '\n', row[match['ref']], '\n')
-
-assert False
-
-# Number of results
-len(query_metrics[list(query_metrics.keys())[0]])
-
-# Sorted metrics
-for x in sorted_keys[:40]:
-    print(x, '\n -> ', agg_query_metrics[x], '\n')
-
-t_ps = [x/400. for x in range(4*80, 4*100)]
-precs = []
-recs = []
-ratios = []
-
-for t_p in t_ps:
-    tab = pd.DataFrame([(key, *compute_threshold(metrics, t_p=t_p, t_r=0)) for key, metrics in query_metrics.items() if key in sorted_keys])
-    tab.columns = ['key', 'thresh', 'precision', 'recall', 'ratio']
-    tab.sort_values('ratio', ascending=False, inplace=True)
-    precs.append(tab.precision.iloc[0])
-    recs.append(tab.recall.iloc[0])
-    ratios.append(tab.ratio.iloc[0])
-    
-import matplotlib.pyplot as plt
-plt.plot(t_ps, precs)
-plt.plot(t_ps, recs)
-plt.plot(t_ps, ratios)
-print(tab.head(10))
-
-'''
-pre-process:
-COMMUNE: remove "commune de"
-
-pre-process: L1 + ENSEIGNE + NOMEN_LONG
-
-Redresser les noms propres A. Camuse
-
-tags pour les LIBAPET sirene ?
-
-'''
-
-
-'''
-DATA?
-Rungis   -> [Libelle_commune][source]
-> CHEVILLY LARUE   -> [LIBCOM]
-BAT E4 DU MIN DE PARIS RUNGIS   -> [ods_adresse][source]
-> 2 AVENUE DE FLANDRE   -> [L4_NORMALISEE]
-PALIMEX   -> [APP_Libelle_etablissement][source]
-> PALIMEX   -> [L1_NORMALISEE]
-330177635 00050 [source]
-330177635 00050 [ref]
-
-Marseille 7e  Arrondissement   -> [Libelle_commune][source]
-> CHALLES LES EAUX   -> [LIBCOM]
-LA LICORNE - PIZZERIA   -> [ods_adresse][source]
-> 72 ALL DE LA BREISSE - RESIDENCE   -> [L4_NORMALISEE]
-LA LICORNE   -> [APP_Libelle_etablissement][source]
-> LGDI   -> [L1_NORMALISEE]
-LA LICORNE   -> [APP_Libelle_etablissement][source]
-> None   -> [ENSEIGNE]
-822461620 00012 [source]
-823997358 00010 [ref]
-
-sans paramêtrage: Lycée Maxence Van der Meersch 
- ASS MAXENCE VAN DER MEERSCH 
-
-Paris 14e  Arrondissement   -> [Libelle_commune][source]
-> PARIS 14   -> [LIBCOM]
-
-181 RUE DU CHATEAU   -> [ods_adresse][source]
-> 171 RUE DU CHATEAU   -> [L4_NORMALISEE]
-
-L'ASSIETTE   -> [APP_Libelle_etablissement][source]
-> L ASSIETTE   -> [L1_NORMALISEE]
-
-L'ASSIETTE   -> [APP_Libelle_etablissement][source]
-> L'ASSIETTE   -> [ENSEIGNE]
-
-L'ASSIETTE   -> [APP_Libelle_etablissement][source]
-> NUAGE SARL   -> [NOMEN_LONG]
-505240614 00014 [source]
-505240614 00014 [ref]
-
-Take queries with better precision first
-
-'''
+print(labeller.to_emit())
