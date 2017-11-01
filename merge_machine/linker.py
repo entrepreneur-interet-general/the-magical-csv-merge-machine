@@ -426,8 +426,6 @@ class Linker(ESAbstractDataProject):
     
         return labeller
     
-    
-
 
     def analyze_results(self, params={}):
         # Check that memory is loaded (if necessary)

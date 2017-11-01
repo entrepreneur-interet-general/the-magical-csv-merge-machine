@@ -60,6 +60,9 @@ def es_linker(source, params):
     def _is_match(f_r, threshold):
         return bool(f_r['hits']['hits']) and (f_r['hits']['max_score'] >= threshold)
     
+    def _has_match(f_r):
+        return bool(f_r['hits']['hits'])
+    
     # Perform matching on non-exact pairs (not labelled)
     if source_indexes:
         rows = (x[1] for x in source.iterrows() if x[0] in source_indexes)
@@ -68,26 +71,27 @@ def es_linker(source, params):
 
         # TODO: remove threshold condition
         matches_in_ref = pd.DataFrame([f_r['hits']['hits'][0]['_source'] \
-                                   if _is_match(f_r, threshold) \
+                                   if _has_match(f_r) \
                                    else {} \
                                    for f_r in full_responses], index=source_indexes)
                         
         ref_id = pd.Series([f_r['hits']['hits'][0]['_id'] \
-                                if _is_match(f_r, threshold) \
+                                if _has_match(f_r) \
                                 else np.nan \
                                 for f_r in full_responses], index=matches_in_ref.index)
     
         confidence = pd.Series([f_r['hits']['hits'][0]['_score'] \
-                                if _is_match(f_r, threshold) \
+                                if _has_match(f_r) \
                                 else np.nan \
                                 for f_r in full_responses], index=matches_in_ref.index)
         
         confidence_gap = pd.Series([f_r['hits']['hits'][0]['_score'] - f_r['hits']['hits'][1]['_score']
-                                if (len(f_r['hits']['hits']) >= 2) and _is_match(f_r, threshold) \
+                                if (len(f_r['hits']['hits']) >= 2) and _has_match(f_r) \
                                 else np.nan \
                                 for f_r in full_responses], index=matches_in_ref.index)
 
         matches_in_ref.columns = [x + '__REF' for x in matches_in_ref.columns]
+        matches_in_ref['__IS_MATCH'] = confidence >= threshold
         matches_in_ref['__ID_REF'] = ref_id
         matches_in_ref['__CONFIDENCE'] = confidence    
         matches_in_ref['__GAP'] = confidence_gap
