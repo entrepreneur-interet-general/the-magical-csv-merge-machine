@@ -40,7 +40,7 @@ class Normalizer(ESAbstractDataProject):
     MODULES = NORMALIZE_MODULES
     MODULE_ORDER = NORMALIZE_MODULE_ORDER
     MODULE_ORDER_log = NORMALIZE_MODULE_ORDER_log
-    CHARS_TO_REPLACE = ['\(', '\)', '\\', '\"', '/'] # Format for regex
+    CHARS_TO_REPLACE = ['\(', '\)', '\\', '\"', '/', "\'"] # Format for regex
     
 #==============================================================================
 # Actual class
