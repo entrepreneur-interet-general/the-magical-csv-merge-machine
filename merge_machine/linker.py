@@ -453,10 +453,7 @@ class Linker(ESAbstractDataProject):
         # Update log buffer
         self._end_active_log(log, error=False)  
         
-        return infered_params
-    
-    
-    
+        return infered_params    
 
     def create_es_index_ref(self, columns_to_index, force=False):
         

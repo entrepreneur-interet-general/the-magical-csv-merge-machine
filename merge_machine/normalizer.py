@@ -6,16 +6,13 @@ Created on Fri Apr 21 19:39:45 2017
 @author: leo
 
 """
-import csv
 import io
 import itertools
-import json
 import logging
 import os
 import re
 import time
 
-from elasticsearch import Elasticsearch, client
 import pandas as pd
 from werkzeug.utils import secure_filename
 
