@@ -190,11 +190,11 @@ def _gen_index_settings(index_settings_template, columns_to_index):
     INPUT:
         - columns_to_index. For:
             {
-            "Name": {
-                    'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams', 'city'
+            "nom_lycee": {
+                    'french', 'whitespace', 'integers', 'n_grams', 'city'
                     }, 
-            "City": {
-                    'french', 'whitespace', 'integers'
+            "ville": {
+                    'french', 'whitespace', 'city'
                     },
             "ID": {}
             }

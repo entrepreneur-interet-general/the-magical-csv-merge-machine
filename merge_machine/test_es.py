@@ -11,6 +11,21 @@ Created on Fri Aug 18 16:42:41 2017
 https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-fields.html
 
 $ ./bin/elasticsearch
+    
+
+        queries = self.current_queries
+        
+        new_res = dict()
+        source_idxs = self.current_queries[0].history_pairs.keys()
+        for idx in source_idxs:
+            count = defaultdict(int)
+            for query in queries:
+                if query.history_pairs[idx]:
+                    count[query.history_pairs[idx][0]] += 1
+                else:
+                    count['nores'] += 1
+            new_res[idx] = sorted(list(count.items()), key=lambda x: x[1], reverse=True)[0][0]
+
 """
 
 import pandas as pd

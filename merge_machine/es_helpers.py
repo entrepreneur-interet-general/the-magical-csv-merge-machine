@@ -186,7 +186,7 @@ def _bulk_search(es, index_name, all_query_templates, rows, must_filters, must_n
     search_templates = list(og_search_templates)        
     # search_template is [(id, (query, row)), ...]
     while search_templates:
-        print('At search iteration', i)
+        # print('At search iteration', i)
         
         bulk_body_gen = _gen_bulk(index_name, [x[1] for x in search_templates], 
                                   must_filters, must_not_filters, num_results)
@@ -204,8 +204,8 @@ def _bulk_search(es, index_name, all_query_templates, rows, must_filters, must_n
             if not has_error:
                 full_responses[s_t[0]] = res
     
-        print('Num errors:', sum(has_error_vect))
-        print('Num hits', sum(has_hits_vect))
+        # print('Num errors:', sum(has_error_vect))
+        # print('Num hits', sum(has_hits_vect))
         
         # Limit query to those we couldn't get the first time
         search_templates = [x for x, y in zip(search_templates, has_error_vect) if y]

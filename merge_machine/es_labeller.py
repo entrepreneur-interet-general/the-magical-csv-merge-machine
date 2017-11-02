@@ -34,6 +34,7 @@ TODO: try multiple training orders on data
 force diversity in cores
 
 """
+from collections import defaultdict
 import copy
 import itertools
 import pickle
@@ -86,6 +87,7 @@ class SingleQueryTemplate():
         self.boost = boost
         
         self.core = self._core()
+        self.extended_core = self._extended_core()
         
 
     def to_dict(self):
@@ -116,6 +118,12 @@ class SingleQueryTemplate():
         '''
         return (self.source_col, self.ref_col, self.analyzer_suffix)
         
+    def _extended_core(self):
+        '''
+        Like _core with additional information on bool level
+        '''
+        return (self.bool_lvl, self.source_col, self.ref_col, self.analyzer_suffix)
+    
     def __hash__(self):
         try:
             return self.__hash
@@ -145,8 +153,9 @@ class CompoundQueryTemplate():
         self.shoulds = tuple(sorted([SingleQueryTemplate(*x) for x in single_query_templates_tuple if x[0] == 'should']))
         
         assert self.musts
-        
+
         self.core = self._core()
+        self.extended_core = self._extended_core()
         self.parent_cores = self._parent_cores()
 
     def add_must(self, query):
@@ -175,6 +184,13 @@ class CompoundQueryTemplate():
         for must in self.musts:
             cores.append(must._core())
         return tuple(sorted(cores))
+
+    def _extended_core(self):
+        '''Compound query template without boost information'''
+        extended_cores = []
+        for must in self.musts:
+            extended_cores.append(must._extended_core())
+        return tuple(sorted(extended_cores))
 
     def __hash__(self):
         try:
@@ -457,7 +473,18 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
         return new_query_templates
     
     def multiply_by_core(self, core_queries, bool_levels):
-        '''Takes a single compound query and returns a list of multiple queries'''
+        '''
+        Takes a single compound query and returns a list of multiple queries
+        
+        INPUT:
+            core_queries: list of CoreScorerQueryTemplate to add to the current 
+                        instance of query
+            bool_levels: list of 1 or two elements of ['must', 'should']
+        
+        OUTPUT:
+            new_query_templates: list of query templates 
+        
+        '''
         
         new_query_templates = []
         
@@ -480,10 +507,28 @@ class LabellerQueryTemplate(CompoundQueryTemplate):
                 else:
                     raise ValueError('Invalid level: {0}; should be must or should')
         return new_query_templates
-
+    
+    def new_template_restricted(self, cores_to_remove, bool_levels_to_keep):
+        '''
+        Return the current a new LabellerQueryTemplate based on the current 
+        instance, but for which none of the single query templates are included
+        in cores_to_remove.
+        
+        INPUT:
+            cores_to_remove: 
+            bool_levels_to_keep: bool levels to keep ('must' or 'should')
+        '''
+        new_single_query_template_tuples = tuple(s_q_t._as_tuple() for s_q_t in \
+                    self.musts + self.shoulds if (s_q_t.core not in cores_to_remove) \
+                                                  and (s_q_t.bool_lvl in bool_levels_to_keep))
+        
+        if new_single_query_template_tuples:
+            return LabellerQueryTemplate(new_single_query_template_tuples)
+        else:
+            return None
 
 class CoreScorerQueryTemplate(SingleQueryTemplate):
-    '''Scoer'''
+    '''Score'''
     
     def __init__(self, *argv, **kwargs):
         super().__init__(*argv, **kwargs)    
@@ -526,6 +571,7 @@ class CoreScorerQueryTemplate(SingleQueryTemplate):
         self.ref_lens.append(l_r)
         self.intersect_lens.append(l_i)
         
+        # Score is mean number of intersections
         self.score = sum(x > 0 for x in self.intersect_lens) / len(self.intersect_lens)
         
         
@@ -1040,6 +1086,17 @@ class Labeller():
         for query in self.current_queries:
             query.compute_metrics(self.t_p, self.t_r)
     
+    
+    def majority_vote(self, max_num_voters, min_score=0):
+        ''' #TODO: Document / implement min_score'''
+        count = defaultdict(int)
+        for query in self.current_queries[:max_num_voters]:
+            if query.history_pairs[self.current_source_idx]:
+                count[query.history_pairs[self.current_source_idx][0]] += 1
+            else:
+                count['nores'] += 1
+        best_pair = sorted(list(count.items()), key=lambda x: x[1], reverse=True)[0][0]
+        return best_pair
     
     def _sort_queries(self, by='score'):
         '''Sort queries by query score (best first)'''
@@ -1599,17 +1656,38 @@ class Labeller():
             
             return res
         return wrapper
-            
     
+    
+    @print_name
+    @_query_counter_wrapper    
+    def filter_by_extended_core(self):
+        '''Keep the best of each query template for all distinct extended_cores'''
+        queries_by_extended_core = defaultdict(list)
+        for query in self.current_queries:
+            queries_by_extended_core[query.extended_core].append(query)
+            
+        self.current_queries = [sorted(queries, key=lambda x: x.score)[-1] \
+                                for queries in queries_by_extended_core.values()]
+        
+        
     def filter_(self):
         '''Apply query filtering'''
+        
+        FILTER_BY_CORE_IDXS = [10, 20]
+        
         if self._nprl() > 1:
             print('FILTERING !')
             self.filter_by_precision()
             self.filter_by_num_keys()
+        
+        if self._nprl() in FILTER_BY_CORE_IDXS:
+            self.filter_by_core()
+            
+            # TODO: re-score ?
+            self._re_score_history(call_next_row=False)
     
-            if not self.current_queries:
-                raise RuntimeError('No more queries after filtering')
+        if not self.current_queries:
+            raise RuntimeError('No more queries after filtering')
         
     def expand(self):
         '''
@@ -1637,6 +1715,7 @@ class Labeller():
             return
         
         self._re_score_history(call_next_row=False)
+        self.filter_by_extended_core()
         self.filter_()
         
         self.already_expanded.add(self._nprl())
@@ -1661,7 +1740,15 @@ class Labeller():
             return self.num_positive_rows_labelled[-1]
         else:
             return 0   
-   
+
+
+    @print_name
+    @_query_counter_wrapper    
+    def filter_by_core(self):
+        cores = [q.core for q in self.single_core_queries if q.score <= 0.2]
+        self.current_queries = list({query.new_template_restricted(cores, ['must']) \
+                                            for query in self.current_queries})
+        self.current_queries = [x for x in self.current_queries if x is not None]
     
     @print_name
     @_query_counter_wrapper
@@ -1803,6 +1890,7 @@ class Labeller():
                                     '_source': self.current_ref_item}
         
         dict_to_emit['es_score'] = self.current_es_score
+        dict_to_emit['majority_vote'] = self.majority_vote(10)
         
         # Estimate if the current pair is considered to be a match or not
         # (only if we have access to es_score and current query threshold)
@@ -1827,6 +1915,8 @@ class Labeller():
     
         print('ES score: {0}; Thresh: {1}; Is match: {2}'.format(dict_to_emit['es_score'],
                   dict_to_emit['thresh'], dict_to_emit['estimated_is_match']))
+        print('Majority_vote:', dict_to_emit['majority_vote'])
+    
     
         print('\n(S): {0}'.format(dict_to_emit['source_idx']))
         print('(R): {0}'.format(dict_to_emit['ref_idx']))
