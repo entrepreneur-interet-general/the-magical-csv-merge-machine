@@ -66,6 +66,10 @@ def print_name(function):
         return res
     return wrapper
 
+
+        
+    
+
 # =============================================================================
 # 
 # =============================================================================
@@ -821,7 +825,7 @@ class Labeller():
         self.es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
     
     def to_dict(self):
-        ''' '''    
+        ''' '''
         # source and ref_index_name, es, source_gen, ref_gen, and all current 
         # except for queries are not included
         
@@ -1657,9 +1661,40 @@ class Labeller():
             return res
         return wrapper
     
+    def _log_wrapper(func):
+        ''' '''
+    
+        def wrapper(self, *args, **kwargs):
+            
+            self._sort_queries()
+            best_query = self.current_queries[0]
+            old_precision = best_query.precision
+            old_recall = best_query.recall
+            old_score = best_query.score
+            
+            res = func(self)
+            
+            try:
+                self.log
+            except:
+                self.log = []
+                
+            self._sort_queries()
+            best_query = self.current_queries[0]
+            precision = best_query.precision
+            recall = best_query.recall
+            score = best_query.score
+            
+            self.log.append((func.__name__, \
+                             old_precision, old_recall, old_score, \
+                             precision, recall, score,))
+            
+            return res
+        return wrapper
     
     @print_name
-    @_query_counter_wrapper    
+    @_query_counter_wrapper   
+    @_log_wrapper
     def filter_by_extended_core(self):
         '''Keep the best of each query template for all distinct extended_cores'''
         queries_by_extended_core = defaultdict(list)
@@ -1668,7 +1703,7 @@ class Labeller():
             
         self.current_queries = [sorted(queries, key=lambda x: x.score)[-1] \
                                 for queries in queries_by_extended_core.values()]
-        
+        self._sort_queries()
         
     def filter_(self):
         '''Apply query filtering'''
@@ -1744,6 +1779,7 @@ class Labeller():
 
     @print_name
     @_query_counter_wrapper    
+    @_log_wrapper
     def filter_by_core(self):
         cores = [q.core for q in self.single_core_queries if q.score <= 0.2]
         self.current_queries = list({query.new_template_restricted(cores, ['must']) \
@@ -1752,6 +1788,7 @@ class Labeller():
     
     @print_name
     @_query_counter_wrapper
+    @_log_wrapper
     def filter_by_precision(self):
         MIN_PRECISION_TAB = [(20, 0.7), (10, 0.5), (5, 0.3)]
         def _min_precision(self):
@@ -1774,6 +1811,7 @@ class Labeller():
    
     @print_name
     @_query_counter_wrapper
+    @_log_wrapper
     def filter_by_num_keys(self):
         MAX_NUM_KEYS_TAB = [(20, 10), (10, 50), (7, 200), (5, 500), (0, 4000)]
         def _max_num_queries(self):
@@ -1792,6 +1830,7 @@ class Labeller():
 
     @print_name   
     @_query_counter_wrapper
+    @_log_wrapper
     def expand_by_core(self):
         '''Add queries to current_queries by adding fields'''
         print('EXPANDING BY CORE')
@@ -1801,6 +1840,7 @@ class Labeller():
 
     @print_name    
     @_query_counter_wrapper    
+    @_log_wrapper
     def expand_by_boost(self):
         '''Add queries to current_queries by varying boost levels'''
         print('EXPANDING BY BOOST')        

@@ -212,4 +212,9 @@ for i in range(100):
                                   {'NOMEN_LONG': ['ass', 'association', 'sportive', 
                                                   'foyer', 'maison', 'amicale']})
 
-print(labeller.to_emit())
+print(labeller.to_emit(), '\n\n')
+
+best_query = labeller.current_queries[0]
+print('Precision:', best_query.precision)
+print('Recall:', best_query.recall)
+print('Score:', best_query.score)
