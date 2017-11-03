@@ -724,7 +724,7 @@ def upload(project_id):
     _, module_params = _parse_request()   
     if module_params is None:
         module_params = {}
-    make_mini = module_params.get('make_mini', True)
+    make_mini = module_params.get('make_mini', True) # TODO: can remove ?
     
     # Upload data        
     def custom_stream_factory(total_content_length, filename, content_type, content_length=None):

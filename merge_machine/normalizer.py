@@ -276,7 +276,7 @@ class Normalizer(ESAbstractDataProject):
                                 'file_name': file_name,
                                 'og_file_name': og_file_name,
                                 'module_name': 'INIT',
-                                'data_was_transformed': True
+                                'data_was_transformed': True # TODO: usefull ?
                              }
         
         # Check that file name is not already present 
@@ -317,7 +317,7 @@ class Normalizer(ESAbstractDataProject):
             assert list(self.mem_data.columns) == self.metadata['column_tracker']['original']
                 
         # Create new empty log in metadata
-        self.mem_data_info['file_name'] = file_name
+        self.mem_data_info['file_name'] = file_name #TODO: twice ?
         self.metadata['log'][file_name] = self._default_log()
                 
         # Complete log
@@ -536,6 +536,7 @@ class ESNormalizer(Normalizer):
     
 
 if __name__ == '__main__':
+    
     source_file_name = 'source.csv' # 'SIREN_FUI.col' # 'abes.csv'
     user_given_name = 'second_file.csv'
 
@@ -543,10 +544,14 @@ if __name__ == '__main__':
     
     # Create/Load a project
     #project_id = "4e8286f034eef40e89dd99ebe6d87f21"
+    
+    
+    
     proj = ESNormalizer(None, create_new=True)
     
     # Upload file to normalize
     source_file_name = 'errors/hal_labels.csv'
+    source_file_name = 'ref.csv'
     file_path = os.path.join('local_test_data', source_file_name)
     with open(file_path, 'rb') as f:
         proj.upload_init_data(f, source_file_name, user_given_name)
@@ -565,6 +570,10 @@ if __name__ == '__main__':
     infered_mvs = proj.infer('infer_mvs', params=None)
     
     proj.transform('replace_mvs', params=infered_mvs)
+    
+    
+    
+    
     
     #    inferredTypes = proj.infer('infer_types', params = None)
     #    

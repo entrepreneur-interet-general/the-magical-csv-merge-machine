@@ -267,6 +267,8 @@ class Linker(ESAbstractDataProject):
         # Change file_name to output file_name
         self.mem_data_info['file_name'] = self.output_file_name(self.mem_data_info['file_name']) # File being modified
     
+    
+        import pdb; pdb.set_trace()
         log, run_info = self.transform('es_linker', module_params)        
         
         return log, run_info
@@ -454,6 +456,7 @@ class Linker(ESAbstractDataProject):
         return infered_params    
 
     def create_es_index_ref(self, columns_to_index, force=False):
+        '''#TODO: doc'''
         
         self.ref = ESNormalizer(self.ref.project_id)
         
@@ -574,59 +577,55 @@ if __name__ == '__main__':
     proj.add_selected_project('source', False, source_proj_id)
     proj.add_selected_project('ref', False, ref_proj_id)
     
-    
-    linker_type = 'es_linker'
-    
-    if linker_type == 'es_linker':
 
-        # Index
-        proj.load_project_to_merge('ref')
+    # Index
+    proj.load_project_to_merge('ref')
 
-        ref = ESNormalizer(proj.ref.project_id)
-        
-        # ref_path, columns_to_index, force=False)
-        ref_path = ref.path_to_last_written()
-        
-        columns_to_index = {
-            'numero_uai': {},
-            'denomination_principale_uai': {
-                'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
-            },
-            'patronyme_uai': {
-                'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
-            },
-            'adresse_uai': {
-                'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
-            },
-            'localite_acheminement_uai': {
-                'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
-            },
-            'departement': {
-                'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
-            },
-            'code_postal_uai': {},
-            'full_name': {
-                'french', 'whitespace', 'integers', 'end_n_grams', 'n_grams'
-            }
+    ref = ESNormalizer(proj.ref.project_id)
+    
+    # ref_path, columns_to_index, force=False)
+    ref_path = ref.path_to_last_written()
+    
+    columns_to_index = {
+        'numero_uai': {},
+        'denomination_principale_uai': {
+            'french', 'whitespace', 'integers', 'n_grams'
+        },
+        'patronyme_uai': {
+            'french', 'whitespace', 'integers', 'n_grams'
+        },
+        'adresse_uai': {
+            'french', 'whitespace', 'integers', 'n_grams'
+        },
+        'localite_acheminement_uai': {
+            'french', 'whitespace', 'integers', 'n_grams'
+        },
+        'departement': {
+            'french', 'whitespace', 'integers', 'n_grams'
+        },
+        'code_postal_uai': {},
+        'full_name': {
+            'french', 'whitespace', 'integers', 'n_grams'
         }
-        
-        ref.create_index(ref_path, columns_to_index, force=False)
-        
-        # Link
-        index_name = proj.metadata['files']['ref']['project_id']
-        query_template = (('must', 'commune', 'localite_acheminement_uai', '.french', 1), ('must', 'lycees_sources', 'full_name', '.french', 1))
-        threshold = 3.5
-        must = {'full_name': ['lycee']}
-        must_not = {'full_name': ['ass', 'association', 'sportive', 'foyer']}
+    }
+    
+    ref.create_index(ref_path, columns_to_index, force=False)
+    
+    # Link
+    index_name = proj.metadata['files']['ref']['project_id']
+    query_template = (('must', 'commune', 'localite_acheminement_uai', '.french', 1), ('must', 'lycees_sources', 'full_name', '.french', 1))
+    threshold = 3.5
+    must = {'full_name': ['lycee']}
+    must_not = {'full_name': ['ass', 'association', 'sportive', 'foyer']}
 
-        params=dict()
-        params['index_name'] = index_name
-        params['query_template'] = query_template
-        params['thresh'] = threshold
-        params['must'] = must
-        params['must_not'] = must_not
-        
-        proj.linker('es_linker', None, params)
+    params=dict()
+    params['index_name'] = index_name
+    params['query_template'] = query_template
+    params['thresh'] = threshold
+    params['must'] = must
+    params['must_not'] = must_not
+    
+    proj.linker('es_linker', None, params)
 
     proj.write_data()   
 

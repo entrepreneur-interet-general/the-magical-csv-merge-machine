@@ -66,10 +66,6 @@ def print_name(function):
         return res
     return wrapper
 
-
-        
-    
-
 # =============================================================================
 # 
 # =============================================================================
@@ -1668,26 +1664,29 @@ class Labeller():
             
             self._sort_queries()
             best_query = self.current_queries[0]
-            old_precision = best_query.precision
-            old_recall = best_query.recall
-            old_score = best_query.score
+            log = dict()
             
-            res = func(self)
+            log['func_name'] = func.__name__
+            log['old_best_query'] = best_query
+            log['old_precision'] = best_query.precision
+            log['old_recall'] = best_query.recall
+            log['old_score'] = best_query.score
             
+            res = func(self, *args, **kwargs)
+
+            self._sort_queries()
+            best_query = self.current_queries[0]
+            log['best_query'] = best_query
+            log['precision'] = best_query.precision
+            log['recall'] = best_query.recall
+            log['score'] = best_query.score
+                        
             try:
                 self.log
             except:
                 self.log = []
                 
-            self._sort_queries()
-            best_query = self.current_queries[0]
-            precision = best_query.precision
-            recall = best_query.recall
-            score = best_query.score
-            
-            self.log.append((func.__name__, \
-                             old_precision, old_recall, old_score, \
-                             precision, recall, score,))
+            self.log.append(log)
             
             return res
         return wrapper
@@ -1729,8 +1728,10 @@ class Labeller():
         Use current state to determin whether or not to use queyr expansion and 
         which method to use.
         '''
-        EXPAND_BY_CORE_IDXS = [11, 17]
-        EXPAND_BY_BOOST_IDXS = [14, 22, 30, 60, 120, 240] # TODO: smarter than that
+        EXPAND_BY_CORE_IDXS = {11, 17}
+        EXPAND_BY_BOOST_IDXS = {14, 22, 30, 60, 120, 240} # TODO: smarter than that
+
+        assert not bool(EXPAND_BY_CORE_IDXS & EXPAND_BY_BOOST_IDXS)
 
         try:
             self.already_expanded
@@ -1749,16 +1750,10 @@ class Labeller():
         else: 
             return
         
-        self._re_score_history(call_next_row=False)
-        self.filter_by_extended_core()
-        self.filter_()
-        
         self.already_expanded.add(self._nprl())
         
         assert self.current_source_idx == self.labelled_pairs_match[-1][0]
-    
-    
-    
+
     
     def _nrl(self):
         '''Current number of rows labelled'''
@@ -1838,6 +1833,12 @@ class Labeller():
         self.current_queries = [x for query in self.current_queries \
                                 for x in query.multiply_by_core(cores, ['must'])]
 
+
+        # TODO: Move back into expand
+        self._re_score_history(call_next_row=False)
+        self.filter_by_extended_core()
+        self.filter_()
+
     @print_name    
     @_query_counter_wrapper    
     @_log_wrapper
@@ -1846,6 +1847,11 @@ class Labeller():
         print('EXPANDING BY BOOST')        
         self.current_queries = [x for query in self.current_queries \
                                 for x in query.multiply_by_boost(2)]
+
+        # TODO: Move back into expand
+        self._re_score_history(call_next_row=False)
+        self.filter_by_extended_core()
+        self.filter_()
 
     @print_name
     def export_best_params(self):

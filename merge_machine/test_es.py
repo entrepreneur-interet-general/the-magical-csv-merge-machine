@@ -170,14 +170,19 @@ elif test_num in [3, 4]:
 
 if test_num == 2:
     columns_certain_match = {'source': ['SIRET'], 'ref': ['SIRET']}
-    labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
+    labellers = dict()
+
+    for i in range(3):
+        labellers[i] = Labeller(source, ref_table_name, match_cols, columns_to_index)
+        labellers[i].auto_label(columns_certain_match)
+        
     
-    import cProfile
-    cProfile.run("labeller.auto_label(columns_certain_match)", "restats")
-    
-    import pstats
-    p = pstats.Stats('restats')
-    p.strip_dirs().sort_stats(-1).print_stats()
+#    import cProfile
+#    cProfile.run("labeller.auto_label(columns_certain_match)", "restats")
+#    
+#    import pstats
+#    p = pstats.Stats('restats')
+#    p.strip_dirs().sort_stats(-1).print_stats()
     
 elif test_num == 4:
     columns_certain_match = {'source': ['grid'], 'ref': ['ID']}
@@ -200,10 +205,7 @@ for i in range(100):
             else:
                 print('Invalid answer ("y"/"1", "n"/"0", "u" or "p")')
         else:
-            break
-    
-    
-    
+            break    
     
     if i == 15:
         print('Updating musts')
@@ -212,6 +214,30 @@ for i in range(100):
                                   {'NOMEN_LONG': ['ass', 'association', 'sportive', 
                                                   'foyer', 'maison', 'amicale']})
 
+    
+from collections import defaultdict
+# Majority vote on labellers
+pairs_count = dict()
+for labeller in labellers.values():
+    best_query = labeller.current_queries[0]
+    
+    for source_id, pairs in best_query.history_pairs.items():
+        
+        if source_id not in pairs_count:
+            pairs_count[source_id] = defaultdict(int)
+        
+        if pairs:
+            pair = pairs[0]
+            pairs_count[source_id][pair] += 1
+        
+        
+res = dict()
+for source_id, pair_count in pairs_count.items():
+    if pair_count:
+        res[source_id] = sorted(list(pair_count.items()), key=lambda x: x[1])[-1][0]
+    else:
+        res[source_id] = None
+    
 print(labeller.to_emit(), '\n\n')
 
 best_query = labeller.current_queries[0]
