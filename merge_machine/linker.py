@@ -266,9 +266,7 @@ class Linker(ESAbstractDataProject):
         
         # Change file_name to output file_name
         self.mem_data_info['file_name'] = self.output_file_name(self.mem_data_info['file_name']) # File being modified
-    
-    
-        import pdb; pdb.set_trace()
+
         log, run_info = self.transform('es_linker', module_params)        
         
         return log, run_info
