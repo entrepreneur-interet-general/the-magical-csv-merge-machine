@@ -97,43 +97,42 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
     DEFAULT_FILTER_FIELD = '.french' # TODO: replace by standard or whitespace
     
     query_template = [_reformat_s_q_t(s_q_t) for s_q_t in query_template]
-    try:
-        body = {
-              'size': num_results,
-              'query': {
-                'bool': dict({
-                   must_or_should: [
-                              {'match': {
-                                      s_q_t[2] + s_q_t[3]: {'query': _remove_words(' '.join(row[idx] for idx in s_q_t[1]), must_filters.get(s_q_t[2], [])),
-                                                            'boost': s_q_t[4]}}
-                              } \
-                              for s_q_t in query_template if (s_q_t[0] == must_or_should) \
-                                          and isinstance(s_q_t[2], str)
-                            ] \
-        
-                            + [
-                              {'multi_match': {
-                                      'fields': [col + s_q_t[3] for col in s_q_t[2]], 
-                                      'query': _remove_words(row[s_q_t[1]].str.cat(sep=' '), []),
-                                      'boost': s_q_t[4]
-                                      }
-                              } \
-                              for s_q_t in query_template if (s_q_t[0] == must_or_should) \
-                                          and (isinstance(s_q_t[2], tuple) or isinstance(s_q_t[2], list))
-                            ] \
-                    for must_or_should in ['must', 'should']
-                    },
-        
-                        **{
-                           'must_not': [{'match_phrase': {field + DEFAULT_FILTER_FIELD: {'query': ' OR '.join(values)}}
-                                     } for field, values in must_not_filters.items()],
-                           'filter': [{'match_phrase': {field + DEFAULT_FILTER_FIELD: {'query': ' AND '.join(values)}}
-                                     } for field, values in must_filters.items()],
-                        })               
-                      }
-               }
-    except:
-        import pdb; pdb.set_trace()
+
+    body = {
+          'size': num_results,
+          'query': {
+            'bool': dict({
+               must_or_should: [
+                          {'match': {
+                                  s_q_t[2] + s_q_t[3]: {'query': _remove_words(' '.join(row[idx] for idx in s_q_t[1] if isinstance(row[idx], str)), must_filters.get(s_q_t[2], [])),
+                                                        'boost': s_q_t[4]}}
+                          } \
+                          for s_q_t in query_template if (s_q_t[0] == must_or_should) \
+                                      and isinstance(s_q_t[2], str)
+                        ] \
+    
+                        + [
+                          {'multi_match': {
+                                  'fields': [col + s_q_t[3] for col in s_q_t[2]], 
+                                  'query': _remove_words(row[s_q_t[1]].str.cat(sep=' '), []),
+                                  'boost': s_q_t[4]
+                                  }
+                          } \
+                          for s_q_t in query_template if (s_q_t[0] == must_or_should) \
+                                      and (isinstance(s_q_t[2], tuple) or isinstance(s_q_t[2], list))
+                        ] \
+                for must_or_should in ['must', 'should']
+                },
+    
+                    **{
+                       'must_not': [{'match_phrase': {field + DEFAULT_FILTER_FIELD: {'query': ' OR '.join(values)}}
+                                 } for field, values in must_not_filters.items()],
+                       'filter': [{'match_phrase': {field + DEFAULT_FILTER_FIELD: {'query': ' AND '.join(values)}}
+                                 } for field, values in must_filters.items()],
+                    })               
+                  }
+           }
+
     return body
 
 

@@ -19,7 +19,7 @@ os.chdir(curdir)
 
 
 PROTOCOL = 'http://'
-HOST = '127.0.1.7:5000'
+HOST = '127.0.0.1:5000'
 PRINT = True
 PRINT_CHAR_LIMIT = 10000
 
