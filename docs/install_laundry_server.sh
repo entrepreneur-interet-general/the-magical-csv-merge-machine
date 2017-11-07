@@ -47,7 +47,7 @@ sudo dpkg -i elasticsearch-5.6.2.deb
 # Préparation des données nécessaires à elasticsearch
 
 mkdir -p resource/es_linker
-wget "https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000@public/download/?format=json&timezone=Europe/Berlin" -O merge_machine/resource/es_linker/geonames-all-cities-with-a-population-1000.json
+wget "https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000@public/download/?format=json&timezone=Europe/Berlin" -O resource/es_linker/geonames-all-cities-with-a-population-1000.json
 python3 es_gen_resource.py
 
 # Ici, éditer le fichier de config /etc/default/elasticsearch et décommenter les lignes :
@@ -58,7 +58,9 @@ python3 es_gen_resource.py
 # -Xms4g -Xmx4g
 # (si le serveur cible a au moins 32GB de RAM, sinon réduire à 2GB, sachant qu'en-dessous ES aura du mal à construire certains index)
 
-# Vérifier le bon fonctionnement d'elasticsearch
+# Lancer puis vérifier le bon fonctionnement d'elasticsearch
+service elasticsearch start
+service elasticsearch status
 curl http://localhost:9200/
 
 # Installation (compilation) de redis
