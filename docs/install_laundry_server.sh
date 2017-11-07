@@ -81,8 +81,12 @@ nohup ./src/redis-server > redis.out &
 uwsgi --http 0.0.0.0:5000 -b 32768 --wsgi-file api.py --callable app  --master --processes 4 --threads 2 > uwsgi.out 2>&1 &
 
 # Lancement du worker (un seul pour l'instant : si besoin de monter en charge, envisager l'installation de composants Dockers)
+# On indique le code retour du processus afin de détecter s'il a échoué à se lancer (subtilité : ce n'est pas le code retour du script Python
+# mais celui de la commande nohup, autrement dit un code != 0 indique que nohup a échoué, mais un code 0 ne garantit pas que le script
+# Python n'a pas lancé d'erreur, il faut pour cela regarder le fichier de sortie worker.out)
 
-nohup python3 worker.py > worker.out 2>&1 &
+( nohup python3 worker.py; echo "Processus worker (pid=$!) a fini avec le statut $?" ) > worker.out 2>&1 &
+
 
 # Si nécessaire, ouvrir le port 5000 utilisé par l'API (rarement ouvert par défaut chez les hébergeurs)
 
