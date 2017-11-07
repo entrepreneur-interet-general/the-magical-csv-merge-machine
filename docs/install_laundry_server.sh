@@ -69,12 +69,12 @@ tar xzf redis-4.0.2.tar.gz
 cd redis-4.0.2
 make
 
-# Revenir à la racine de notre code Python (répertoire merge_machine) pour lancer les processus backend
-cd ..
-
 # Lancement de redis (via nohup, donc dans un processus qui persistera après fermeture du terminal)
 
 nohup ./src/redis-server > redis.out &
+
+# Revenir à la racine de notre code Python (répertoire merge_machine) pour lancer les processus backend
+cd ..
 
 # Lancement du serveur uWSGI qui exécute le service applicatif API
 
