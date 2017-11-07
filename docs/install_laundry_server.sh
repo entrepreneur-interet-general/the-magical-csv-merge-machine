@@ -41,8 +41,7 @@ pip3 install uwsgi
 # Installation + configuration d'elasticsearch
 
 wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.6.2.deb /tmp
-sudo dpkg -i elasticsearch-5.6.2.deb
-
+dpkg -i elasticsearch-5.6.2.deb
 
 # Préparation des données nécessaires à elasticsearch
 
@@ -70,7 +69,10 @@ tar xzf redis-4.0.2.tar.gz
 cd redis-4.0.2
 make
 
-# Lancement de redis
+# Revenir à la racine de notre code Python (répertoire merge_machine) pour lancer les processus backend
+cd ..
+
+# Lancement de redis (via nohup, donc dans un processus qui persistera après fermeture du terminal)
 
 nohup ./src/redis-server > redis.out &
 
