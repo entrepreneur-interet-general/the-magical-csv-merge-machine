@@ -5,7 +5,7 @@
 # Prérequis : écosystème Python 
 
 apt-get update
-apt-get install python3-pip python3-dev nginx git
+apt-get install python3-pip python3-dev git
 pip3 install --upgrade pip
 
 # Création d'un environnement virtuel pour isoler l'installation du backend (code Python à partir de api.py et de worker.py)
