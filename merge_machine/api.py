@@ -119,7 +119,7 @@ import werkzeug
 from werkzeug.utils import secure_filename
 
 # Redis imports
-from rq import cancel_job as rq_cancel_job, Queue
+from rq import cancel_job as rq_cancel_job, Queue, Worker
 from rq.job import Job
 from worker import conn, VALID_QUEUES
 
@@ -320,6 +320,11 @@ def socket_error_wrapper(func):
 @app.route('/api/ping/')
 def ping():
     return jsonify(error=False, message="It's alive !!")
+
+@app.route('/api/ping_redis')
+def ping_redis():
+    num_workers = len(Worker.all(conn))
+    return jsonify(error=bool(num_workers), num_workers=num_workers)
 
 #==============================================================================
 # GENERIC API METHODS (NORMALIZE AND LINK)
