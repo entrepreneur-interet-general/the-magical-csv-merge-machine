@@ -5,7 +5,7 @@
 # Prérequis : écosystème Python 
 
 apt-get update
-apt-get install python3-pip python3-dev nginx git
+apt-get install python3-pip python3-dev git
 pip3 install --upgrade pip
 
 # Création d'un environnement virtuel pour isoler l'installation du backend (code Python à partir de api.py et de worker.py)
@@ -40,15 +40,14 @@ pip3 install uwsgi
 
 # Installation + configuration d'elasticsearch
 
-wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.6.2.deb
-sudo dpkg -i elasticsearch-5.6.2.deb
-
+wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.6.2.deb /tmp
+dpkg -i elasticsearch-5.6.2.deb
 
 # Préparation des données nécessaires à elasticsearch
 
-mkdir -p merge_machine/resource/es_linker
-wget "https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000@public/download/?format=json&timezone=Europe/Berlin" -O merge_machine/resource/es_linker/geonames-all-cities-with-a-population-1000.json
-python3 merge_machine/es_gen_resource.py
+mkdir -p resource/es_linker
+wget "https://data.opendatasoft.com/explore/dataset/geonames-all-cities-with-a-population-1000@public/download/?format=json&timezone=Europe/Berlin" -O resource/es_linker/geonames-all-cities-with-a-population-1000.json
+python3 es_gen_resource.py
 
 # Ici, éditer le fichier de config /etc/default/elasticsearch et décommenter les lignes :
 # LOG_DIR=/var/log/elasticsearch
@@ -58,7 +57,9 @@ python3 merge_machine/es_gen_resource.py
 # -Xms4g -Xmx4g
 # (si le serveur cible a au moins 32GB de RAM, sinon réduire à 2GB, sachant qu'en-dessous ES aura du mal à construire certains index)
 
-# Vérifier le bon fonctionnement d'elasticsearch
+# Lancer puis vérifier le bon fonctionnement d'elasticsearch
+service elasticsearch start
+service elasticsearch status
 curl http://localhost:9200/
 
 # Installation (compilation) de redis
@@ -68,17 +69,24 @@ tar xzf redis-4.0.2.tar.gz
 cd redis-4.0.2
 make
 
-# Lancement de redis
+# Lancement de redis (via nohup, donc dans un processus qui persistera après fermeture du terminal)
 
 nohup ./src/redis-server > redis.out &
+
+# Revenir à la racine de notre code Python (répertoire merge_machine) pour lancer les processus backend
+cd ..
 
 # Lancement du serveur uWSGI qui exécute le service applicatif API
 
 uwsgi --http 0.0.0.0:5000 -b 32768 --wsgi-file api.py --callable app  --master --processes 4 --threads 2 > uwsgi.out 2>&1 &
 
 # Lancement du worker (un seul pour l'instant : si besoin de monter en charge, envisager l'installation de composants Dockers)
+# On indique le code retour du processus afin de détecter s'il a échoué à se lancer (subtilité : ce n'est pas le code retour du script Python
+# mais celui de la commande nohup, autrement dit un code != 0 indique que nohup a échoué, mais un code 0 ne garantit pas que le script
+# Python n'a pas lancé d'erreur, il faut pour cela regarder le fichier de sortie worker.out)
 
-nohup python3 worker.py > worker.out 2>&1 &
+( nohup python3 worker.py; echo "Processus worker (pid=$!) a fini avec le statut $?" ) > worker.out 2>&1 &
+
 
 # Si nécessaire, ouvrir le port 5000 utilisé par l'API (rarement ouvert par défaut chez les hébergeurs)
 
