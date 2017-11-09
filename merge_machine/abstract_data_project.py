@@ -720,8 +720,7 @@ class ESAbstractDataProject(AbstractDataProject):
             bulk += json.dumps({"query" : {"match" : {"_id": id_}}, "size": 1}) + '\n'
             
         res = self.es.msearch(bulk)
-        return res
-        
+        return res     
     
     def create_index(self, ref_path, columns_to_index, force=False):
         '''
@@ -738,7 +737,6 @@ class ESAbstractDataProject(AbstractDataProject):
                           usecols=columns_to_index.keys(),
                           dtype=str, chunksize=self.es_insert_chunksize)
         
-       
         if self.has_index() and force:
             self.ic.delete(self.index_name)
             

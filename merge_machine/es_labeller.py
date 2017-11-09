@@ -686,10 +686,7 @@ class Labeller():
     
     >>> for x in range(100):
             to_display = labeller.to_emit()
-            labeller.update('y')
-    
-    >>> labeller.export_params()    
-        
+            labeller.update('y')        
     '''
     NUM_RESULTS = 3
     
@@ -841,8 +838,7 @@ class Labeller():
         
         dict_['current_queries'] = [query.to_dict() for query in self.current_queries()]   
         dict_['single_core_queries'] = [query.to_dict() for query in self.single_core_queries()]   
-        
-        
+
     
     
     def to_pickle(self, file_path):
@@ -853,6 +849,7 @@ class Labeller():
         self.source_gen = None
         self.ref_gen = None
         
+        es_con = self.es
         self.es = None
         
         with open(file_path, 'wb') as w:
@@ -861,7 +858,7 @@ class Labeller():
         self.source_gen = temp_source_gen    
         self.ref_gen = temp_ref_gen   
             
-        self._init_es()
+        self.es = es_con
         
     @classmethod
     def from_pickle(cls, file_path):
@@ -1833,7 +1830,6 @@ class Labeller():
         self.current_queries = [x for query in self.current_queries \
                                 for x in query.multiply_by_core(cores, ['must'])]
 
-
         # TODO: Move back into expand
         self._re_score_history(call_next_row=False)
         self.filter_by_extended_core()
@@ -1856,7 +1852,6 @@ class Labeller():
     @print_name
     def export_best_params(self):
         '''Returns a dictionnary with the best parameters (input for es_linker)''' # DONE
-        
         best_query = self.current_queries[0]
         
         params = dict()
@@ -1998,6 +1993,8 @@ class Labeller():
         '''
         self.print_emit()
         return input('\n > ')
+    
+
         
     
 class ConsoleLabeller(Labeller):
@@ -2005,7 +2002,7 @@ class ConsoleLabeller(Labeller):
     TABS = ['menu', 'labeller', 'filter']
     
     def __init__(self, *args, **kwargs):
-        self.super().__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.current_tab = 'labeller'
         
     def display(self):
@@ -2042,4 +2039,24 @@ class ConsoleLabeller(Labeller):
                 
             elif self.current_tab == 'filter':
                 self.filter_update(user_input)        
-    
+
+    def console_labeller(self, max_num_labels=100):
+        finished = False
+        for i in range(max_num_labels):  
+            
+            if (not self.has_labels) or finished:
+                break
+            
+            for x in range(10):
+                if self.has_labels:
+                    user_input = self.console_input()
+                    if self.answer_is_valid(user_input):
+                        self.update(user_input)
+                        break
+                    elif user_input == 'quit':
+                        finished = True
+                        break
+                    else:
+                        print('Invalid answer ("y(es)"/"1", "n(o)"/"0", or "p(revious)" / or "q(uit)") ')
+                else:
+                    break  

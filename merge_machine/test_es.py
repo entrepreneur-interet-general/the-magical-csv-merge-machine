@@ -30,7 +30,7 @@ $ ./bin/elasticsearch
 
 import pandas as pd
 
-from es_labeller import Labeller
+from es_labeller import ConsoleLabeller
 
 
 dir_path = 'data/sirene'
@@ -173,7 +173,7 @@ if test_num == 2:
     labellers = dict()
 
     for i in range(3):
-        labellers[i] = Labeller(source, ref_table_name, match_cols, columns_to_index)
+        labellers[i] = ConsoleLabeller(source, ref_table_name, match_cols, columns_to_index)
         labellers[i].auto_label(columns_certain_match)
         
     
@@ -186,33 +186,20 @@ if test_num == 2:
     
 elif test_num == 4:
     columns_certain_match = {'source': ['grid'], 'ref': ['ID']}
-    labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
+    labeller = ConsoleLabeller(source, ref_table_name, match_cols, columns_to_index)
     
 else:    
-    labeller = Labeller(source, ref_table_name, match_cols, columns_to_index)
+    labeller = ConsoleLabeller(source, ref_table_name, match_cols, columns_to_index)
 
 
-for i in range(100):  
-    if not labeller.has_labels:
-        break
-    
-    for x in range(10):
-        if labeller.has_labels:
-            user_input = labeller.console_input()
-            if labeller.answer_is_valid(user_input):
-                labeller.update(user_input)
-                break
-            else:
-                print('Invalid answer ("y"/"1", "n"/"0", "u" or "p")')
-        else:
-            break    
-    
-    if i == 15:
-        print('Updating musts')
-        if test_num == 0:
-            labeller.update_musts({'NOMEN_LONG': ['lycee']},
-                                  {'NOMEN_LONG': ['ass', 'association', 'sportive', 
-                                                  'foyer', 'maison', 'amicale']})
+labeller.console_labeller()
+
+#    if i == 15:
+#        print('Updating musts')
+#        if test_num == 0:
+#            labeller.update_musts({'NOMEN_LONG': ['lycee']},
+#                                  {'NOMEN_LONG': ['ass', 'association', 'sportive', 
+#                                                  'foyer', 'maison', 'amicale']})
 
     
 from collections import defaultdict

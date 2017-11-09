@@ -12,6 +12,7 @@ TODO: look into missing document
 """
 from distutils.version import LooseVersion
 import json
+import logging
 import os
 import time
 
@@ -65,7 +66,7 @@ def index(ref_gen, table_name, testing=False, file_len=0):
         ic.put_settings(low_refresh, table_name)
     
     # Bulk insert
-    print('Started indexing')    
+    logging.info('Started indexing')    
     i = 0
     t_start = time.time()
     for ref_tab in ref_gen:        
@@ -88,7 +89,7 @@ def index(ref_gen, table_name, testing=False, file_len=0):
         # Display progress
         t_cur = time.time()
         eta = (file_len - i) * (t_cur-t_start) / i
-        print('Indexed {0} rows / ETA: {1} s'.format(i, eta))
+        logging.info('Indexed {0} rows / ETA: {1} s'.format(i, eta))
 
     # Back to default refresh
     if not testing:
