@@ -15,6 +15,7 @@ from es_labeller import Labeller as ESLabeller
 from normalizer import ESNormalizer
 from results_analyzer import link_results_analyzer
 
+from es_connection import es
 from CONFIG import LINK_DATA_PATH
 from MODULES import LINK_MODULES, LINK_MODULE_ORDER, LINK_MODULE_ORDER_log
 
@@ -418,7 +419,7 @@ class Linker(ESAbstractDataProject):
         if columns_to_index is None:
             columns_to_index = self.ref.gen_default_columns_to_index()
         
-        labeller = ESLabeller(source, ref_table_name, col_matches, columns_to_index, certain_column_matches)
+        labeller = ESLabeller(es, source, ref_table_name, col_matches, columns_to_index, certain_column_matches)
         
         # TODO: Auto label certain pairs 
         

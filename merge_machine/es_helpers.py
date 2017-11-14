@@ -123,12 +123,11 @@ def _gen_body(query_template, row, must_filters={}, must_not_filters={}, num_res
                         ] \
                 for must_or_should in ['must', 'should']
                 },
-    
                     **{
-                       'must_not': [{'match_phrase': {field + DEFAULT_FILTER_FIELD: {'query': ' OR '.join(values)}}
-                                 } for field, values in must_not_filters.items()],
-                       'filter': [{'match_phrase': {field + DEFAULT_FILTER_FIELD: {'query': ' AND '.join(values)}}
-                                 } for field, values in must_filters.items()],
+                       'must_not': [{'match_phrase': {field + DEFAULT_FILTER_FIELD: {'query': value}}
+                                 } for field, values in must_not_filters.items() for value in values],
+                       'filter': [{'match_phrase': {field + DEFAULT_FILTER_FIELD: {'query': value}}
+                                 } for field, values in must_filters.items() for value in values],
                     })               
                   }
            }

@@ -31,6 +31,7 @@ $ ./bin/elasticsearch
 from elasticsearch import Elasticsearch
 import pandas as pd
 
+from es_connection import es
 from es_labeller import ConsoleLabeller
 
 
@@ -114,7 +115,6 @@ else:
     raise Exception('Not a valid test number')
     
     
-es = Elasticsearch(timeout=60, max_retries=10, retry_on_timeout=True)
 
 source = pd.read_csv(source_file_path, 
                     sep=source_sep, encoding=source_encoding,
@@ -203,7 +203,15 @@ labeller.console_labeller()
 #                                  {'NOMEN_LONG': ['ass', 'association', 'sportive', 
 #                                                  'foyer', 'maison', 'amicale']})
 
-    
+
+best_query = labeller.current_queries[0]
+print(best_query._as_tuple())
+print('Precision:', best_query.precision)
+print('Recall:', best_query.recall)
+print('Score:', best_query.score)
+
+assert False
+
 from collections import defaultdict
 # Majority vote on labellers
 pairs_count = dict()
@@ -227,9 +235,3 @@ for source_id, pair_count in pairs_count.items():
     else:
         res[source_id] = None
     
-print(labeller.to_emit(), '\n\n')
-
-best_query = labeller.current_queries[0]
-print('Precision:', best_query.precision)
-print('Recall:', best_query.recall)
-print('Score:', best_query.score)

@@ -731,11 +731,15 @@ class Labeller():
         '''Dedupe source on columns used for matching to avoid multiple search'''
          # Dedupe source on matching columns
         source_cols_for_match = set()
+    
         for match in match_cols:
-            if isinstance(match['source'], str):
-                source_cols_for_match.add(match['source'])
-            else:
-                source_cols_for_match.update(match['source'])
+            try:
+                if isinstance(match['source'], str):
+                    source_cols_for_match.add(match['source'])
+                else:
+                    source_cols_for_match.update(match['source'])
+            except:
+                import pdb; pdb.set_trace()
         source_cols_for_match = list(source_cols_for_match)       
         
         smaller_source = source.drop_duplicates(subset=source_cols_for_match)
@@ -2059,7 +2063,7 @@ class ConsoleLabeller(Labeller):
 
     def user_input_is_valid(self, user_input):
         if user_input[0] == '=':
-            return user_input in self.VALID_TAB_CHANGES
+            return user_input[:2] in self.VALID_TAB_CHANGES
         elif user_input in ['q', 'quit', 'pdb']:
             return True
         elif self.current_tab == 'labeller':
@@ -2073,13 +2077,13 @@ class ConsoleLabeller(Labeller):
 
     def change_tab(self, user_input):
         ''' Switch to another context tab '''
-        if user_input.lower() in ['=l', '=labeller']:
+        if user_input.lower()[:2] == '=l':
             self.current_tab = 'labeller'
             
-        elif user_input.lower() in ['=f', '=filter']:
+        elif user_input.lower()[:2] == '=f':
             self.current_tab = 'filter'
             
-        elif user_input.lower() in ['=m', '=menu']:
+        elif user_input.lower()[:2] == '=m':
             self.current_tab = 'menu'
     
     
@@ -2167,10 +2171,10 @@ class ConsoleLabeller(Labeller):
         print('other menu things ...')
     
     def display_filter(self):        
-        current_filters = 'Current filters:' \
-                         + '\n'.join('must_filters / {0} / {1}'.format(key, values) \
+        current_filters = 'Current filters:\n' \
+                         + '\n'.join('must_filters / {0} / {1}\n'.format(key, values) \
                                       for key, values in self.must_filters.items()) \
-                         + '\n'.join('must_not_filters / {0} / {1}'.format(key, values) \
+                         + '\n'.join('must_not_filters / {0} / {1}\n'.format(key, values) \
                                       for key, values in self.must_not_filters.items())
     
         print(self.FILTER_INSTRUCTIONS)
