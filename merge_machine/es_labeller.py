@@ -37,6 +37,7 @@ force diversity in cores
 from collections import defaultdict
 import copy
 import itertools
+import json
 import pickle
 import random
 
@@ -741,12 +742,13 @@ class Labeller():
         
         return smaller_source
     
-    def __init__(self, source, ref_index_name, 
+    def __init__(self, es, source, ref_index_name, 
                  match_cols, columns_to_index, 
                  certain_column_matches=None, 
                  must={}, must_not={}):
         '''        
         INPUT: 
+          - es: elastcisearch connection (elasticsearch.Elasticsearch())
           - source: pandas DataFrame containing input data to match
           - ref_index_name: name of the Elasticsearch index to search in
           - match_cols: Indication of columns to try to match:
@@ -759,14 +761,14 @@ class Labeller():
                     }
           - must_filters
         '''
-            
+        
         self.source = self._dedupe_source(source, match_cols)
         
         self.ref_index_name = ref_index_name
         self.match_cols = match_cols      
         self.columns_to_index = columns_to_index
         
-        self._init_es()
+        self.es = es
         
         self.labelled_pairs = [] # Flat list of labelled pairs
         self.labels = {} # Flat list of labels
@@ -812,11 +814,7 @@ class Labeller():
             
         for query in self.single_core_queries:
             query._sanity_check()
-    
-    def _init_es(self):
-        '''Initiate the elasticsearch connectiion'''
-        self.es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
-    
+
     def to_dict(self):
         ''' '''
         # source and ref_index_name, es, source_gen, ref_gen, and all current 
@@ -839,9 +837,65 @@ class Labeller():
         dict_['current_queries'] = [query.to_dict() for query in self.current_queries()]   
         dict_['single_core_queries'] = [query.to_dict() for query in self.single_core_queries()]   
 
+
+        dict_['has_labels'] = self.has_labels
+        dict_['current_source_idx'] = self.current_source_idx
+        dict_['current_ref_idx'] = self.current_ref_idx
+        dict_['current_source_item'] = self.current_source_item
+        dict_['current_ref_item'] = self.current_ref_item
+        dict_['current_es_score'] = self.current_es_score
+        
+        # self._init_source_gen() # creates self.source_gen
+        
+    
+    @classmethod
+    def from_dict(cls, es, source, ref_index_name, dict_):
+        
+        labeller = Labeller(es, source, ref_index_name, dict_['match_cols'], 
+                                                dict_['columns_to_index'], 
+                                                dict_['certain_column_mathes'], 
+                                                dict_['must_filters'], 
+                                                dict_['must_not_filters'])
+        
+        # Load from dict
+        labeller.labelled_pairs = dict_['labelled_pairs']
+        labeller.labels = dict_['labels'] 
+        labeller.num_rows_labelled = dict_['num_rows_labelled'] 
+        labeller.num_positive_rows_labelled = dict_['num_positive_rows_labelled'] 
+        labeller.labelled_pairs_match = dict_['labelled_pairs_match']         
+        
+        labeller.current_queries = [LabellerQueryTemplate.from_dict(x) for x in dict_['current_queries']]
+        labeller.single_core_queries = [CoreScorerQueryTemplate.from_dict(x) for x in dict_['single_core_queries']]
+        
+        labeller.has_labels = dict_['has_labels']
+        labeller._init_source_gen() # creates self.source_gen
+        
+        labeller.current_source_idx = dict_['current_source_idx']
+        labeller.current_ref_idx = dict_['current_ref_idx']
+        
+        labeller.current_source_item = dict_['current_source_item']
+        labeller.current_ref_item = dict_['current_ref_item']
+        
+        labeller.current_es_score = dict_['current_es_score']
+
+        labeller._sanity_check()
+        
+        return labeller
+
+
+    def to_json(self, file_path):
+        dict_ = self.to_dict()
+        with open(file_path, 'w') as w:
+            json.dump(dict_, w)
+    
+    @classmethod
+    def from_json(cls, file_path, es, source, ref_index_name, dict_):
+        with open(file_path) as f:
+            dict_ = json.load(f)
+        return cls.from_dict(es, source, ref_index_name, dict_)
     
     
-    def to_pickle(self, file_path):
+    def DEPRECATED_to_pickle(self, file_path):
         '''Pickle the current object'''
         temp_source_gen = self.source_gen
         temp_ref_gen = self.ref_gen
@@ -861,13 +915,13 @@ class Labeller():
         self.es = es_con
         
     @classmethod
-    def from_pickle(cls, file_path):
+    def DEPRECATED_from_pickle(cls, file_path, es):
         '''Load a labeller pickled using to_pickle'''
         
         with open(file_path, 'rb') as r:
             labeller = pickle.load(r)       
         
-        labeller._init_es()
+        labeller.es = es
         
         labeller._init_source_gen() 
         labeller._init_ref_gen() # Possible to have same pair
@@ -1538,7 +1592,7 @@ class Labeller():
         '''
 
         # Do not re-score if no labels
-        if not self.num_positive_rows_labelled[-1]:
+        if (not self.num_positive_rows_labelled) or (not self.num_positive_rows_labelled[-1]):
             print('WARNING: No labels for re-scoring')
             return
             
@@ -1887,7 +1941,7 @@ class Labeller():
         
         self._re_score_history(call_next_row=True)
         
-        assert self.current_source_idx != self.labelled_pairs_match[-1][0]
+        #        assert self.current_source_idx != self.labelled_pairs_match[-1][0]
         self._sanity_check()
         
         
@@ -1942,12 +1996,133 @@ class Labeller():
         
         return dict_to_emit
     
+
     
-    def print_emit(self):
-        '''Print current state of labeller and the active pair to label'''
-        dict_to_emit = self.to_emit()
+
+        
+    
+class ConsoleLabeller(Labeller):
+    
+    TABS = ['menu', 'labeller', 'filter']
+    
+    FILTER_INSTRUCTIONS = 'Filter instructions:\n' \
+            'Update filters for a given column with the following syntax:\n' \
+            '{must_filters or must_not_filters} / {column} / {list_of_elements_to_filter_on}\n' \
+            '\n  f.ex: must_not_filters / estab_type / ["kindergarden", "high school"] \n' \
+            '  f.ex 2: must_filters / estab_city / ["Paris"]\n' \
+            '\nThe first example will force all results from the column estab_type\n' \
+            'NOT to include either "kindergarden" or "high school"\n' \
+            'The second example will force all results from the column estab_city\n' \
+            'NOT to include the word  "Paris"\n'
+    
+    MENU_INSTRUCTIONS = '#TODO: write menu instructions'
+    
+    LABELLER_INSTRUCTIONS = 'Valid answers are: "y(es)"/"1", "n(o)"/"0", or "p(revious)" / or "q(uit)"'
+    
+    GENERAL_INSTRUCTIONS = 'You can switch tabs by using the following inputs: ' \
+            '"=labeller", "=menu" or "=filter".\n You can quit by typing "quit"'
+    
+    
+    VALID_TAB_CHANGES = ['=l', '=labeller', '=f', '=filter', '=m', '=menu']
+
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        self.current_tab = 'labeller'
+        self.finished = False # Are there any more labels
+
+    def process_input(self, user_input):
+        '''
+        Use the appropriate function to process the user input based on the 
+        current tab
+        '''        
+        if user_input == 'pdb':
+            print('You have reached debug mode. Enter "c" to resume')
+            import pdb; pdb.set_trace()
+            
+        elif user_input in ['q', 'quit']:
+            raise KeyboardInterrupt('Console labeller quit by user')
+        
+        else:
+            if user_input[0] == '=':
+                self.change_tab(user_input)
+                
+            elif self.current_tab == 'labeller':
+                self.update(user_input)
+                
+            elif self.current_tab == 'filter':
+                self.update_filter(user_input)
+                
+            elif self.current_tab == 'menu':
+                self.update_menu(user_input)
+
+    def user_input_is_valid(self, user_input):
+        if user_input[0] == '=':
+            return user_input in self.VALID_TAB_CHANGES
+        elif user_input in ['q', 'quit', 'pdb']:
+            return True
+        elif self.current_tab == 'labeller':
+            return self.answer_is_valid(user_input)
+        elif self.current_tab == 'filter':
+            return self.filter_user_input_is_valid(user_input)
+        elif self.current_tab == 'menu':
+            return self.menu_user_input_is_valid(user_input)
+            
+        
+
+    def change_tab(self, user_input):
+        ''' Switch to another context tab '''
+        if user_input.lower() in ['=l', '=labeller']:
+            self.current_tab = 'labeller'
+            
+        elif user_input.lower() in ['=f', '=filter']:
+            self.current_tab = 'filter'
+            
+        elif user_input.lower() in ['=m', '=menu']:
+            self.current_tab = 'menu'
+    
+    
+    def display(self):
+        '''Show the appropriate display according to the current tab'''
         
         print('\n' + '*'*50)
+        print('*** In tab: {0} ***'.format(self.current_tab))
+        
+        if self.current_tab == 'labeller':
+            self.display_pair()
+            
+        elif self.current_tab == 'menu':
+            self.display_menu()
+            
+        elif self.current_tab == 'filter':
+            self.display_filter()
+
+        if self.finished:
+            print('>>> No more pairs to label. You can still update filters.' \
+                  'Type "quit" to exit labeller.')
+
+    def display_instructions(self):        
+        if self.current_tab == 'labeller':
+            print(self.LABELLER_INSTRUCTIONS)
+            
+        elif self.current_tab == 'menu':
+            print(self.MENU_INSTRUCTIONS)
+            
+        elif self.current_tab == 'filter':
+            print(self.FILTER_INSTRUCTIONS)
+
+        print('\n', self.GENERAL_INSTRUCTIONS)
+
+        if self.finished:
+            print('>>> No more pairs to label. You can still update filters.' \
+                  'Type "quit" to exit labeller.')
+
+
+    def display_pair(self):
+        '''Print current state of labeller and the active pair to label'''
+        dict_to_emit = self.to_emit()
+    
         print('({0}): {1}'.format(dict_to_emit['query_ranking'], dict_to_emit['query']))
         print('Precision: {0}; Recall: {1}; Score: {2}'.format(
                                           dict_to_emit['estimated_precision'],
@@ -1986,77 +2161,75 @@ class Labeller():
                 for ref_col in ref_cols:
                     print('(R): {0} -> {1}'.format(ref_col, dict_to_emit['ref_item']['_source'][ref_col]))
 
-    
-    def console_input(self):
-        '''
-        Print and input to perform labelling in console        
-        '''
-        self.print_emit()
-        return input('\n > ')
-    
 
+    def display_menu(self):
+        print('*** THE MAGICAL CSV MERGE MACHINE ***')
+        print('other menu things ...')
+    
+    def display_filter(self):        
+        current_filters = 'Current filters:' \
+                         + '\n'.join('must_filters / {0} / {1}'.format(key, values) \
+                                      for key, values in self.must_filters.items()) \
+                         + '\n'.join('must_not_filters / {0} / {1}'.format(key, values) \
+                                      for key, values in self.must_not_filters.items())
+    
+        print(self.FILTER_INSTRUCTIONS)
+        print(current_filters)
+
+    
+    def filter_user_input_is_valid(self, user_input):
+        values = [x.strip() for x in user_input.split('/', 2)]
+        
+        return (user_input.count('/') >= 2) \
+                and (values[0] in ['must_filters', 'must_not_filters'])     
         
     
-class ConsoleLabeller(Labeller):
+    def menu_user_input_is_valid(self, user_input):
+        return False 
     
-    TABS = ['menu', 'labeller', 'filter']
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.current_tab = 'labeller'
+    def update_filter(self, user_input):
         
-    def display(self):
-        if self.current_tab == 'labeller':
-            self.display_labeller()
-            
-        elif self.current_tab == 'menu':
-            self.display_menu()
-            
-        elif self.current_tab == 'filter':
-            self.display_filter()
-    
-    def menu_update(self, user_input):
-        ''''''
-        if user_input.lower() in ['l', 'labeller']:
-            self.current_tab = 'labeller'
-        elif user_input.lower() in ['f', 'filter']:
-            pass
+        values = [x.strip() for x in user_input.split('/', 2)]
         
-    def update(self, user_input):
+        condition = values[0]
+        column = values[1]
+        try:
+            list_of_strings = eval(values[2])
+            if isinstance(list_of_strings, str):
+                list_of_strings = [list_of_strings]
+        except:
+            list_of_strings = [values[2]]
         
-        if user_input == 'pdb':
-            print('You have reached debug mode. Enter "c" to resume')
-            import pdb; pdb.set_trace()
-            
-        elif user_input in ['q', 'quit']:
-            raise KeyboardInterrupt('Console labeller quit by user')
+        must_filters = self.must_filters
+        must_not_filters = self.must_not_filters
+        
+        if condition == 'must_filters':
+            must_filters[column] = list_of_strings
         else:
-            if self.current_tab == 'labeller':
-                self.update(user_input)
-                
-            elif self.current_tab == 'menu':
-                self.menu_update(user_input)
-                
-            elif self.current_tab == 'filter':
-                self.filter_update(user_input)        
+            must_not_filters[column] = list_of_strings
+        
+        #
+        self.update_musts(must_filters, must_not_filters)
+    
 
-    def console_labeller(self, max_num_labels=100):
-        finished = False
-        for i in range(max_num_labels):  
-            
-            if (not self.has_labels) or finished:
+    def next_action(self):
+        ''''''
+        display = True
+        for x in range(10):
+            if display:
+                self.display()
+            user_input = input('\n > ')
+            if self.user_input_is_valid(user_input):
+                self.process_input(user_input)
                 break
-            
-            for x in range(10):
-                if self.has_labels:
-                    user_input = self.console_input()
-                    if self.answer_is_valid(user_input):
-                        self.update(user_input)
-                        break
-                    elif user_input == 'quit':
-                        finished = True
-                        break
-                    else:
-                        print('Invalid answer ("y(es)"/"1", "n(o)"/"0", or "p(revious)" / or "q(uit)") ')
-                else:
-                    break  
+            else:
+                print('\n/!\\ INVALID ANSWER /!\\')
+                self.display_instructions()
+                display = False
+        else:
+            raise RuntimeError('Too many consecutive wrong orders')
+    
+    def console_labeller(self, max_num_actions=200):
+        for i in range(max_num_actions):
+            self.next_action()
+

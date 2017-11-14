@@ -28,6 +28,7 @@ $ ./bin/elasticsearch
 
 """
 
+from elasticsearch import Elasticsearch
 import pandas as pd
 
 from es_labeller import ConsoleLabeller
@@ -40,7 +41,7 @@ file_len = 10*10**6
 
 sirene_index_name = '123vivalalgerie2'
 
-test_num = 2
+test_num = 0
 
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
@@ -111,13 +112,14 @@ elif test_num == 5:
 
 else:
     raise Exception('Not a valid test number')
-
+    
+    
+es = Elasticsearch(timeout=60, max_retries=10, retry_on_timeout=True)
 
 source = pd.read_csv(source_file_path, 
                     sep=source_sep, encoding=source_encoding,
                     dtype=str, nrows=chunksize)
 source = source.where(source.notnull(), '')
-
 
 if test_num in [0,1,2,5]:
     columns_to_index = {
@@ -173,7 +175,7 @@ if test_num == 2:
     labellers = dict()
 
     for i in range(3):
-        labellers[i] = ConsoleLabeller(source, ref_table_name, match_cols, columns_to_index)
+        labellers[i] = ConsoleLabeller(es, source, ref_table_name, match_cols, columns_to_index)
         labellers[i].auto_label(columns_certain_match)
         
     
@@ -186,10 +188,10 @@ if test_num == 2:
     
 elif test_num == 4:
     columns_certain_match = {'source': ['grid'], 'ref': ['ID']}
-    labeller = ConsoleLabeller(source, ref_table_name, match_cols, columns_to_index)
+    labeller = ConsoleLabeller(es, source, ref_table_name, match_cols, columns_to_index)
     
 else:    
-    labeller = ConsoleLabeller(source, ref_table_name, match_cols, columns_to_index)
+    labeller = ConsoleLabeller(es, source, ref_table_name, match_cols, columns_to_index)
 
 
 labeller.console_labeller()
