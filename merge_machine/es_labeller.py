@@ -705,6 +705,8 @@ class Labeller():
                  
                  'forget_row': 'f',
                  'f': 'f',
+                 'uncertain': 'f',
+                 'u': 'f',
                  
                  'previous': 'p',
                  'p': 'p',
