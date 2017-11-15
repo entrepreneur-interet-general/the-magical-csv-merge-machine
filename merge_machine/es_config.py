@@ -53,6 +53,13 @@ filters = {
         "type" : "length",
         "min": 4
     },
+            
+            
+    "leading_zero_trim": {
+        "type": "pattern_replace",
+        "pattern": "^0+(.*)",
+        "replacement": "$1"
+    },
 
 # =============================================================================
 # French re-implement
@@ -133,7 +140,8 @@ analyzers = {
         'filter': ['lowercase']
     },        
     "integers": {
-        'tokenizer': 'integers'
+        'tokenizer': 'integers',
+        'filter': ['leading_zero_trim']
     },
     "n_grams": { # char_n_grams
         'tokenizer': 'char_n_grams',
