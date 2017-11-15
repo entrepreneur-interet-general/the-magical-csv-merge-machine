@@ -606,7 +606,6 @@ def DETUPLIFY_TODO_DELETE(arg):
         return arg[0]
     return arg
 
-
 def _gen_all_single_query_template_tuples(match_cols, columns_to_index, bool_levels,
                                           boost_levels):
     '''Generate a list of single query tuples'''
@@ -899,7 +898,7 @@ class Labeller():
         return cls.from_dict(es, source, ref_index_name, dict_)
     
     
-    def DEPRECATED_to_pickle(self, file_path):
+    def to_pickle(self, file_path):
         '''Pickle the current object'''
         temp_source_gen = self.source_gen
         temp_ref_gen = self.ref_gen
@@ -919,7 +918,7 @@ class Labeller():
         self.es = es_con
         
     @classmethod
-    def DEPRECATED_from_pickle(cls, file_path, es):
+    def from_pickle(cls, file_path, es):
         '''Load a labeller pickled using to_pickle'''
         
         with open(file_path, 'rb') as r:

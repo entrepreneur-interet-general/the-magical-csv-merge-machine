@@ -312,7 +312,7 @@ class Linker(ESAbstractDataProject):
         '''Reads labeller stored in pickle'''
         pickle_path = self.path_to(module_name, 'labeller.pkl')
         
-        labeller = ESLabeller.from_pickle(pickle_path)            
+        labeller = ESLabeller.from_pickle(pickle_path, es)            
         return labeller
 
     #==========================================================================

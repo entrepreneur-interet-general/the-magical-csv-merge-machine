@@ -939,7 +939,7 @@ def socket_load_labeller(message_received):
     
     encoder = MyEncoder()
     
-    flask._app_ctx_stack.labeller_mem[project_id]['labeller'].print_emit() # Print what is about to be emited
+    # flask._app_ctx_stack.labeller_mem[project_id]['labeller'].print_emit() # Print what is about to be emited
     emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit()))
 
 
@@ -949,7 +949,7 @@ def socket_get_answer(message_received):
     
     message_received = json.loads(message_received)
     logging.info(message_received)
-    project_id = message_received['project_id']
+    project_id = message_received['project_id'] 
     user_input = message_received['user_input']
 
     #message = 'Expect to have about 50% of good proposals in this phase. The more you label, the better...'
@@ -960,7 +960,7 @@ def socket_get_answer(message_received):
         raise ValueError('Answer received "{0}" is not valid'.format(user_input))
         
     encoder = MyEncoder()
-    flask._app_ctx_stack.labeller_mem[project_id]['labeller'].print_emit() # Print what is about to be emited
+    # flask._app_ctx_stack.labeller_mem[project_id]['labeller'].print_emit() # Print what is about to be emited
     emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit()))
 
 @socketio.on('update_filters', namespace='/')
@@ -982,7 +982,7 @@ def socket_update_musts(message_received):
     flask._app_ctx_stack.labeller_mem[project_id]['labeller'].update_musts(must, must_not)
     
     encoder = MyEncoder()
-    flask._app_ctx_stack.labeller_mem[project_id]['labeller'].print_emit() # Print what is about to be emited
+    # flask._app_ctx_stack.labeller_mem[project_id]['labeller'].print_emit() # Print what is about to be emited
     emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit()))
 
 @socketio.on('complete_training', namespace='/')
