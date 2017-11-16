@@ -38,6 +38,7 @@ from collections import defaultdict
 import copy
 import itertools
 import json
+import logging
 import pickle
 import random
 
@@ -709,9 +710,7 @@ class Labeller():
                  'u': 'f',
                  
                  'previous': 'p',
-                 'p': 'p',
-
-                 'quit': 'q'             
+                 'p': 'p'         
                  }
 
     #min_precision_tab = [(20, 0.7), (10, 0.5), (5, 0.3)]
@@ -1500,12 +1499,8 @@ class Labeller():
         uncertain = self.VALID_ANSWERS[user_input] == 'u'
         forget_row = self.VALID_ANSWERS[user_input] == 'f'
         use_previous = self.VALID_ANSWERS[user_input] == 'p'
-        quit_ = self.VALID_ANSWERS[user_input] == 'q'
         
-        assert yes + no + uncertain + forget_row + use_previous + quit_ == 1
-    
-        if quit_:
-            raise RuntimeError('User quit labeller by typing "quit"')
+        assert yes + no + uncertain + forget_row + use_previous == 1            
     
         if use_previous:
             self.previous()
@@ -2047,7 +2042,8 @@ class ConsoleLabeller(Labeller):
             import pdb; pdb.set_trace()
             
         elif user_input in ['q', 'quit']:
-            raise KeyboardInterrupt('Console labeller quit by user')
+            logging.warning('Console labeller quit by user')
+            self.finished = True
         
         else:
             if user_input[0] == '=':
@@ -2063,7 +2059,9 @@ class ConsoleLabeller(Labeller):
                 self.update_menu(user_input)
 
     def user_input_is_valid(self, user_input):
-        if user_input[0] == '=':
+        if not user_input:
+            return False
+        elif user_input[0] == '=':
             return user_input[:2] in self.VALID_TAB_CHANGES
         elif user_input in ['q', 'quit', 'pdb']:
             return True
@@ -2074,8 +2072,6 @@ class ConsoleLabeller(Labeller):
         elif self.current_tab == 'menu':
             return self.menu_user_input_is_valid(user_input)
             
-        
-
     def change_tab(self, user_input):
         ''' Switch to another context tab '''
         if user_input.lower()[:2] == '=l':
@@ -2236,5 +2232,7 @@ class ConsoleLabeller(Labeller):
     
     def console_labeller(self, max_num_actions=200):
         for i in range(max_num_actions):
+            if self.finished:
+                return
             self.next_action()
 

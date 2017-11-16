@@ -27,7 +27,8 @@ import pandas as pd
 
 from es_helpers import _bulk_search
 
-es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
+from es_connection import es
+
 
 def es_linker(source, params):
     '''
@@ -36,7 +37,8 @@ def es_linker(source, params):
     
     INPUT:
         source: pandas.DataFrame containing all source items
-        params:    
+        params:
+            es_conn: Parameters for the elasticsearch connection
             index_name: name of the Elasticsearch index to fetch from
             query_template: The query template
             threshold: minimum value of score for this query_template for a match
@@ -44,6 +46,8 @@ def es_linker(source, params):
             must_not: terms to exclude by field from search (OR: will exclude if ANY is found)
             exact_pairs: list of (source_id, ES_ref_id) which are certain matches
     '''
+    
+    #es = Elasticsearch(**params['es_conn'])
     
     index_name = params['index_name']
     query_template = params['query_template']

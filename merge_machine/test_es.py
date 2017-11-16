@@ -31,8 +31,10 @@ $ ./bin/elasticsearch
 from elasticsearch import Elasticsearch, client
 import pandas as pd
 
-from es_connection import es
+from es_connection import es, ic
+import es_insert
 from es_labeller import ConsoleLabeller
+from es_match import es_linker
 
 
 dir_path = 'data/sirene'
@@ -56,6 +58,8 @@ if test_num == 0:
     
     
     ref_table_name = sirene_index_name
+    
+    # must_not_filters / NOMEN_LONG / ["ASSOCIATION", "ASSOC", 'ASS', 'PARENTS', 'CONSEIL', 'FCPE', 'FSE', 'FOYER', 'LYCEENS', 'MAISON']
     
 elif test_num == 1:
     source_file_path = 'local_test_data/integration_5/data_ugly.csv'
@@ -119,50 +123,15 @@ else:
     raise Exception('Not a valid test number')
     
     
-# =============================================================================
-# Index the referential
-# =============================================================================
-    
-testing = True     
-
-# Initialize Elasticsearch connection
-es = Elasticsearch(timeout=60, max_retries=10, retry_on_timeout=True)
-ic = client.IndicesClient(es)
-
-if force_re_index or ic.exists(ref_table_name):
-    if ic.exists(ref_table_name):
-        ic.delete(ref_table_name)
-    
-    
-    
-
-ref_gen = pd.read_csv(ref_path, 
-                  usecols=columns_to_index.keys(),
-                  dtype=str, chunksize=self.es_insert_chunksize)
-
-if self.has_index() and force:
-    self.ic.delete(self.index_name)
-    
-if not self.has_index():
-    logging.info('Creating new index')
-    log = self._init_active_log('INIT', 'transform')
-    
-    index_settings = es_insert.gen_index_settings(columns_to_index)
-    
-    logging.warning('Creating index')
-    logging.warning(index_settings)
-    self.ic.create(self.index_name, body=json.dumps(index_settings))    
-    logging.warning('Inserting in index')
-    es_insert.index(ref_gen, self.index_name, testing)
-
-    log = self._end_active_log(log, error=False)
-    
-    
 
 source = pd.read_csv(source_file_path, 
                     sep=source_sep, encoding=source_encoding,
                     dtype=str, nrows=chunksize)
 source = source.where(source.notnull(), '')
+
+# =============================================================================
+# Define the columns to index
+# =============================================================================
 
 if test_num in [0,1,2,5]:
     columns_to_index = {
@@ -213,6 +182,33 @@ elif test_num in [3, 4]:
                     }
             }
 
+
+# =============================================================================
+# Index the referential
+# =============================================================================
+import json
+    
+testing = True     
+
+
+if force_re_index or (not ic.exists(ref_table_name)):
+    if ic.exists(ref_table_name):
+        ic.delete(ref_table_name)
+    
+    ref_gen = pd.read_csv(ref_file_path, 
+              usecols=columns_to_index.keys(),
+              dtype=str, chunksize=40000)
+    
+    index_settings = es_insert.gen_index_settings(columns_to_index)
+    
+    ic.create(ref_table_name, body=json.dumps(index_settings))    
+    es_insert.index(ref_gen, ref_table_name, testing)
+
+    
+# =============================================================================
+# Initiate the labellers
+# =============================================================================
+
 if test_num == 2:
     columns_certain_match = {'source': ['SIRET'], 'ref': ['SIRET']}
     labellers = dict()
@@ -239,8 +235,15 @@ else:
 
 labeller.console_labeller()
 
-new_source = es_linker(source, params)
+(new_source, _) = es_linker(source, labeller.export_best_params())
 
+
+for (i, row) in new_source.iloc[:20].iterrows():
+    print('*'*50)
+    for match in match_cols:
+        print(match['source'], '->', row[match['source']])
+        print(match['ref'], '->', row[match['ref'] + '__REF'])
+        print('\n')
 
 
 

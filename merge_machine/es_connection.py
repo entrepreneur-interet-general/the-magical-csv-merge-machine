@@ -26,6 +26,7 @@ if CONFIG.PRODUCTION_MODE:
             break
 else:
     es = Elasticsearch(timeout=60, max_retries=10, retry_on_timeout=True)
+    
 es_version = es.info()['version']['number']
 
 ic = client.IndicesClient(es)

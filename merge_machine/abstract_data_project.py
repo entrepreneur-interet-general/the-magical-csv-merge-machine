@@ -709,6 +709,8 @@ class AbstractDataProject(AbstractProject):
     
 class ESAbstractDataProject(AbstractDataProject):
     es_insert_chunksize = 40000
+    self.es = Elasticsearch(**es_conn)
+    self.ic = client.
 
     def __init__(self, *argv, **kwargs):
         super().__init__(*argv, **kwargs)
