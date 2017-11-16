@@ -36,11 +36,11 @@ from itertools import tee
 import os
 import time
 
-from elasticsearch import Elasticsearch, client
 import numpy as np
 import pandas as pd
 
 from abstract_project import AbstractProject, NOT_IMPLEMENTED_MESSAGE
+from es_connection import es, ic
 import es_insert
 
 MINI_PREFIX = 'MINI__'
@@ -543,26 +543,35 @@ class AbstractDataProject(AbstractProject):
         file_path = self.path_to(self.mem_data_info['module_name'], 
                                  self.mem_data_info['file_name'])
 
-        print(self.mem_data_info)
+        
+        # TODO: move this. This was done to avoid concat with init when no changes were made
         nrows = 0
-        with open(file_path, 'w') as w:
-            
-            # If any data was transformed: write the transformed data
-            # if self.mem_data_info['data_was_transformed']:
-            try:
-                # Enumerate to know whether or not to write header (i==0)
-                for i, part_tab in enumerate(self.mem_data):
-                    logging.debug('At part {0}'.format(i))
-                    part_tab.to_csv(w, encoding='utf-8', 
-                                         index=False,  
-                                         header=i==0)
-                                         #quoting=csv.QUOTE_NONNUMERIC)
-                    nrows += len(part_tab)
-                    
-            except KeyboardInterrupt as e:
-                logging.error(e)
+        if os.path.isfile(file_path):
+            logging.warning('File {0} already exists. Will not be re-written')
 
+        else:
+            print(self.mem_data_info)
+            with open(file_path, 'w') as w:
+                # If any data was transformed: write the transformed data
+                # if self.mem_data_info['data_was_transformed']:
+                try:
+                    # Enumerate to know whether or not to write header (i==0)
+                    for i, part_tab in enumerate(self.mem_data):
+                        logging.debug('At part {0}'.format(i))
+                        part_tab.to_csv(w, encoding='utf-8', 
+                                             index=False,  
+                                             header=i==0)
+                                             #quoting=csv.QUOTE_NONNUMERIC)
+                        nrows += len(part_tab)
+                        
+                except KeyboardInterrupt as e:
+                    logging.error(e)
 
+            if nrows == 0:
+                raise Exception('No data was written, make sure you loaded data before'
+                               + ' calling write_data')
+
+        # TODO: check if valid also when no changes are made...
         logging.info('Wrote to: {0}'.format(file_path))
         self._write_log_buffer(written=True)
         self._write_run_info_buffer()
@@ -570,9 +579,7 @@ class AbstractDataProject(AbstractProject):
         # Reset data_was_transformed
         self.mem_data_info['data_was_transformed'] = False
     
-        if nrows == 0:
-            raise Exception('No data was written, make sure you loaded data before'
-                           + ' calling write_data')
+
         return nrows
 
         
@@ -702,8 +709,6 @@ class AbstractDataProject(AbstractProject):
     
 class ESAbstractDataProject(AbstractDataProject):
     es_insert_chunksize = 40000
-    es = Elasticsearch(timeout=60, max_retries=10, retry_on_timeout=True)
-    ic = client.IndicesClient(es)
 
     def __init__(self, *argv, **kwargs):
         super().__init__(*argv, **kwargs)
@@ -719,7 +724,7 @@ class ESAbstractDataProject(AbstractDataProject):
             bulk += json.dumps({"index" : self.index_name}) + '\n'
             bulk += json.dumps({"query" : {"match" : {"_id": id_}}, "size": 1}) + '\n'
             
-        res = self.es.msearch(bulk)
+        res = es.msearch(bulk)
         return res     
     
     def create_index(self, ref_path, columns_to_index, force=False):
@@ -738,7 +743,7 @@ class ESAbstractDataProject(AbstractDataProject):
                           dtype=str, chunksize=self.es_insert_chunksize)
         
         if self.has_index() and force:
-            self.ic.delete(self.index_name)
+            ic.delete(self.index_name)
             
         if not self.has_index():
             logging.info('Creating new index')
@@ -748,7 +753,7 @@ class ESAbstractDataProject(AbstractDataProject):
             
             logging.warning('Creating index')
             logging.warning(index_settings)
-            self.ic.create(self.index_name, body=json.dumps(index_settings))    
+            self.ic.create(es, self.index_name, body=json.dumps(index_settings))    
             logging.warning('Inserting in index')
             es_insert.index(ref_gen, self.index_name, testing)
         
@@ -758,10 +763,10 @@ class ESAbstractDataProject(AbstractDataProject):
         self._write_log_buffer(written=False)
     
     def delete_index(self):
-        return self.ic.delete(self.index_name)
+        return ic.delete(self.index_name)
         
     def has_index(self):
-        return self.ic.exists(self.index_name)     
+        return ic.exists(self.index_name)     
     
     def index_is_complete(self):
         pass

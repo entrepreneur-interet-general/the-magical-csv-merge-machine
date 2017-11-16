@@ -13,6 +13,8 @@ from elasticsearch import client, Elasticsearch
 from linker import ESLinker
 from normalizer import ESNormalizer
 
+from es_connection import es
+
 from CONFIG import LINK_DATA_PATH, NORMALIZE_DATA_PATH
 
 def _check_project_type(project_type):
@@ -123,15 +125,27 @@ class Admin():
     
 
 # =============================================================================
+# Loose link projects (missing normalization projects)
+# =============================================================================
+    def delete_loose_links(self):
+        '''
+        Delete link projects for which a normalization project is non existant or not defined
+        '''
+        for proj_metadata in self.list_projects('link'):
+            if (proj_metadata['files']['source'] is None) \
+                or (proj_metadata['files']['ref'] is None) \
+                or ((proj_metadata['files']['source']['project_id'] not in self.normalize_project_ids)) \
+                or ((proj_metadata['files']['ref']['project_id'] not in self.normalize_project_ids)):
+                self.remove_project('link', proj_metadata['project_id'])
+
+# =============================================================================
 # Elasticsearch
 # =============================================================================
     def list_elasticsearch_indices(self):
-        es = Elasticsearch()
         ic = client.IndicesClient(es)
         return set(ic.stats()['indices'].keys())
         
     def delete_index(self, index_name):
-        es = Elasticsearch()
         ic = client.IndicesClient(es)
         print('Deleting index {0}'.format(index_name))
         return ic.delete(index_name)
@@ -205,9 +219,13 @@ if __name__ == '__main__':
                         action='store_true',
                         help='Flag to keep Elasticsearch indices despite having'
                         ' deleted the MMM projects')    
+    parser.add_argument('-kll', '--keep_loose_links',
+                        action='store_true',
+                        help='Flag to NOT delete loose link projects')    
 
+    args = parser.parse_args()
     
-    args = parser.parse_args('list link -pa all -hfn 24 -w before'.split())
+    #args = parser.parse_args('list link -pa all -hfn 24 -w before'.split())
     
     
     
@@ -228,6 +246,8 @@ if __name__ == '__main__':
     
     print(res)
     
-    if (args.request == 'delete') and (not args.keep_indices):
-        admin.delete_unused_indices()
-    
+    if (args.request == 'delete'):
+        if not args.keep_indices:
+            admin.delete_unused_indices()
+        if not args.keep_loose_links:
+            admin.delete_loose_links()

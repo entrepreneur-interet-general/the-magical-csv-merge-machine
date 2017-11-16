@@ -232,7 +232,7 @@ def _init_project(project_type,
     DEV NOTE: Use this in api calls that have project_type as a variable
     '''
     _check_project_type(project_type)
-    
+
     if project_type == 'link':
         proj = ESLinker(project_id=project_id, 
                           create_new=create_new, 
@@ -243,6 +243,7 @@ def _init_project(project_type,
                               create_new=create_new, 
                               display_name=display_name, 
                               description=description)
+    
     return proj
             
 

@@ -8,9 +8,8 @@ Created on Tue Aug 29 13:15:15 2017
 Deals with inserting a table in Elasticsearch
 
 TODO: look into missing document
-
 """
-from distutils.version import LooseVersion
+
 import json
 import logging
 import os
@@ -21,26 +20,6 @@ import pandas as pd
 
 from es_config import gen_index_settings
 
-import CONFIG
-if CONFIG.PRODUCTION_MODE:
-    for i in range(0, 3): # Max retries
-        while True:
-            try:
-                es = Elasticsearch('http://elasticsearch:9200', http_auth=('elastic', 'changeme'),
-                    timeout=30, max_retries=10, retry_on_timeout=True)
-                if not es.ping():
-                    raise ValueError("ElasticSearch connection failed!")
-            except:
-                time.sleep(30)
-                continue
-            break
-else:
-    es = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
-es_version = es.info()['version']['number']
-
-if LooseVersion(es_version) < LooseVersion('5.6.1'):
-    raise RuntimeError('ES Version is too old. Upgrade to 5.6.1 or newer.')
-
 def pre_process_tab(tab):
     ''' Clean tab before insertion '''
     for x in tab.columns:
@@ -48,7 +27,7 @@ def pre_process_tab(tab):
     return tab
 
 
-def index(ref_gen, table_name, testing=False, file_len=0):
+def index(es, ref_gen, table_name, testing=False, file_len=0):
     '''
     Insert values from ref_gen in the Elasticsearch index
     

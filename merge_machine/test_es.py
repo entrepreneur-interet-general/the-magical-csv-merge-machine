@@ -28,7 +28,7 @@ $ ./bin/elasticsearch
 
 """
 
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, client
 import pandas as pd
 
 from es_connection import es
@@ -40,16 +40,20 @@ chunksize = 3000
 file_len = 10*10**6
 
 
+force_re_index = False
+
 sirene_index_name = '123vivalalgerie2'
 
 test_num = 0
 
 if test_num == 0:
     source_file_path = 'local_test_data/source.csv'
+    ref_file_path = ''
     match_cols = [{'source': 'commune', 'ref': 'LIBCOM'},
                   {'source': 'lycees_sources', 'ref': 'NOMEN_LONG'}]    
     source_sep = ','
     source_encoding = 'utf-8'
+    
     
     ref_table_name = sirene_index_name
     
@@ -113,6 +117,45 @@ elif test_num == 5:
 
 else:
     raise Exception('Not a valid test number')
+    
+    
+# =============================================================================
+# Index the referential
+# =============================================================================
+    
+testing = True     
+
+# Initialize Elasticsearch connection
+es = Elasticsearch(timeout=60, max_retries=10, retry_on_timeout=True)
+ic = client.IndicesClient(es)
+
+if force_re_index or ic.exists(ref_table_name):
+    if ic.exists(ref_table_name):
+        ic.delete(ref_table_name)
+    
+    
+    
+
+ref_gen = pd.read_csv(ref_path, 
+                  usecols=columns_to_index.keys(),
+                  dtype=str, chunksize=self.es_insert_chunksize)
+
+if self.has_index() and force:
+    self.ic.delete(self.index_name)
+    
+if not self.has_index():
+    logging.info('Creating new index')
+    log = self._init_active_log('INIT', 'transform')
+    
+    index_settings = es_insert.gen_index_settings(columns_to_index)
+    
+    logging.warning('Creating index')
+    logging.warning(index_settings)
+    self.ic.create(self.index_name, body=json.dumps(index_settings))    
+    logging.warning('Inserting in index')
+    es_insert.index(ref_gen, self.index_name, testing)
+
+    log = self._end_active_log(log, error=False)
     
     
 
@@ -195,6 +238,11 @@ else:
 
 
 labeller.console_labeller()
+
+new_source = es_linker(source, params)
+
+
+
 
 #    if i == 15:
 #        print('Updating musts')

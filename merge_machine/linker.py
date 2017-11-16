@@ -218,8 +218,10 @@ class Linker(ESAbstractDataProject):
         (module_name, file_name) = proj.get_last_written()
     
         # TODO: add warning for implicit use of mini
-        if proj.metadata['has_mini']:
-            proj = 'MINI__' + file_name.replace('MINI__', '')
+        if proj.metadata['has_mini'] and (file_role == 'source'):
+            file_name = 'MINI__' + file_name.replace('MINI__', '')
+        if proj.metadata['has_mini'] and (file_role == 'ref'):
+            file_name = file_name.replace('MINI__', '')
 
         # Check that         
         self.metadata['files'][file_role] = {'public': public, 
