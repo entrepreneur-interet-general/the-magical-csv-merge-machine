@@ -12,11 +12,9 @@ import json
 import unidecode
 
 def deduplicate(tab, columns):
-    '''Creates a smaller veri'''
+    '''Creates a smaller version of the original table'''
     
-    
-    # indexes is 
-    
+    raise NotImplementedError
     return smaller_tab, indexes
 
 
@@ -25,6 +23,8 @@ def re_duplicate(tab, smaller_tab, columns, indexes):
     Takes the output of deduplicate and recreates the table with the original
     size.
     '''
+    raise NotImplementedError
+    return original_tab
     
     
 

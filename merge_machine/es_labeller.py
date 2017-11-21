@@ -1963,6 +1963,12 @@ class Labeller():
         dict_to_emit['must_filters'] = self.must_filters
         dict_to_emit['must_not_filters'] = self.must_not_filters
         
+        # Info on labeller (counts)
+        dict_to_emit['num_pos'] = sum(self.VALID_ANSWERS[x]=='y' for x in self.labels.values())
+        dict_to_emit['num_neg'] = sum(self.VALID_ANSWERS[x]=='n' for x in self.labels.values())
+        dict_to_emit['num_unc'] = sum(self.VALID_ANSWERS[x]=='u' for x in self.labels.values())
+        dict_to_emit['num_for'] = sum(self.VALID_ANSWERS[x]=='f' for x in self.labels.values())
+        
         # Info on current query
         # TODO: on  previous, current_query is no longer valid
         current_query = self.current_query
@@ -1997,13 +2003,19 @@ class Labeller():
         return dict_to_emit
     
 
-    
 
         
     
 class ConsoleLabeller(Labeller):
     
     TABS = ['menu', 'labeller', 'filter']
+    
+    HELP = '\n*** HELP: What am I supposed to do? ***\n' \
+            'The labeller object helps to learn the optimal parameters to use with' \
+            ' es_linker. There are two tabs you can switch through: filters and' \
+            ' labeller. The labeller tab is used to actually label pairs as match' \
+            ' of not_match. The filter tab is used to restrict search withing the' \
+            ' referential by adding mandatory or forbidden words in specific columns'
     
     FILTER_INSTRUCTIONS = 'Filter instructions:\n' \
             'Update filters for a given column with the following syntax:\n' \
@@ -2045,6 +2057,9 @@ class ConsoleLabeller(Labeller):
             logging.warning('Console labeller quit by user')
             self.finished = True
         
+        elif user_input in ['h', 'help']:  
+            print(self.HELP)
+            self.display_instructions()
         else:
             if user_input[0] == '=':
                 self.change_tab(user_input)
@@ -2063,7 +2078,7 @@ class ConsoleLabeller(Labeller):
             return False
         elif user_input[0] == '=':
             return user_input[:2] in self.VALID_TAB_CHANGES
-        elif user_input in ['q', 'quit', 'pdb']:
+        elif user_input in ['q', 'quit', 'pdb', 'h', 'help']:
             return True
         elif self.current_tab == 'labeller':
             return self.answer_is_valid(user_input)
@@ -2103,7 +2118,9 @@ class ConsoleLabeller(Labeller):
             print('>>> No more pairs to label. You can still update filters.' \
                   'Type "quit" to exit labeller.')
 
-    def display_instructions(self):        
+    def display_instructions(self): 
+        print('\n*** INSTRUCTIONS for {0} ***'.format(self.current_tab))
+        
         if self.current_tab == 'labeller':
             print(self.LABELLER_INSTRUCTIONS)
             
