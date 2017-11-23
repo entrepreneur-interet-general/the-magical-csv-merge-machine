@@ -750,14 +750,14 @@ class ESAbstractDataProject(AbstractDataProject):
         if not self.has_index():
             logging.info('Creating new index')
             log = self._init_active_log('INIT', 'transform')
-            
+                    
             index_settings = es_insert.gen_index_settings(columns_to_index)
             
             logging.warning('Creating index')
             logging.warning(index_settings)
-            self.ic.create(es, self.index_name, body=json.dumps(index_settings))    
+            self.ic.create(self.index_name, body=json.dumps(index_settings))    
             logging.warning('Inserting in index')
-            es_insert.index(ref_gen, self.index_name, testing)
+            es_insert.index(es, ref_gen, self.index_name, testing)
         
             log = self._end_active_log(log, error=False)
         else:
