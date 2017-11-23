@@ -28,13 +28,12 @@ $ ./bin/elasticsearch
 
 """
 
-from elasticsearch import Elasticsearch, client
 import pandas as pd
 
 from es_connection import es, ic
-import es_insert
-from es_labeller import ConsoleLabeller
-from es_match import es_linker
+from merge_machine import es_insert
+from merge_machine.es_labeller import ConsoleLabeller
+from merge_machine.es_match import es_linker
 
 
 dir_path = 'data/sirene'
@@ -235,7 +234,7 @@ else:
 
 labeller.console_labeller()
 
-(new_source, _) = es_linker(source, labeller.export_best_params())
+(new_source, _) = es_linker(es, source, labeller.export_best_params())
 
 
 for (i, row) in new_source.iloc[:20].iterrows():

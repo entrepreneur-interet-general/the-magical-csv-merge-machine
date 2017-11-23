@@ -8,10 +8,10 @@ Created on Mon Apr 24 15:46:00 2017
 from collections import  defaultdict
 import os
 
+from merge_machine.es_labeller import Labeller as ESLabeller
 import pandas as pd
 
 from abstract_data_project import ESAbstractDataProject
-from es_labeller import Labeller as ESLabeller
 from normalizer import ESNormalizer
 from results_analyzer import link_results_analyzer
 

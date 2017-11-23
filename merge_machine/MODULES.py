@@ -6,7 +6,7 @@ Created on Mon Apr 24 17:18:28 2017
 @author: leo
 """
 
-from es_match import es_linker
+from es_linker import es_linker
 from results_analyzer import link_results_analyzer
 from missing_values import infer_mvs, replace_mvs, sample_mvs_ilocs
 from preprocess_fields_v3 import infer_types, normalize_values, sample_types_ilocs

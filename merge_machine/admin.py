@@ -9,7 +9,7 @@ Created on Fri Mar  3 10:37:58 2017
 import os
 import time
 
-from elasticsearch import client, Elasticsearch
+from elasticsearch import client
 from linker import ESLinker
 from normalizer import ESNormalizer
 

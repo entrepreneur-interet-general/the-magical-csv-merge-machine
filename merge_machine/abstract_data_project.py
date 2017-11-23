@@ -41,7 +41,7 @@ import pandas as pd
 
 from abstract_project import AbstractProject, NOT_IMPLEMENTED_MESSAGE
 from es_connection import es, ic
-import es_insert
+from merge_machine import es_insert
 
 MINI_PREFIX = 'MINI__'
 
@@ -709,8 +709,8 @@ class AbstractDataProject(AbstractProject):
     
 class ESAbstractDataProject(AbstractDataProject):
     es_insert_chunksize = 40000
-    self.es = Elasticsearch(**es_conn)
-    self.ic = client.
+    es = es
+    ic = ic
 
     def __init__(self, *argv, **kwargs):
         super().__init__(*argv, **kwargs)
