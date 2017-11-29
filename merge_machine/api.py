@@ -324,7 +324,7 @@ def ping():
 @app.route('/api/ping_redis')
 def ping_redis():
     num_workers = len(Worker.all(conn))
-    return jsonify(error=bool(num_workers), num_workers=num_workers)
+    return jsonify(error=not bool(num_workers), num_workers=num_workers)
 
 #==============================================================================
 # GENERIC API METHODS (NORMALIZE AND LINK)
