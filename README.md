@@ -1,4 +1,7 @@
-# [PROJET EN COURS / MISE EN LIGNE PREVUE EN NOVEMBRE]
+# [PROJET EN COURS]
+# [MISE EN LIGNE TRES BIENTÔT...]
+# [LE CODE DE MATCH A DESORMAIS SON PROPRE PACKAGE:]
+## --> https://github.com/entrepreneur-interet-general/Merge-Machine <--
 
 # The Magical CSV Merge Machine
 
