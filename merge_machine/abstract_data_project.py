@@ -755,6 +755,8 @@ class ESAbstractDataProject(AbstractDataProject):
             log = self._end_active_log(log, error=False)
         else:
             logging.info('Index already exists')
+        logging.info('Finished indexing')
+        self.valid_index()
         self._write_log_buffer(written=False)
     
     def delete_index(self):
@@ -769,7 +771,16 @@ class ESAbstractDataProject(AbstractDataProject):
         
         # Get file name (complicated due to legacy functionalities)
         file_names = [x for x in self.metadata['files'].keys() if MINI_PREFIX not in x]
-        assert len(file_names) == 1
+        
+        # TODO: very ugly hack to separate normalizer and link
+        if ('ref' in file_names) and ('source' in file_names):
+            return True
+        
+        try:
+            assert len(file_names) == 1
+        except:
+            import pdb; pdb.set_trace()
+        
         file_name = file_names[0]
         
         nrows = self.metadata['files'][file_name]['nrows']
@@ -777,7 +788,7 @@ class ESAbstractDataProject(AbstractDataProject):
         nrows_es = self.ic.stats(self.index_name, 'docs')['_all']['total']['docs']['count']
         
         if nrows != nrows_es:
-            logging.error('ES index does not have the same number of rows as the original file. Might be removed...')
+            logging.error('ES index does not have the same number of rows as the original file.')
             return False
         return True
                 
