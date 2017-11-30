@@ -287,7 +287,8 @@ def _create_es_labeller(project_id, *argv):
     '''
     proj = ESLinker(project_id=project_id)
     labeller = proj._gen_es_labeller()
-    proj.write_labeller('es_linker', labeller)
+    # proj.write_labeller('es_linker', labeller)
+    proj.labeller_to_json(labeller)
     return
 
 def _infer_restriction(project_id, _, module_params):

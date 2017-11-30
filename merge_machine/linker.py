@@ -274,35 +274,6 @@ class Linker(ESAbstractDataProject):
         
         return log, run_info
 
-    def DEPRECATED_dedupe_linker(self, data_params, module_params):
-        '''
-        /!\ data_params does not Follow standards 
-        
-        # TODO: This is not optimal. Find way to change data_params to smt else
-        # TODO: at least take source in mem_data to make iterable
-        '''
-        
-        # Initiate log # TODO: move hardcode of file name
-        self.mem_data_info['file_role'] = 'link' # Role of file being modified
-        self.mem_data_info['file_name'] = self.output_file_name(os.path.split(data_params['source'])[-1]) # File being modified
-        
-        log = self._init_active_log('dedupe_linker', 'link')
-
-        self.mem_data, run_info = self.MODULES['link']['dedupe_linker']['func'](data_params, module_params)
-        
-        # TODO: inconsistent with transform (this is for dedupe_linker)
-        if isinstance(self.mem_data, pd.DataFrame):
-            self.mem_data = (x for x in [self.mem_data])
-        
-        self.mem_data_info['module_name'] = 'dedupe_linker'
-        
-        # Complete log
-        log = self._end_active_log(log, error=False)
-                          
-        # Update buffers
-        self.run_info_buffer[('dedupe_linker', self.mem_data_info['file_name'])] = run_info
-        return 
-
     def write_labeller(self, module_name, labeller):
         '''Pickles the labeller object in project'''
         # TODO: Add isinstance(labeller, Labeller)        
@@ -317,40 +288,6 @@ class Linker(ESAbstractDataProject):
         labeller = ESLabeller.from_pickle(pickle_path, es)            
         return labeller
 
-    #==========================================================================
-    #  Module specific: Dedupe Linker
-    #==========================================================================
-
-    def _gen_paths_dedupe_DEPRECATED(self):        
-        self._check_select()
-        
-        # Get path to training file for dedupe
-        training_path = self.path_to('dedupe_linker', 'training.json')
-        learned_settings_path = self.path_to('dedupe_linker', 'learned_settings')
-        
-        # TODO: check that normalization projects are complete ?
-        
-        # Get path to source
-        file_name = self.metadata['files']['source']['file_name']
-        source_path = self.source.path_to_last_written(module_name=None, 
-                    file_name=file_name)
-        
-        # Get path to ref
-        file_name = self.metadata['files']['ref']['file_name']
-        if self.metadata['files']['ref']['restricted']:
-            ref_path = self.path_to('restriction', file_name)
-        else:
-            ref_path = self.ref.path_to_last_written(module_name=None, 
-                        file_name=file_name)
-        
-        # Add paths
-        paths = {
-                'ref': ref_path, 
-                'source': source_path,
-                'train': training_path,
-                'learned_settings': learned_settings_path            
-                }
-        return paths
 
     #==========================================================================
     #  Module specific: ES Linker
@@ -402,7 +339,7 @@ class Linker(ESAbstractDataProject):
         '''
         self._check_select()
         
-        chunksize = 40000
+        #chunksize = 40000
         
         col_matches_tmp = self.read_col_matches()
         col_matches = []
@@ -414,7 +351,7 @@ class Linker(ESAbstractDataProject):
         paths = self._gen_paths_es()
         source = pd.read_csv(paths['source'], 
                             sep=',', encoding='utf-8',
-                            dtype=str, nrows=chunksize)
+                            dtype=str, nrows=3000)
         source = source.where(source.notnull(), '')
         
         ref_table_name = self.ref.project_id
@@ -429,6 +366,26 @@ class Linker(ESAbstractDataProject):
     
         return labeller
     
+    def labeller_to_json(self, labeller):
+        
+        file_path = self.path_to('es_linker', 'labeller.json')
+        labeller.to_json(file_path)
+        
+    def labeller_from_json(self):
+        file_path = self.path_to('es_linker', 'labeller.json')
+        
+        paths = self._gen_paths_es()
+        source = pd.read_csv(paths['source'], 
+                            sep=',', encoding='utf-8',
+                            dtype=str, nrows=3000)
+        source = source.where(source.notnull(), '')        
+        
+        
+        ref_table_name = self.ref.project_id
+        labeller = ESLabeller.from_json(file_path, es, source, ref_table_name)
+        
+        return labeller
+            
 
     def analyze_results(self, params={}):
         # Check that memory is loaded (if necessary)

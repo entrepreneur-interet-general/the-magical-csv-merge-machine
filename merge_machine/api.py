@@ -919,107 +919,191 @@ def label_pair(project_id):
 # =============================================================================
 # Socket methods
 # =============================================================================
+
+
+@app.route('/api/link/labeller/current/<project_id>/', methods=['GET'])
+def current_state(project_id):
+    '''
+    Get the current state for an ES labeller.
     
-@socketio.on('load_labeller', namespace='/')
-@socket_error_wrapper
-def socket_load_labeller(message_received):
-    '''Loads labeller. Necessary to have a separate call to preload page'''
-    message_received = json.loads(message_received)
-    project_id = message_received['project_id']
-    
-    # TODO: remove from memory at the end
-    # Create flask labeller memory if necessary and add current labeller
-    try:
-        flask._app_ctx_stack.labeller_mem[project_id] = dict()
-    except:
-        flask._app_ctx_stack.labeller_mem = {project_id: dict()}
-    
+    GET:
+        project_id: ID for "link" project
+    '''
     # Generate necessary paths and create labeller
     proj = ESLinker(project_id=project_id)
-    flask._app_ctx_stack.labeller_mem[project_id]['labeller'] = proj._read_labeller('es_linker')
     
+    labeller = proj.labeller_from_json()
+
     encoder = MyEncoder()
+    return jsonify(error=False,
+                   result=encoder.encode(labeller.to_emit()))
     
-    # flask._app_ctx_stack.labeller_mem[project_id]['labeller'].print_emit() # Print what is about to be emited
-    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit()))
 
+#@socketio.on('load_labeller', namespace='/')
+#@socket_error_wrapper
+#def socket_load_labeller(message_received):
+#    '''Loads labeller. Necessary to have a separate call to preload page'''
+#    print('socket_load_labeller')
+#    message_received = json.loads(message_received)
+#    project_id = message_received['project_id']
+#    
+#    # Generate necessary paths and create labeller
+#    proj = ESLinker(project_id=project_id)
+#    
+#    labeller = proj.labeller_from_json()
+#
+#    encoder = MyEncoder()
+#    emit('message', encoder.encode(labeller.to_emit()))
 
-@socketio.on('answer', namespace='/')
-@socket_error_wrapper
-def socket_get_answer(message_received):
+@app.route('/api/link/labeller/update/<project_id>/', methods=['POST'])
+def update_labeller(project_id):
+    '''
+    Send an user input to the labeller and receive the updated labeller state    
     
-    message_received = json.loads(message_received)
-    logging.info(message_received)
-    project_id = message_received['project_id'] 
-    user_input = message_received['user_input']
+    GET:
+        project_id: ID for "link" project
+    
+    POST:
+        module_params:
+            user_input: #TODO: document
+    '''
+    _, module_params = _parse_request()
+    logging.info(module_params)
+    user_input = module_params['user_input']
 
-    #message = 'Expect to have about 50% of good proposals in this phase. The more you label, the better...'
-    if flask._app_ctx_stack.labeller_mem[project_id]['labeller'].answer_is_valid(user_input):
-        flask._app_ctx_stack.labeller_mem[project_id]['labeller'].update(user_input)
-        
+    proj = ESLinker(project_id=project_id)
+    labeller = proj.labeller_from_json()
+
+    if labeller.answer_is_valid(user_input):
+        labeller.update(user_input)
     else:
         raise ValueError('Answer received "{0}" is not valid'.format(user_input))
+    
+    proj.labeller_to_json(labeller)
         
     encoder = MyEncoder()
-    # flask._app_ctx_stack.labeller_mem[project_id]['labeller'].print_emit() # Print what is about to be emited
-    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit()))
+    return jsonify(error=False,
+                   result=encoder.encode(labeller.to_emit()))
 
-@socketio.on('update_filters', namespace='/')
-@socket_error_wrapper
-def socket_update_musts(message_received):
-    # If object received is string
-    if isinstance(message_received, str):
-        message_received = json.loads(message_received)
-    else:
-        assert isinstance(message_received, dict)
+#@socketio.on('answer', namespace='/')
+#@socket_error_wrapper
+#def socket_get_answer(message_received):
+#    print('socket_get_answer')
+#    message_received = json.loads(message_received)
+#    logging.info(message_received)
+#    project_id = message_received['project_id'] 
+#    user_input = message_received['user_input']
+#
+#    proj = ESLinker(project_id=project_id)
+#    labeller = proj.labeller_from_json()
+#
+#    if labeller.answer_is_valid(user_input):
+#        labeller.update(user_input)
+#    else:
+#        raise ValueError('Answer received "{0}" is not valid'.format(user_input))
+#    
+#    proj.labeller_to_json(labeller)
+#        
+#    encoder = MyEncoder()
+#    emit('message', encoder.encode(labeller.to_emit()))
+
+@app.route('/api/link/labeller/update_filters/<project_id>/', methods=['POST'])
+def update_filters_labeller(project_id):
+    '''
+    Update filters for a labeller and receive the updated labeller state. 
     
-    print('here ok')
-    print('update_musts got:', message_received)
-    logging.info('update_musts got:', message_received)
-    project_id = message_received['project_id']
-    must = message_received['must']    
-    must_not = message_received['must_not'] 
+    GET:
+        project_id: ID for "link" project
     
-    flask._app_ctx_stack.labeller_mem[project_id]['labeller'].update_musts(must, must_not)
+    POST:
+        module_params:
+            must: #TODO: document
+            must_not: #TODO: document
+    '''
+    _, module_params = _parse_request()
+    
+    logging.info('update_musts got:', module_params)
+    must = module_params['must']    
+    must_not = module_params['must_not'] 
+    
+    proj = ESLinker(project_id=project_id)
+    labeller = proj.labeller_from_json()
+    
+    labeller.update_musts(must, must_not)
+    
+    proj.labeller_to_json(labeller)
     
     encoder = MyEncoder()
-    # flask._app_ctx_stack.labeller_mem[project_id]['labeller'].print_emit() # Print what is about to be emited
-    emit('message', encoder.encode(flask._app_ctx_stack.labeller_mem[project_id]['labeller'].to_emit()))
+    return jsonify(error=False,
+                   result=encoder.encode(labeller.to_emit()))
 
-@socketio.on('complete_training', namespace='/')
-@socket_error_wrapper
-def socket_complete_training(message_received):
-    '''Writes the data in the labeller and deletes the labeller'''
-    message_received = json.loads(message_received)
-    logging.info(message_received)
-    project_id = message_received['project_id']
+#@socketio.on('update_filters', namespace='/')
+#@socket_error_wrapper
+#def socket_update_musts(message_received):
+#    # If object received is string
+#    if isinstance(message_received, str):
+#        message_received = json.loads(message_received)
+#    else:
+#        assert isinstance(message_received, dict)
+#    
+#    print('here ok')
+#    print('update_musts got:', message_received)
+#    logging.info('update_musts got:', message_received)
+#    project_id = message_received['project_id']
+#    must = message_received['must']    
+#    must_not = message_received['must_not'] 
+#    
+#    proj = ESLinker(project_id=project_id)
+#    labeller = proj.labeller_from_json()
+#    
+#    labeller.update_musts(must, must_not)
+#    
+#    proj.labeller_to_json(labeller)
+#    
+#    encoder = MyEncoder()
+#    emit('message', encoder.encode(labeller.to_emit()))
+
+
+@app.route('/api/link/labeller/complete_training/<project_id>/', methods=['GET'])
+def complete_training(project_id):
+    '''
+    # TODO: SOON deprecated 
+    
+    GET:
+        project_id: ID for "link" project
+    '''
     proj = ESLinker(project_id)
 
     logging.info('Writing train')
-    learned_settings = flask._app_ctx_stack.labeller_mem[project_id]['labeller'].export_best_params()
+    labeller = proj.labeller_from_json()
+    
+    learned_settings = labeller.export_best_params()
+    
     proj.add_es_learned_settings(learned_settings)
     logging.info('Wrote train')
     
-    try:
-        del flask._app_ctx_stack.labeller_mem[project_id]['labeller']
-        logging.info('Deleted labeller for project: {0}'.format(project_id))
-    except:
-        logging.warning('Could not delete labeller for project: {0}'.format(project_id))
+    return jsonify(error=False)
 
-    emit('wrote_labeller', {'error': False})
-    
-@socketio.on('terminate', namespace='/')
-@socket_error_wrapper
-def socket_terminate_labeller_load(message_received):
-    '''Clear memory in application for selected project'''
-    message_received = json.loads(message_received)
-    project_id = message_received['project_id']
-    
-    try:
-        del flask._app_ctx_stack.labeller_mem[project_id]['labeller']
-        logging.info('Deleted labeller for project: {0}'.format(project_id))
-    except:
-        logging.warning('Could not delete labeller for project: {0}'.format(project_id))
+#@socketio.on('complete_training', namespace='/')
+#@socket_error_wrapper
+#def socket_complete_training(message_received):
+#    '''Writes the data in the labeller and deletes the labeller'''
+#    message_received = json.loads(message_received)
+#    logging.info(message_received)
+#    project_id = message_received['project_id']
+#    proj = ESLinker(project_id)
+#
+#    logging.info('Writing train')
+#    labeller = proj.labeller_from_json()
+#    
+#    #    learned_settings = flask._app_ctx_stack.labeller_mem[project_id]['labeller'].export_best_params()
+#    learned_settings = labeller.export_best_params()
+#    
+#    proj.add_es_learned_settings(learned_settings)
+#    logging.info('Wrote train')
+#    
+#    emit('wrote_labeller', {'error': False})
+
 
             
 # =============================================================================
