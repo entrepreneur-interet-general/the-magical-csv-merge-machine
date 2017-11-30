@@ -777,8 +777,7 @@ class ESAbstractDataProject(AbstractDataProject):
         nrows_es = self.ic.stats(self.index_name, 'docs')['_all']['total']['docs']['count']
         
         if nrows != nrows_es:
-            logging.error('ES index does not have the same number of rows as the original file')
-            import pdb; pdb.set_trace()
+            logging.error('ES index does not have the same number of rows as the original file. Might be removed...')
             return False
         return True
                 
