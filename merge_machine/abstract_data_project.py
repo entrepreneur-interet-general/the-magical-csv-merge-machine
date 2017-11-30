@@ -737,7 +737,7 @@ class ESAbstractDataProject(AbstractDataProject):
                           usecols=columns_to_index.keys(),
                           dtype=str, chunksize=self.es_insert_chunksize)
         
-        if self.has_index() and force:
+        if self.has_index() and (force or (not self.valid_index())):
             self.ic.delete(self.index_name)
             
         if not self.has_index():
@@ -761,7 +761,30 @@ class ESAbstractDataProject(AbstractDataProject):
         return self.ic.delete(self.index_name)
         
     def has_index(self):
-        return self.ic.exists(self.index_name)     
+        '''Check if the index with this name exists and '''
+        return self.ic.exists(self.index_name)    
+        
+    def valid_index(self):
+        ''' Check that the number of rows in ES fits with nrows'''
+        
+        # Get file name (complicated due to legacy functionalities)
+        file_names = [x for x in self.metadata['files'].keys() if MINI_PREFIX not in x]
+        assert len(file_names) == 1
+        file_name = file_names[0]
+        
+        nrows = self.metadata['files'][file_name]['nrows']
+        
+        nrows_es = self.ic.stats(self.index_name, 'docs')['_all']['total']['docs']['count']
+        
+        if nrows != nrows_es:
+            logging.error('ES index does not have the same number of rows as the original file')
+            import pdb; pdb.set_trace()
+            return False
+        return True
+                
+            
+            
+        
     
     def index_is_complete(self):
         pass
