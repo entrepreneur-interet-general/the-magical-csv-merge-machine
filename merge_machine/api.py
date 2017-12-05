@@ -150,7 +150,7 @@ app.config['ALLOWED_EXTENSIONS'] = ['csv', 'xls', 'xlsx', 'zip']
 # Redis connection
 q = dict()
 for q_name in VALID_QUEUES:
-    q[q_name] = Queue(q_name, connection=conn, default_timeout=1800)
+    q[q_name] = Queue(q_name, connection=conn, default_timeout=7200)
 
 #==============================================================================
 # HELPER FUNCTIONS
@@ -250,15 +250,15 @@ def _init_project(project_type,
 #==============================================================================
 
 
-@app.errorhandler(404)
-def page_not_found(error):
-    app.logger.error('URL not valid: %s', (error))
-    return jsonify(error=True, message=error.description), 404
+#@app.errorhandler(404)
+#def page_not_found(error):
+#    app.logger.error('URL not valid: %s', (error))
+#    return jsonify(error=True, message=error.description), 404
 
-@app.errorhandler(405)
-def method_not_allowed(error):
-    app.logger.error('Method not allowed (POST or GET): %s', (error))
-    return jsonify(error=True, message=error.description), 405
+#@app.errorhandler(405)
+#def method_not_allowed(error):
+#    app.logger.error('Method not allowed (POST or GET): %s', (error))
+#    return jsonify(error=True, message=error.description), 405
 
 def api_error_wrapper(func):
     """
@@ -306,10 +306,10 @@ def err():
 def ping():
     return jsonify(error=False, message="It's alive !!")
 
-@app.route('/api/ping_redis')
+@app.route('/api/ping_redis/')
 def ping_redis():
     num_workers = len(Worker.all(conn))
-    return jsonify(error=bool(num_workers), num_workers=num_workers)
+    return jsonify(error=not bool(num_workers), num_workers=num_workers)
 
 #==============================================================================
 # GENERIC API METHODS (NORMALIZE AND LINK)

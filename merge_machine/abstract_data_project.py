@@ -746,9 +746,9 @@ class ESAbstractDataProject(AbstractDataProject):
         ref_gen = pd.read_csv(ref_path, 
                           usecols=columns_to_index.keys(),
                           dtype=str, chunksize=self.es_insert_chunksize)
-        
-        if self.has_index() and force:
-            ic.delete(self.index_name)
+
+        if self.has_index() and (force or (not self.valid_index())):
+            self.ic.delete(self.index_name)
             
         if not self.has_index():
             logging.info('Creating new index')
@@ -766,13 +766,42 @@ class ESAbstractDataProject(AbstractDataProject):
             logging.warning('Finished indexing')
         else:
             logging.info('Index already exists')
+        logging.info('Finished indexing')
+        self.valid_index()
         self._write_log_buffer(written=False)
     
     def delete_index(self):
         return ic.delete(self.index_name)
         
     def has_index(self):
-        return ic.exists(self.index_name)     
+        '''Check if the index with this name exists and '''
+        return self.ic.exists(self.index_name)    
+        
+    def valid_index(self):
+        ''' Check that the number of rows in ES fits with nrows'''
+        
+        # Get file name (complicated due to legacy functionalities)
+        file_names = [x for x in self.metadata['files'].keys() if MINI_PREFIX not in x]
+        
+        # TODO: very ugly hack to separate normalizer and link
+        if ('ref' in file_names) and ('source' in file_names):
+            return True
+        
+        try:
+            assert len(file_names) == 1
+        except:
+            import pdb; pdb.set_trace()
+        
+        file_name = file_names[0]
+        
+        nrows = self.metadata['files'][file_name]['nrows']
+        
+        nrows_es = self.ic.stats(self.index_name, 'docs')['_all']['total']['docs']['count']
+        
+        if nrows != nrows_es:
+            logging.error('ES index does not have the same number of rows as the original file.')
+            return False
+        return True
     
     def index_is_complete(self):
         pass
