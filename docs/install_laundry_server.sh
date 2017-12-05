@@ -19,8 +19,11 @@ source laundry_env/bin/activate
 
 apt-get install autoconf automake curl gcc g++ libtool pkg-config enchant elasticsearch python3-elasticsearch
 
-# Récupération du code source du backend applicatif
+# Récupération et installation du code pour la jointure
+git clone https://github.com/entrepreneur-interet-general/Merge-Machine
+pip3 install -e Merge-Machine 
 
+# Récupération du code source du backend applicatif
 git clone https://github.com/eig-2017/the-magical-csv-merge-machine.git
 
 # Installation du reste des modules Python requis 
