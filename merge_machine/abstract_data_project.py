@@ -763,7 +763,7 @@ class ESAbstractDataProject(AbstractDataProject):
             es_insert.index(es, ref_gen, self.index_name, testing)
         
             log = self._end_active_log(log, error=False)
-            logging.info('Index was created')
+            logging.warning('Finished indexing')
         else:
             logging.info('Index already exists')
         self._write_log_buffer(written=False)

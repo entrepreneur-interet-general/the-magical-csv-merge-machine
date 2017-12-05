@@ -113,7 +113,6 @@ os.chdir(curdir)
 import flask
 from flask import Flask, jsonify, request, send_file, url_for
 from flask_session import Session
-from flask_socketio import disconnect, emit, SocketIO
 from flask_cors import CORS, cross_origin
 import werkzeug
 from werkzeug.utils import secure_filename
@@ -147,8 +146,6 @@ app.debug = True
 app.config['SECRET_KEY'] = open('secret_key.txt').read()
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024 # Check that files are not too big (10GB)
 app.config['ALLOWED_EXTENSIONS'] = ['csv', 'xls', 'xlsx', 'zip']
-
-socketio = SocketIO(app)       
 
 # Redis connection
 q = dict()
@@ -293,19 +290,6 @@ def api_error_wrapper(func):
 def err():
     raise Exception('Yo lo')
 
-def socket_error_wrapper(func):
-    def func_wrapper(*argv, **kwarg):
-        
-        try:
-            func(*argv, **kwarg)
-        except Exception as e:
-            tb = traceback.format_exc()
-            print('Exception in socket:', tb)
-            
-            to_send = {'error': True, 'error_message': e.__str__()}
-            encoder = MyEncoder()
-            emit('message', encoder.encode(to_send))
-    return func_wrapper
 
 #==============================================================================
 # API
@@ -917,7 +901,7 @@ def label_pair(project_id):
     pass
 
 # =============================================================================
-# Socket methods
+# Labeller methods
 # =============================================================================
 
 
@@ -937,23 +921,7 @@ def current_state(project_id):
     encoder = MyEncoder()
     return jsonify(error=False,
                    result=encoder.encode(labeller.to_emit()))
-    
 
-#@socketio.on('load_labeller', namespace='/')
-#@socket_error_wrapper
-#def socket_load_labeller(message_received):
-#    '''Loads labeller. Necessary to have a separate call to preload page'''
-#    print('socket_load_labeller')
-#    message_received = json.loads(message_received)
-#    project_id = message_received['project_id']
-#    
-#    # Generate necessary paths and create labeller
-#    proj = ESLinker(project_id=project_id)
-#    
-#    labeller = proj.labeller_from_json()
-#
-#    encoder = MyEncoder()
-#    emit('message', encoder.encode(labeller.to_emit()))
 
 @app.route('/api/link/labeller/update/<project_id>/', methods=['POST'])
 def update_labeller(project_id):
@@ -985,27 +953,7 @@ def update_labeller(project_id):
     return jsonify(error=False,
                    result=encoder.encode(labeller.to_emit()))
 
-#@socketio.on('answer', namespace='/')
-#@socket_error_wrapper
-#def socket_get_answer(message_received):
-#    print('socket_get_answer')
-#    message_received = json.loads(message_received)
-#    logging.info(message_received)
-#    project_id = message_received['project_id'] 
-#    user_input = message_received['user_input']
-#
-#    proj = ESLinker(project_id=project_id)
-#    labeller = proj.labeller_from_json()
-#
-#    if labeller.answer_is_valid(user_input):
-#        labeller.update(user_input)
-#    else:
-#        raise ValueError('Answer received "{0}" is not valid'.format(user_input))
-#    
-#    proj.labeller_to_json(labeller)
-#        
-#    encoder = MyEncoder()
-#    emit('message', encoder.encode(labeller.to_emit()))
+
 
 @app.route('/api/link/labeller/update_filters/<project_id>/', methods=['POST'])
 def update_filters_labeller(project_id):
@@ -1036,33 +984,7 @@ def update_filters_labeller(project_id):
     encoder = MyEncoder()
     return jsonify(error=False,
                    result=encoder.encode(labeller.to_emit()))
-
-#@socketio.on('update_filters', namespace='/')
-#@socket_error_wrapper
-#def socket_update_musts(message_received):
-#    # If object received is string
-#    if isinstance(message_received, str):
-#        message_received = json.loads(message_received)
-#    else:
-#        assert isinstance(message_received, dict)
-#    
-#    print('here ok')
-#    print('update_musts got:', message_received)
-#    logging.info('update_musts got:', message_received)
-#    project_id = message_received['project_id']
-#    must = message_received['must']    
-#    must_not = message_received['must_not'] 
-#    
-#    proj = ESLinker(project_id=project_id)
-#    labeller = proj.labeller_from_json()
-#    
-#    labeller.update_musts(must, must_not)
-#    
-#    proj.labeller_to_json(labeller)
-#    
-#    encoder = MyEncoder()
-#    emit('message', encoder.encode(labeller.to_emit()))
-
+    
 
 @app.route('/api/link/labeller/complete_training/<project_id>/', methods=['GET'])
 def complete_training(project_id):
@@ -1083,28 +1005,6 @@ def complete_training(project_id):
     logging.info('Wrote train')
     
     return jsonify(error=False)
-
-#@socketio.on('complete_training', namespace='/')
-#@socket_error_wrapper
-#def socket_complete_training(message_received):
-#    '''Writes the data in the labeller and deletes the labeller'''
-#    message_received = json.loads(message_received)
-#    logging.info(message_received)
-#    project_id = message_received['project_id']
-#    proj = ESLinker(project_id)
-#
-#    logging.info('Writing train')
-#    labeller = proj.labeller_from_json()
-#    
-#    #    learned_settings = flask._app_ctx_stack.labeller_mem[project_id]['labeller'].export_best_params()
-#    learned_settings = labeller.export_best_params()
-#    
-#    proj.add_es_learned_settings(learned_settings)
-#    logging.info('Wrote train')
-#    
-#    emit('wrote_labeller', {'error': False})
-
-
             
 # =============================================================================
 # ES FETCH
@@ -1314,4 +1214,4 @@ def list_public_projects(project_type):
     return jsonify(list_of_projects)
 
 if __name__ == '__main__':
-    socketio.run(app, host='127.0.0.1', port=5000, debug=True)
+    app.run(host='127.0.0.1', port=5000, debug=True)
