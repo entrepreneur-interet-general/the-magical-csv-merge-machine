@@ -17,7 +17,6 @@ def link_results_analyzer(tab, params={}):
             col_matches: pair of columns that constitute certain matches:
                 ex: {"source": "unique_id", "ref": "UNIQUE_ID"}
             lower: lowercase before matching
-    
     '''
     
     if '__CONFIDENCE' not in tab.columns:

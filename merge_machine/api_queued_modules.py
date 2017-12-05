@@ -8,6 +8,7 @@ Created on Thu Jun  1 21:10:15 2017
 
 import logging
 import os
+import time
 
 # Change current path to path of api.py
 curdir = os.path.dirname(os.path.realpath(__file__))
@@ -271,6 +272,7 @@ def _create_es_index(project_id, data_params, module_params):
         
     file_path = proj.path_to(module_name, file_name)
     proj.create_index(file_path, columns_to_index, force)
+    time.sleep(5) # TODO: why is this necessary?
     return
 
 
