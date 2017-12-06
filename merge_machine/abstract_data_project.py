@@ -730,7 +730,7 @@ class ESAbstractDataProject(AbstractDataProject):
             bulk += json.dumps({"query" : {"match" : {"_id": id_}}, "size": 1}) + '\n'
             
         res = es.msearch(bulk)
-        return res     
+        return res
     
     def create_index(self, ref_path, columns_to_index, force=False):
         '''
