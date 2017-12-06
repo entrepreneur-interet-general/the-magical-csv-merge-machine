@@ -42,7 +42,7 @@ import pandas as pd
 from abstract_project import AbstractProject, NOT_IMPLEMENTED_MESSAGE
 from es_connection import es, ic
 from merge_machine import es_insert
-from merge_machine.es_config import default_analyzer, index_settings_template
+from merge_machine.es_config import DEFAULT_ANALYZER, DEFAULT_ANALYZERS, INDEX_SETTINGS_TEMPLATE
 
 MINI_PREFIX = 'MINI__'
 
@@ -754,7 +754,7 @@ class ESAbstractDataProject(AbstractDataProject):
             logging.info('Creating new index')
             log = self._init_active_log('INIT', 'transform')
                     
-            index_settings = es_insert.gen_index_settings(default_analyzer, columns_to_index, index_settings_template)
+            index_settings = es_insert.gen_index_settings(DEFAULT_ANALYZER, columns_to_index, INDEX_SETTINGS_TEMPLATE)
             
             logging.warning('Creating index')
             logging.warning(index_settings)
@@ -809,7 +809,7 @@ class ESAbstractDataProject(AbstractDataProject):
         
     def gen_default_columns_to_index(self, for_linking=True, columns_to_index=None):
         if for_linking:
-            analyzers = {'french', 'whitespace', 'integers', 'city', 'n_grams'} # TODO: from config
+            analyzers = DEFAULT_ANALYZERS
         else:
             analyzers = {}
         

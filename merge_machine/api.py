@@ -1006,6 +1006,52 @@ def complete_training(project_id):
     
     return jsonify(error=False)
             
+
+@app.route('/api/link/labeller/add_search/<project_id>/', methods=['POST'])
+def add_search(project_id):
+    '''
+    # Perform search on specific user-specified terms
+    
+    GET:
+        project_id: ID for "link" project
+    
+    POST:
+        col_to_search: A dictionnary mapping the column name to query string
+            Ex: {'colA': 'some text', 'colB': 'some other text'}
+    '''
+    _, module_params = _parse_request()
+    
+    proj = ESLinker(project_id)
+    
+    labeller = proj.labeller_from_json()
+    
+    labeller.add_search_to_ref_gen(module_params['col_to_search'])
+    
+    proj.labeller_to_json(labeller)
+        
+    encoder = MyEncoder()
+    return jsonify(error=False,
+                   result=encoder.encode(labeller.to_emit()))
+
+@app.route('/api/link/labeller/clear_search/<project_id>/', methods=['GET'])
+def clear_search(project_id):
+    '''
+    Remove user search items from the list of next labeller proposals
+    '''
+    _, module_params = _parse_request()
+    
+    proj = ESLinker(project_id)
+    
+    labeller = proj.labeller_from_json()
+    
+    labeller.remove_search_from_ref_gen(module_params['col_to_search'])
+    
+    proj.labeller_to_json(labeller)
+        
+    encoder = MyEncoder()
+    return jsonify(error=False,
+                   result=encoder.encode(labeller.to_emit()))
+
 # =============================================================================
 # ES FETCH
 # =============================================================================
