@@ -1110,7 +1110,7 @@ SCHEDULED_JOBS = {
                     'link_results_analyzer': {'project_type': 'link'}
                     }
 
-def choose_queue(job_name, project_id, data_params):
+def _choose_queue(job_name, project_id, data_params):
     '''
     Priority is low by default. It is high if specified in SCHEDULED_MODULES
     or if performing on a __MINI or file that doesn't have __MINI
@@ -1147,15 +1147,22 @@ def schedule_job(job_name, project_id):
     assert job_name in SCHEDULED_JOBS
     data_params, module_params = _parse_request()
 
-    q_priority = choose_queue(job_name, project_id, data_params)
+    q_priority = _choose_queue(job_name, project_id, data_params)
     assert q_priority in VALID_QUEUES
     
     job_id = project_id + '_' + job_name
+    
+    # Delete job if already queued
+    if job_id in q[q_priority].job_ids:
+        logging.warning('Deleting job: {0} for re-scheduling'.format(job_id))
+        q[q_priority].remove(job_id)
+    
     #TODO: remove and de-comment under
     job = q[q_priority].enqueue_call(
             func='api_queued_modules._' + job_name,
             args=(project_id, data_params, module_params), 
-            result_ttl=5000, 
+            ttl=24*3600, # Job can be queued for 24 hours max
+            result_ttl=2*3600, # Result can be kept for 2 hours max
             job_id=job_id, 
             #depends_on=project_id
     )        
