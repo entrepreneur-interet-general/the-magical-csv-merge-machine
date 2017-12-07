@@ -7,6 +7,8 @@ Created on Wed Dec  6 19:43:08 2017
 
 Script to add SIRENE to API
 """
+from datetime import datetime
+import os
 
 from api_helpers import APIConnection
 
@@ -14,7 +16,7 @@ from api_helpers import APIConnection
 # Define how to connect to API
 # =============================================================================
 PROTOCOL = 'http://'
-HOST = '127.0.0.1:5000'
+HOST = '51.15.221.77:5000'
 PRINT = True
 PRINT_CHAR_LIMIT = 10000
 
@@ -26,7 +28,33 @@ c = APIConnection(PROTOCOL, HOST, PRINT, PRINT_CHAR_LIMIT)
 # =============================================================================
 
 params = {
-            'file_path': '/home/m75380/Documents/eig/the-magical-csv-merge-machine/merge_machine/local_test_data/sirene/sirene_filtered.csv'
+          "new_project": {
+                        "description": "Base SIRENE ({0})".format(datetime.now().isoformat()[:10]),
+                        "display_name": "SIRENE",
+                        "public": True
+                      },
+        
+            'file_path': '/home/m75380/Documents/eig/the-magical-csv-merge-machine/merge_machine/local_test_data/sirene/sirene_filtered.csv',
+            
+            'columns_to_index': {
+                                     'CEDEX': [],
+                                     'ENSEIGNE': ['french', 'n_grams', 'integers', 'city'],
+                                     'L1_DECLAREE': ['french', 'n_grams', 'integers', 'city'],
+                                     'L1_NORMALISEE': ['french', 'n_grams', 'integers', 'city'],
+                                     'L4_DECLAREE': ['french', 'n_grams', 'integers', 'city'],
+                                     'L4_NORMALISEE': ['french', 'n_grams', 'integers', 'city'],
+                                     'L6_DECLAREE': ['french', 'n_grams', 'integers', 'city'],
+                                     'L6_NORMALISEE': ['french', 'n_grams', 'integers', 'city'],
+                                     'LIBAPET': [],
+                                     'LIBCOM': ['french', 'n_grams', 'city'],
+                                     'NIC': [],
+                                     'NOMEN_LONG': ['french', 'n_grams', 'integers', 'city'],
+                                     'PRODEN': [],
+                                     'PRODET': [],
+                                     'SIEGE': [],
+                                     'SIREN': [],
+                                     'SIRET': []
+                                }
         }
 
 #==============================================================================
@@ -50,27 +78,29 @@ with open(file_path, 'rb') as f:
 #==============================================================================
 # Get last written
 #==============================================================================
-url_to_append = '/api/last_written/normalize/{0}'.format(project_id)
-body = {
-        'before_module': 'replace_mvs'        
-        }
-resp = c.post_resp(url_to_append, body)
-module_name = resp['module_name']
-file_name = resp['file_name']
+
+module_name = 'INIT'
+file_name = os.path.split(params['file_path'])[-1]
 
 # =============================================================================
-# Skip replace_mvs
+# Skip replace_mvs, recode_types, concat_with_init
 # =============================================================================
-url_to_append = '/api/set_skip/<project_type>/<project_id>'
-for module_name in ['replace_mvs', 'recode_types', 'concat_with_init']:
-    body = {'data_params': {'module_name': module_name, 'file_name': file_name}}
-    resp = c.post_resp(url_to_append)
+url_to_append = '/api/set_skip/normalize/{0}'.format(project_id)
+for mn in ['replace_mvs', 'recode_types', 'concat_with_init']:
+    body = {'data_params': {'module_name': mn, 'file_name': file_name},
+            'module_params': {'skip_value': True}}
+    resp = c.post_resp(url_to_append, body)
 
 # =============================================================================
 # Index reference     
 # =============================================================================
 url_to_append = '/api/schedule/create_es_index/{0}/'.format(project_id)
 body = {
+        'data_params': {
+                        'project_type': 'normalize', 
+                        'module_name':module_name, 
+                        'file_name': file_name
+                        },
         'module_params': {'columns_to_index': params.get('columns_to_index', None),
                           'force': True}
         }

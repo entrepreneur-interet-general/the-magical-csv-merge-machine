@@ -787,10 +787,7 @@ class ESAbstractDataProject(AbstractDataProject):
         if ('ref' in file_names) and ('source' in file_names):
             return True
         
-        try:
-            assert len(file_names) == 1
-        except:
-            import pdb; pdb.set_trace()
+        assert len(file_names) == 1
         
         file_name = file_names[0]
         
@@ -807,34 +804,36 @@ class ESAbstractDataProject(AbstractDataProject):
         pass
         #TODO: Check if thing is thinged
         
-    def gen_default_columns_to_index(self, for_linking=True, columns_to_index=None):
+    def gen_default_columns_to_index(self, for_linking=True, columns=None):
+        '''
+        Generate the dict specifying the analyzers to use for each column 
+        while indexing in Elasticsearch        .
+        
+        INPUT:
+            for_linking: The parameters are intended to be used in the context
+                        of linking
+            columns: a list of columns to be indexed
+        '''
+        
         if for_linking:
             analyzers = DEFAULT_ANALYZERS
         else:
             analyzers = {}
         
-        # If columns_to_index is already dict
-        if isinstance(columns_to_index, dict):
-            return columns_to_index            
+        assert isinstance(columns, list) or (columns is None)
         
-        # If arguments are not valid 
-        if (not for_linking) and (columns_to_index is None):
-            raise ValueError('if NOT for_linking, you should specify the columns_to_index')
-        
-        # If a list of columns to analyze is passed
-        if isinstance(columns_to_index, list):
-            columns_to_index = {col: analyzers for col in columns_to_index}
+        if isinstance(columns, list):
+            columns_to_index = {col: analyzers for col in columns}
         
         # If columns_to_index is None (and project is link), fetch from 
         # TODO: cheap fix, move to linker
-        if for_linking and (columns_to_index is None):
+        if for_linking and (columns is None):
             column_tracker = self.metadata['column_tracker']
             columns_to_index = {col: analyzers if col in column_tracker['selected'] \
                                 else {} for col in column_tracker['original']}
         
         return columns_to_index
         
-    
     def delete_project(self):
         '''Deletes entire folder containing the project'''
         if self.has_index():

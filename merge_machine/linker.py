@@ -413,15 +413,15 @@ class Linker(ESAbstractDataProject):
         
         return infered_params    
 
-    def create_es_index_ref(self, columns_to_index, force=False):
-        '''#TODO: doc'''
-        
-        self.ref = ESNormalizer(self.ref.project_id)
-        
-        # TODO: Doesn't seem safe..
-        (module_name, file_name) = proj.get_last_written(file_name=self.metadata['files']['ref']['file_name'])
-        ref_path = self.ref.path_to(module_name,file_name)
-        return self.ref.create_index(ref_path, columns_to_index, force)
+#    def create_es_index_ref(self, columns_to_index, force=False):
+#        '''#TODO: doc'''
+#        
+#        self.ref = ESNormalizer(self.ref.project_id)
+#        
+#        # TODO: Doesn't seem safe..
+#        (module_name, file_name) = proj.get_last_written(file_name=self.metadata['files']['ref']['file_name'])
+#        ref_path = self.ref.path_to(module_name,file_name)
+#        return self.ref.create_index(ref_path, columns_to_index, force)
 
 
     #==========================================================================

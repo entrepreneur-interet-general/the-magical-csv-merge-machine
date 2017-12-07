@@ -220,16 +220,16 @@ def _create_es_index(project_id, data_params, module_params):
     POST:
         - data_params: 
                         {
+                        project_type: (optional) defaults to link
                         module_name:
                         file_name: 
                         }
         - module_params: {
                             columns_to_index: 
-                            for_linking: 
+                            for_linking: create index to use as referential (instead of storage)
                             force: force recreation of index even if existant
                         }
     '''
-    
 
     if module_params is None:
         module_params = {}
@@ -242,33 +242,39 @@ def _create_es_index(project_id, data_params, module_params):
     if (not for_linking) and (columns_to_index is not None):
         raise ValueError('columns_to_index and for_linking cannot be not None and False')
 
+    if (data_params is not None) and ('project_type' in data_params):
+        project_type = data_params['project_type']
 
+    project_type = 'link'
+    if data_params is not None:
+        module_name = data_params['module_name']
+        file_name = data_params['file_name']
+        project_type = data_params.get('project_type', 'link')
+        
     # TODO: dirty fix for linking and normalization
     if for_linking:    
-        proj_link = ESLinker(project_id)
-        proj = ESNormalizer(proj_link.ref.project_id)
-        if data_params is None:
-            module_name = proj_link.metadata['files']['ref']['module_name']
-            file_name = proj_link.metadata['files']['ref']['file_name']
-        else:
-            module_name = data_params['module_name']
-            file_name = data_params['file_name']
+        if project_type == 'link':
+            proj_link = ESLinker(project_id)
+            proj = ESNormalizer(proj_link.ref.project_id)
+        
+            if data_params is None:
+                module_name = proj_link.metadata['files']['ref']['module_name']
+                file_name = proj_link.metadata['files']['ref']['file_name']
+                
+        elif project_type == 'normalize':
+            proj = ESNormalizer(project_id)
             
         # Generate default columns_to_index
-        columns_to_index = proj.gen_default_columns_to_index(for_linking, columns_to_index)
+        if columns_to_index is None:
+            columns_to_index = proj.gen_default_columns_to_index(for_linking)
 
     else:
         proj = ESLinker(project_id)
         if data_params is None:
             module_name, file_name = proj.get_last_written()
-        else:
-            module_name = data_params['module_name']
-            file_name = data_params['file_name']    
             
         if columns_to_index is None:
             columns_to_index = {col: {} for col in proj._get_header(module_name, file_name)}
-
-
         
     file_path = proj.path_to(module_name, file_name)
     proj.create_index(file_path, columns_to_index, force)

@@ -954,7 +954,6 @@ def update_labeller(project_id):
                    result=encoder.encode(labeller.to_emit()))
 
 
-
 @app.route('/api/link/labeller/update_filters/<project_id>/', methods=['POST'])
 def update_filters_labeller(project_id):
     '''
@@ -1116,7 +1115,10 @@ def _choose_queue(job_name, project_id, data_params):
     or if performing on a __MINI or file that doesn't have __MINI
     # TODO: MAKE impossible to overwrite metadata
     '''
-    project_type = SCHEDULED_JOBS[job_name]['project_type']
+    if data_params is not None:
+        project_type = data_params.get('project_type')
+    if project_type is None:
+        project_type = SCHEDULED_JOBS[job_name]['project_type']
     proj = _init_project(project_type=project_type, project_id=project_id)  
 
     if data_params and data_params is not None:
