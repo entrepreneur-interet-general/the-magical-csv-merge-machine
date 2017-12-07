@@ -1115,8 +1115,10 @@ def _choose_queue(job_name, project_id, data_params):
     or if performing on a __MINI or file that doesn't have __MINI
     # TODO: MAKE impossible to overwrite metadata
     '''
+    project_type = None
     if data_params is not None:
         project_type = data_params.get('project_type')
+        
     if project_type is None:
         project_type = SCHEDULED_JOBS[job_name]['project_type']
     proj = _init_project(project_type=project_type, project_id=project_id)  
