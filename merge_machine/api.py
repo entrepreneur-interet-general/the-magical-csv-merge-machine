@@ -465,7 +465,7 @@ def download(project_type, project_id):
     if module_params is None:
         module_params = {}
     file_type = module_params.get('file_type', 'csv')
-    zip_ = module_params.get('zip', True)
+    zip_ = module_params.get('zip', False)
     
     if file_type != 'csv':
         raise NotImplementedError('file_type can only be csv')
@@ -489,9 +489,8 @@ def download(project_type, project_id):
     
     if file_type not in ['csv', 'xls', 'xlsx']:
         raise ValueError('Download file type should be csv, xls or xlsx')
-        
-        
 
+    
     (module_name, file_name) = proj.get_last_written(module_name, file_name)
 
     if module_name == 'INIT':
@@ -505,7 +504,7 @@ def download(project_type, project_id):
         new_file_name = proj.to_xls(module_name, file_name)
     
     file_path = proj.path_to(module_name, file_name)
-
+    
     # Zip this file and send the zipped file
     if zip_:
         zip_file_name = new_file_name + '.zip'
