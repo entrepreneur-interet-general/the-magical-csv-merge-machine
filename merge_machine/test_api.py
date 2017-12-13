@@ -420,6 +420,11 @@ def link_pipeline(c, params):
 
 if __name__ == '__main__':
     
+    # Change current path to path of test_file.py		
+    curdir = os.path.dirname(os.path.realpath(__file__))		
+    os.chdir(curdir)
+    
+    
     # Define how to connect to API
     PROTOCOL = 'http://'
     HOST = '127.0.0.1:5000'
