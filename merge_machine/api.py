@@ -982,7 +982,40 @@ def update_filters_labeller(project_id):
     encoder = MyEncoder()
     return jsonify(error=False,
                    result=encoder.encode(labeller.to_emit()))
+
+@app.route('/api/link/labeller/update_targets/<project_id>/', methods=['POST'])
+def update_targets_labeller(project_id):
+    '''
+    Update filters for a labeller and receive the updated labeller state. 
     
+    GET:
+        project_id: ID for "link" project
+    
+    POST:
+        module_params:
+            target_precision: value between 0 and 1 representing the minimal 
+                acceptable value for precision (results with lower values will
+                be strongly penalised)
+            target_recall:value between 0 and 1 representing the minimal 
+                acceptable value for recall (results with lower values will
+                be strongly penalised)
+    '''
+    _, module_params = _parse_request()
+    
+    logging.info('update_musts got:', module_params)
+    t_p = module_params['target_precision']    
+    t_r = module_params['target_recall'] 
+    
+    proj = ESLinker(project_id=project_id)
+    labeller = proj.labeller_from_json()
+    
+    labeller.update_targets(t_p, t_r)
+    
+    proj.labeller_to_json(labeller)
+    
+    encoder = MyEncoder()
+    return jsonify(error=False,
+                   result=encoder.encode(labeller.to_emit()))  
 
 @app.route('/api/link/labeller/complete_training/<project_id>/', methods=['GET'])
 def complete_training(project_id):
