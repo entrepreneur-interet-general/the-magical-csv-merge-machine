@@ -823,7 +823,7 @@ class ESAbstractDataProject(AbstractDataProject):
         assert isinstance(columns, list) or (columns is None)
         
         if isinstance(columns, list):
-            columns_to_index = {col: analyzers for col in columns}
+            columns_to_index = {col: analyzers for col in columns if '__MODIFIED' not in col}
         
         # If columns_to_index is None (and project is link), fetch from 
         # TODO: cheap fix, move to linker
