@@ -405,7 +405,7 @@ def link_pipeline(c, params):
                             "module_name": 'es_linker',
                             "file_name": params['source_file_name'].rsplit('.')[0] + '.csv'
                             }
-            }    
+            }
     resp = c.post_resp(url_to_append, body)
     job_id = resp['job_id']    
 
@@ -421,7 +421,7 @@ def link_pipeline(c, params):
 if __name__ == '__main__':
     
     # Change current path to path of test_file.py		
-    curdir = os.path.dirname(os.path.realpath(__file__))		
+    curdir = os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]		
     os.chdir(curdir)
     
     
