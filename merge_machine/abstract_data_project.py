@@ -148,7 +148,7 @@ class AbstractDataProject(AbstractProject):
             try:
                 self._remove(iter_module_name, file_name)   
                 # os.remove(file_path)
-                logging.warning('clean_after: Removed {0} / {1}'.format(iter_module_name, file_name))
+                logging.warning('clean_after: Removed {0} / {1} (module_name: {2}, delete_current_module: {3})'.format(iter_module_name, file_name, module_name, delete_current_module))
             except FileNotFoundError:
                 pass
             
