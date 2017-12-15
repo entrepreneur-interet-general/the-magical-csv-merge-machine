@@ -217,9 +217,9 @@ class Linker(ESAbstractDataProject):
         # TODO: last_written btw concat_with_initi and init ?
         (module_name, file_name) = proj.get_last_written()
     
-        # TODO: add warning for implicit use of mini
+        # TODO: add warning for implicit use of not-MINI
         if proj.metadata['has_mini'] and (file_role == 'source'):
-            file_name = 'MINI__' + file_name.replace('MINI__', '')
+            file_name = file_name.replace('MINI__', '')
         if proj.metadata['has_mini'] and (file_role == 'ref'):
             file_name = file_name.replace('MINI__', '')
 
