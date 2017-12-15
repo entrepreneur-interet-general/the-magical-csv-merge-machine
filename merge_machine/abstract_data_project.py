@@ -738,8 +738,10 @@ class ESAbstractDataProject(AbstractDataProject):
             - ref_path: path to the file to index
             - columns_to_index
         '''
-        #        import http
-        #        http.client._MAXHEADERS = 1000
+        
+        # To solve http.client.HTTPException: got more than 100 headers
+        import http
+        http.client._MAXHEADERS = 1000
         
         testing = True      
         
@@ -758,6 +760,7 @@ class ESAbstractDataProject(AbstractDataProject):
             
             logging.warning('Creating index')
             logging.warning(index_settings)
+
             self.ic.create(self.index_name, body=json.dumps(index_settings))    
             logging.warning('Inserting in index')
             es_insert.index(es, ref_gen, self.index_name, testing)
