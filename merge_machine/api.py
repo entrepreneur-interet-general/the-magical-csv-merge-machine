@@ -1047,8 +1047,9 @@ def add_search(project_id):
         project_id: ID for "link" project
     
     POST:
-        col_to_search: A dictionnary mapping the column name to query string
-            Ex: {'colA': 'some text', 'colB': 'some other text'}
+        module_params:
+            col_to_search: A dictionnary mapping the column name to query string
+                Ex: {'colA': 'some text', 'colB': 'some other text'}
     '''
     _, module_params = _parse_request()
     
@@ -1056,7 +1057,9 @@ def add_search(project_id):
     
     labeller = proj.labeller_from_json()
     
-    labeller.add_search_to_ref_gen(module_params['col_to_search'])
+    # TODO: change this hack
+    pms = {key: ' '.join(values) for key, values in module_params['col_to_search'].items()}
+    labeller.add_search_to_ref_gen(pms)
     
     proj.labeller_to_json(labeller)
         
