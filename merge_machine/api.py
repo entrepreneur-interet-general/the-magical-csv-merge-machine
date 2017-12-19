@@ -1049,7 +1049,7 @@ def add_search(project_id):
     POST:
         module_params:
             col_to_search: A dictionnary mapping the column name to query string
-                Ex: {'colA': 'some text', 'colB': 'some other text'}
+                Ex: [{'columns': ['col1', 'col2'], 'values_to_search': ['val1']}, ...]
             max_num_results: (optional) Max number of results for search
     '''
     _, module_params = _parse_request()
@@ -1079,7 +1079,7 @@ def clear_search(project_id):
     
     labeller = proj.labeller_from_json()
     
-    labeller.remove_search_from_ref_gen(module_params['col_to_search'])
+    labeller.clear_custom_search()
     
     proj.labeller_to_json(labeller)
         
