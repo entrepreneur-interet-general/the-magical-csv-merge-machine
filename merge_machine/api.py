@@ -1059,7 +1059,7 @@ def add_search(project_id):
     
     # TODO: change this hack
     pms = {key: ' '.join(values) for key, values in module_params['col_to_search'].items()}
-    labeller.add_search_to_ref_gen(pms)
+    labeller.add_custom_search(pms)
     
     proj.labeller_to_json(labeller)
         
