@@ -1050,6 +1050,7 @@ def add_search(project_id):
         module_params:
             col_to_search: A dictionnary mapping the column name to query string
                 Ex: {'colA': 'some text', 'colB': 'some other text'}
+            max_num_results: (optional) Max number of results for search
     '''
     _, module_params = _parse_request()
     
@@ -1059,7 +1060,7 @@ def add_search(project_id):
     
     # TODO: change this hack
     pms = {key: ' '.join(values) for key, values in module_params['col_to_search'].items()}
-    labeller.add_custom_search(pms)
+    labeller.add_custom_search(pms, module_params.get('max_num_results', 15))
     
     proj.labeller_to_json(labeller)
         
