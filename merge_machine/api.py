@@ -1059,7 +1059,12 @@ def add_search(project_id):
     labeller = proj.labeller_from_json()
     
     # TODO: change this hack
-    pms = {key: ' '.join(values) for key, values in module_params['col_to_search'].items()}
+    def temp(cols):
+        if isinstance(cols, str):
+            return cols
+        elif isinstance(cols, list):
+            return tuple(cols)
+    pms = {temp(search['columns']): search['values_to_search'] for search in module_params['search']}
     labeller.add_custom_search(pms, module_params.get('max_num_results', 15))
     
     proj.labeller_to_json(labeller)
