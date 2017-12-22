@@ -274,21 +274,6 @@ class Linker(ESAbstractDataProject):
         
         return log, run_info
 
-    def write_labeller(self, module_name, labeller):
-        '''Pickles the labeller object in project'''
-        # TODO: Add isinstance(labeller, Labeller)        
-        pickle_path = self.path_to(module_name, 'labeller.pkl')
-        
-        labeller.to_pickle(pickle_path)
-    
-    def _read_labeller(self, module_name):
-        '''Reads labeller stored in pickle'''
-        pickle_path = self.path_to(module_name, 'labeller.pkl')
-        
-        labeller = ESLabeller.from_pickle(pickle_path, es)            
-        return labeller
-
-
     #==========================================================================
     #  Module specific: ES Linker
     #==========================================================================
