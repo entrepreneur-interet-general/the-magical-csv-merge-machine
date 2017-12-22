@@ -441,7 +441,7 @@ TYPE_TAGS = {
 	F_INSEE: [F_ID, u'Code', u'Numéro'],
 	F_NIF: [F_ID], 
 	F_NIR: [F_ID], 
-	F_NNS : [F_NNS, u'NumNatStruct', 'RNSR']
+	F_NNS : [F_NNS, u'NumNatStruct', 'RNSR'],
 	F_TVA: [F_ID], 
 	F_GRID_LABEL: [F_ID, 'GRID', 'Recherche', 'Index'],
 	F_YEAR: [F_DATE],
