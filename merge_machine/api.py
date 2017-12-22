@@ -1048,7 +1048,7 @@ def add_search(project_id):
     
     POST:
         module_params:
-            col_to_search: A dictionnary mapping the column name to query string
+            search: A dictionnary mapping the column name to query string
                 Ex: [{'columns': ['col1', 'col2'], 'values_to_search': ['val1']}, ...]
             max_num_results: (optional) Max number of results for search
     '''
