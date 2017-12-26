@@ -126,6 +126,9 @@ class AbstractDataProject(AbstractProject):
         return (module_name, file_name)
 
 
+    def _is_file(self, module_name, file_name):
+        return os.path.isfile(self.path_to(module_name, file_name))
+
     def clean_after(self, module_name, file_name, delete_current_module=True):
         '''
         Removes all occurences of file (file_name) and transformations
