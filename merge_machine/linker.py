@@ -254,7 +254,8 @@ class Linker(ESAbstractDataProject):
         return super().infer(module_name, params)
     
     def linker(self, module_name, data_params, module_params):
-        '''Wrapper aro'''
+        '''Wrapper around link methods.'''
+        
         if module_name == 'es_linker':
             return self.es_linker(module_params)
         elif module_name == 'dedupe_linker':
@@ -263,7 +264,10 @@ class Linker(ESAbstractDataProject):
     def es_linker(self, module_params):
         module_params['index_name'] = ESNormalizer(self.ref.project_id).index_name
         
-        self.source.load_data(*self.source.get_last_written())
+        s = self.metadata['files']['source']
+        
+        self.source.load_data(s['module_name'], s['file_name'])
+        
         self.mem_data = self.source.mem_data
         self.mem_data_info = self.source.mem_data_info
         
