@@ -24,7 +24,7 @@ c = APIConnection(PROTOCOL, HOST, PRINT, PRINT_CHAR_LIMIT)
 def normalize_pipeline(c, params):
     '''
     INPUT:
-        c: instance of APICO=onnection
+        c: instance of APIConnection
         params: ...
     '''
     
@@ -288,8 +288,6 @@ def link_pipeline(c, params):
     if body is not None:
         resp = c.post_resp(url_to_append, body)
     
-    # TODO: Add method to automatically add training data
-    
     #==============================================================================
     # Add training_data  
     #
@@ -406,6 +404,10 @@ def link_pipeline(c, params):
                             "file_name": params['source_file_name'].rsplit('.')[0] + '.csv'
                             }
             }
+    
+    if 'column_certain_matches' in params:
+        body['module_params'] = {'col_matches': params['column_certain_matches']['column_certain_matches']}
+    
     resp = c.post_resp(url_to_append, body)
     job_id = resp['job_id']    
 
