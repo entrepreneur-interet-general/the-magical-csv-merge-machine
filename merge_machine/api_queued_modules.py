@@ -389,7 +389,7 @@ def _dedupe_linker(project_id, *argv):
 
     return {}
 
-def _link_results_analyzer(project_id, data_params, *argv):
+def _link_results_analyzer(project_id, data_params, module_params):
     '''
     Runs the link results analyzer module
     
@@ -402,11 +402,21 @@ def _link_results_analyzer(project_id, data_params, *argv):
         - data_params: {
                 "module_name": module to fetch from
                 "file_name": file to fetch
-                }    
+                }
+        - (module_params): {
+                "col_matches": dict like {"source": col_source, "ref": col_ref}
+                    A pair of columns that can be used a joining key:
+                "lower": bool (defaults to False)
+                    Whether or not the values of the joining should be lowercased
+                    before joining
+                }
     '''
+    if module_params is None:
+        module_params = dict()
+    
     proj = ESLinker(project_id=project_id)
     proj.load_data(data_params['module_name'], data_params['file_name'])    
-    result = proj.infer('link_results_analyzer', {})
+    result = proj.analyze_results(module_params)
     
     # Write log
     proj._write_log_buffer(False)

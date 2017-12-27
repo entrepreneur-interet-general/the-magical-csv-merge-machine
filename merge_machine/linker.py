@@ -385,22 +385,36 @@ class Linker(ESAbstractDataProject):
         # Initiate log
         log = self._init_active_log(module_name, 'infer')
         
-        agg_results = defaultdict(int) 
+        complete_metrics = defaultdict(int) 
         for data in self.mem_data:
-            infered_params = link_results_analyzer(data, params)
+            metrics = link_results_analyzer(data, params)
             
-            agg_results['num_match'] += infered_params['num_match']
-            agg_results['num_match_thresh'] += infered_params['num_match_thresh']
+            for col in ['num_match_thresh', 'num_match', 'num_verif_samples']:
+                complete_metrics[col] += metrics[col]
+            
+            # Weigh ratios according to the number of samples (we divide after)
+            complete_metrics['perc_match_thresh'] += metrics['perc_match_thresh'] * metrics['num_match_thresh']
+            complete_metrics['perc_match'] += metrics['perc_match'] * metrics['num_match']
+            complete_metrics['precision'] += metrics.get('precision', 0) * metrics['num_verif_samples']
+            
+        if complete_metrics['num_match_thresh']:
+            complete_metrics['perc_match_thresh'] /= complete_metrics['num_match_thresh']
+
+        if complete_metrics['num_match']:
+            complete_metrics['perc_match'] /= complete_metrics['num_match']
+            
+        if complete_metrics['precision']:
+            complete_metrics['precision'] /= complete_metrics['num_verif_samples']            
 
         # Write result of inference
         module_to_write_to = self.MODULES['infer'][module_name]['write_to']
 
-        self.upload_config_data(agg_results, module_to_write_to, 'infered_config.json')
+        self.upload_config_data(complete_metrics, module_to_write_to, 'infered_config.json')
         
         # Update log buffer
         self._end_active_log(log, error=False)  
         
-        return infered_params    
+        return complete_metrics    
 
 #    def create_es_index_ref(self, columns_to_index, force=False):
 #        '''#TODO: doc'''

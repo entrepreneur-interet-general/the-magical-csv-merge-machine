@@ -258,7 +258,7 @@ class AbstractDataProject(AbstractProject):
             '''Load the correct type according to the column name'''
             if '__MODIFIED' in col:
                 return bool
-            elif col == '__CONFIDENCE':
+            elif col in ['__CONFIDENCE', '__ES_SCORE', '__THRESH']:
                 return float
             else:
                 return str
