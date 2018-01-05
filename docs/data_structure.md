@@ -1,66 +1,43 @@
-# Server side file system structure [DEPRECATED]
-### TODO: Change to unique file transform + linking project
+# Server side file system structure
 
 ```
 data/
     projects/
-        proj_1/ # Unique Id for each project (1 referential and 1 type of source)
-            metadata.json # Original file name / list of modules that were completed, in what order / list of file names
-            source/
-                INIT/ # Raw files as they were uploaded
-                    source_name.csv # Initial file uploaded by user
-                    (source_2.csv) # Tbd later (if we want to re-use infered and user params)
-                    run_info.json
-                load/ # Encoding + separator
-                    infered_params.json
-                    user_params.json
-                    source_name.csv # File after transformation
-                    run_info.json
-                missing_values/
-                    infered_params.json
-                    user_params.json
-                    source_name.csv
-                    run_info.json                    
-                recoding/ # Cleaning & normalisation
-                    infered_params.json
-                    source_name.json
-                    source.csv
-                    run_info.json
-                (other_pre_processing/)
-                    infered_params.json
-                    user_params.json
-                    source_name.csv
-                    run_info.json
-        
-            (ref/) # Only if user uploads his own referential # Same structure as source/
-                INIT/
-                    ref.csv
-                [...] # Same as source
-                
-            dedupe/
-                infered_params.json # What columns to pair
-                user_params.json # What columns to pair
-                user_training.json # Training pairs
-                learned_params.txt 
-                other_dedupe_generated_files.example 
-                merged_id.csv
-                
-            analysis/
-                analysis.json
-    
-        proj_2/
-            [...]
-        [...]
-        
-    referentials/ # Internal referentials
-        ref_name_1/ # For example "sirene_restreint" # Same structure as source/
-            ref.csv
-            [...] # Same as source
-        ref_name_2/
-            [...]
-        [...]
-    users/ # To be defined ?
-        ???
-    saved_user_data/ # For V2 ?
-        ???
+        normalize/
+            proj_1/ # Unique Id (hash) for each project
+                metadata.json # Original file name / list of modules that were completed, in what order / list of file names
+                source/
+                    INIT/ # The original untransformed files
+                        source_name.csv # Initial file uploaded by user
+                        infered_config.json # Data from upload (num lines, etc.)
+                        source_name.csv__run_info.json # Also data from upload (num lines, etc.)
+                    replace_mvs/ # Inference and replacement of missing values
+                        source_name.csv # Transformed file
+                        infered_config.json # Result of `infer_mvs`
+                        source_name.csv__run_info.json # Output of run
+                    recode_types/
+                        source_name.csv # Transformed file
+                        infered_config.json # Result of `infer_types`
+                        source_name.csv__run_info.json # Output of run                  
+                    concat_with_init/ # Cleaning & normalisation
+                        source_name.csv # Initial file uploaded by user
+                        source_name.csv__run_info.json 
+            proj_2/ # Unique Id (hash) for each project
+                [...]
+
+
+        link/
+            proj_A/ # Unique Id (hash) for each project
+                metadata.json
+                es_linker/
+                    column_matches.json
+                    labeller.json
+                    learned_settings.json
+                    source.csv # The merged file
+                    source.csv__run_info.json
+                results_analysis/
+                    infered_config.json # Results of the analysis        
+            proj_B/ # Unique Id (hash) for each project
+                [...]
+     
  ```
