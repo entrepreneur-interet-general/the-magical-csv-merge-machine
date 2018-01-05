@@ -36,13 +36,13 @@ from itertools import tee
 import os
 import time
 
+from merge_machine import es_insert
+from merge_machine.es_config import DEFAULT_ANALYZER, INDEX_SETTINGS_TEMPLATE
 import numpy as np
 import pandas as pd
 
 from abstract_project import AbstractProject, NOT_IMPLEMENTED_MESSAGE
 from es_connection import es, ic
-from merge_machine import es_insert
-from merge_machine.es_config import DEFAULT_ANALYZER, DEFAULT_ANALYZERS, INDEX_SETTINGS_TEMPLATE
 
 MINI_PREFIX = 'MINI__'
 
@@ -256,7 +256,7 @@ class AbstractDataProject(AbstractProject):
                           
         def choose_dtype(col):
             '''Load the correct type according to the column name'''
-            if '__MODIFIED' in col:
+            if any(x in col for x in ['__MODIFIED', '__IS_MATCH']):
                 return bool
             elif col in ['__CONFIDENCE', '__ES_SCORE', '__THRESH']:
                 return float
@@ -657,7 +657,7 @@ class AbstractDataProject(AbstractProject):
     def run_transform_module(self, module_name, partial_data, params):
         '''
         Runs the selected module on the dataframe in partial_data and stores
-        modifications in the run_info buffer
+        modifications in the run_info buffer.
         '''
         logging.info('At module: {0}'.format(module_name))
         # Apply module transformation
@@ -805,40 +805,7 @@ class ESAbstractDataProject(AbstractDataProject):
             logging.error('ES index does not have the same number of rows as the original file.')
             return False
         return True
-    
-    def index_is_complete(self):
-        pass
-        #TODO: Check if thing is thinged
-        
-    def gen_default_columns_to_index(self, for_linking=True, columns=None):
-        '''
-        Generate the dict specifying the analyzers to use for each column 
-        while indexing in Elasticsearch        .
-        
-        INPUT:
-            for_linking: The parameters are intended to be used in the context
-                        of linking
-            columns: a list of columns to be indexed
-        '''
-        
-        if for_linking:
-            analyzers = DEFAULT_ANALYZERS
-        else:
-            analyzers = {}
-        
-        assert isinstance(columns, list) or (columns is None)
-        
-        if isinstance(columns, list):
-            columns_to_index = {col: analyzers for col in columns if '__MODIFIED' not in col}
-        
-        # If columns_to_index is None (and project is link), fetch from 
-        # TODO: cheap fix, move to linker
-        if for_linking and (columns is None):
-            column_tracker = self.metadata['column_tracker']
-            columns_to_index = {col: analyzers if col in column_tracker['selected'] \
-                                else {} for col in column_tracker['original']}
-        
-        return columns_to_index
+
         
     def delete_project(self):
         '''Deletes entire folder containing the project'''

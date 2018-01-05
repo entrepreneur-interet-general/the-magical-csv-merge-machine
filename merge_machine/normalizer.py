@@ -18,8 +18,15 @@ from werkzeug.utils import secure_filename
 
 from abstract_data_project import ESAbstractDataProject, MINI_PREFIX
 from CONFIG import NORMALIZE_DATA_PATH
+from merge_machine.es_config import DEFAULT_ANALYZERS
+from LINKER_CONFIG import DEFAULT_ANALYZERS_TYPE
 
 from MODULES import NORMALIZE_MODULES, NORMALIZE_MODULE_ORDER, NORMALIZE_MODULE_ORDER_log # TODO: think about these...
+
+
+
+
+
 
 class Normalizer(ESAbstractDataProject):
     """
@@ -521,6 +528,44 @@ class Normalizer(ESAbstractDataProject):
             logging.warning('run_all_transforms was called on a project without' \
                             ' a mini version. Nothing was done...')
 
+
+    def gen_default_columns_to_index(self, column_types=None):
+        '''Generate the dict specifying the analyzers to use for each column 
+        while indexing in Elasticsearch.
+        
+        Parameters
+        ----------
+        column_types: dict
+            A dict indicating the type of each column. This can be the result
+            of `infer_types`
+            
+        Returns
+        -------
+        columns_to_index: dict associating sets of str (values) to str (keys)
+            A dict indicating what Elasticsearch analyzers to use on each 
+            column during indexing.
+        '''
+        
+        def temp(col):
+            """Return the type specific default analyzer for a column or return 
+            all default analyzers if type is not specified or could not be found.
+            """
+            return DEFAULT_ANALYZERS_TYPE.get(column_types.get(col), DEFAULT_ANALYZERS)
+        
+        if column_types is None:
+            column_types = dict()
+
+        # If columns_to_index is None (and project is link), fetch from metadata
+        # TODO: cheap fix, move to linker
+        column_tracker = self.metadata['column_tracker']
+        columns_to_index = {col: temp(col) if col in column_tracker['selected'] \
+                        else {} for col in column_tracker['original']}       
+
+        # Remove all columns containing "__MODIFIED"
+        columns_to_index = {key: vals for key, vals in columns_to_index.items()
+                            if '__MODIFIED' not in key}
+        
+        return columns_to_index
 
 
 class ESNormalizer(Normalizer):
