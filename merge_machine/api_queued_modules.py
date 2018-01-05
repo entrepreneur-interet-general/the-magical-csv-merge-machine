@@ -266,7 +266,7 @@ def _create_es_index(project_id, data_params, module_params):
             
         # Generate default columns_to_index
         if columns_to_index is None:
-            columns_to_index = proj.gen_default_columns_to_index(for_linking)
+            columns_to_index = proj.gen_default_columns_to_index()
 
     else:
         proj = ESLinker(project_id)
