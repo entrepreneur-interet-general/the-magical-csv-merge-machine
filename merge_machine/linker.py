@@ -131,6 +131,9 @@ class Linker(ESAbstractDataProject):
         
         print('trying to upload', learned_settings)
         
+        # TODO: figure out where to move this
+        learned_settings['best_thresh'] = 1
+        
         self.upload_config_data(learned_settings, 'es_linker', 'learned_settings.json')
         
         for file_name in self.metadata['log']:
