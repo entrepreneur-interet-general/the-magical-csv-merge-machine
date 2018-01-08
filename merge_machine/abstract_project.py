@@ -23,6 +23,7 @@ METHODS:
 
 """
 
+import fcntl
 import hashlib
 import json
 import os
@@ -142,7 +143,9 @@ class AbstractProject():
         return os.path.abspath(path)    
         
     def upload_config_data(self, config_dict, module_name, file_name):
-        '''Will write json config file'''
+        '''Write dict type data with a retry logic if a file is locked.'''
+        NUM_RETRY = 10
+        RETRY_INTERVAL = 0.1
         
         if config_dict is None:
             return
@@ -152,19 +155,55 @@ class AbstractProject():
         if (not os.path.isdir(dir_path)) and module_name:
             os.makedirs(dir_path)   
 
-        # Write file
         file_path = self.path_to(module_name, file_name)
-        with open(file_path, 'w') as w:
-            json.dump(config_dict, w, cls=MyEncoder)
+
+        for _ in range(NUM_RETRY):
+            try:
+                # Lock File before writing
+                with open(file_path, 'a') as f:
+                    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                
+                # Write file
+                with open(file_path, 'w') as w:
+                    json.dump(config_dict, w, cls=MyEncoder)
+                
+                    # Unlock file
+                    fcntl.flock(w, fcntl.LOCK_UN)
+                break
+                    
+            except BlockingIOError:
+                time.sleep(RETRY_INTERVAL)
+        else:
+            raise BlockingIOError('{0} is un-writable because '.format(file_path) \
+                                + 'it was locked for by another process')
 
     def read_config_data(self, module_name, file_name):
+        '''Read a json file with retry logic if a file is locked (empty dict 
+        if file is not found).
         '''
-        Reads json file and returns dictionary (empty dict if file is not found)
-        '''
+        NUM_RETRY = 10
+        RETRY_INTERVAL = 0.1
+
         file_path = self.path_to(module_name=module_name, 
                                  file_name=file_name)
         if os.path.isfile(file_path):
-            config = json.loads(open(file_path).read())
+            
+            for _ in range(NUM_RETRY):
+                try:
+                    with open(file_path, 'r') as f:
+                        # Lock file
+                        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        # Read
+                        config = json.loads(f.read())
+                        # Unlock file
+                        fcntl.flock(f, fcntl.LOCK_UN)
+                        break
+                except BlockingIOError:
+                    time.sleep(RETRY_INTERVAL)
+            else:
+                raise BlockingIOError('{0} is un-readable because '.format(file_path) \
+                            + 'it was locked for writing for by another process')
+                
         else: 
             config = dict()
         return config               
