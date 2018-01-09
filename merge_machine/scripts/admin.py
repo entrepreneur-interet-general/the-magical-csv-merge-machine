@@ -8,13 +8,19 @@ Created on Fri Mar  3 10:37:58 2017
 
 import os
 import time
+import sys
 
 from elasticsearch import client
+
+# Change directory to main folder to be able to access methods
+main_dir_path = os.path.split(os.path.abspath(os.path.dirname(__file__)))[0]
+sys.path.append(main_dir_path)
+os.chdir(main_dir_path)
+
 from linker import ESLinker
 from normalizer import ESNormalizer
 
 from es_connection import es
-
 from CONFIG import LINK_DATA_PATH, NORMALIZE_DATA_PATH
 
 def _check_project_type(project_type):
