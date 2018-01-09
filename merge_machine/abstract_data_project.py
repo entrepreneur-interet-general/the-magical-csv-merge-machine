@@ -553,6 +553,7 @@ class AbstractDataProject(AbstractProject):
         # TODO: move this. This was done to avoid concat with init when no changes were made
         nrows = 0
         if os.path.isfile(file_path):
+            nrows = self.metadata['files'][self.mem_data_info['file_name']]['nrows']
             logging.warning('File {0} already exists. Will not be re-written')
 
         else:
@@ -585,7 +586,6 @@ class AbstractDataProject(AbstractProject):
         # Reset data_was_transformed
         self.mem_data_info['data_was_transformed'] = False
     
-
         return nrows
 
         
