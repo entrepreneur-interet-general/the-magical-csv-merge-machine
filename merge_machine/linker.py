@@ -6,7 +6,9 @@ Created on Mon Apr 24 15:46:00 2017
 @author: leo
 """
 from collections import  defaultdict
+import fcntl
 import os
+import time
 
 from merge_machine.es_labeller import Labeller as ESLabeller
 import pandas as pd
@@ -359,9 +361,35 @@ class Linker(ESAbstractDataProject):
         return labeller
     
     def labeller_to_json(self, labeller):
+        '''Write a Labeller object as a json in the appropriate directory. This
+        includes a locking logic to avoid concurrent writes.
+        '''
+        NUM_RETRY = 10
+        RETRY_INTERVAL = 0.1
         
         file_path = self.path_to('es_linker', 'labeller.json')
-        labeller.to_json(file_path)
+        
+        for _ in range(NUM_RETRY):
+            try:
+                # Lock File before writing
+                with open(file_path, 'a') as f:
+                    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                
+                # Write file
+                labeller.to_json(file_path)
+                
+                # Unlock file
+                with open(file_path, 'r') as w:
+                    fcntl.flock(w, fcntl.LOCK_UN)
+                break
+                    
+            except BlockingIOError:
+                time.sleep(RETRY_INTERVAL)
+        else:
+            raise BlockingIOError('{0} is un-writable because '.format(file_path) \
+                                + 'it was locked for by another process.')        
+        
+        
         
     def labeller_from_json(self):
         file_path = self.path_to('es_linker', 'labeller.json')
@@ -374,7 +402,7 @@ class Linker(ESAbstractDataProject):
         
         
         ref_table_name = self.ref.project_id
-        labeller = ESLabeller.from_json(file_path, es, source, ref_table_name)
+        labeller = ESLabeller.from_json(file_path, es, source, ref_table_name)        
         
         return labeller
             
