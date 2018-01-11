@@ -18,9 +18,10 @@
 				 "Ville postale": ["french", "n_grams", "city"],
 				 "Code postal": ["integers"],
 				 "Date de mise à jour": ["integers"],
-				 "Label": ["standard"],
 				 "Label numéro": ["standard", "integers"],
 				 "Libellé établissement tutelle": ["french", "n_grams", "integers", "city"],
+                   "Sigle établissement tutelle": ["standard", "n_grams"],
+                   "Responsables": ["french", "n_grams"],
 
 				 "ID EA": ["integers", "standard"], 
 				 "ID GDR": ["integers", "standard"], 

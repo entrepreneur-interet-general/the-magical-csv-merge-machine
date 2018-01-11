@@ -16,6 +16,7 @@ from api_helpers import APIConnection
 # Path to configuration
 config_path = os.path.join('conf', 'rnsr.json')
 connection_config_path = os.path.join('conf', 'local_connection_parameters.json')
+logs_path = 'logs.json'
 
 # =============================================================================
 # Define how to connect to API
@@ -92,3 +93,27 @@ job_id = resp['job_id']
 #==============================================================================
 url_to_append = '/queue/result/{0}'.format(job_id)
 resp = c.wait_get_resp(url_to_append, max_wait=10000)
+
+
+# =============================================================================
+# Load logs
+# =============================================================================
+if os.path.isfile(logs_path):
+    logs = json.load(open(logs_path))
+else:
+    logs = dict()
+
+# =============================================================================
+# Delete project with same display_name if necessary
+# =============================================================================
+old_project_id = logs.get(params['new_project']['display_name'])
+if old_project_id is not None:
+    url_to_append = '/api/delete/normalize/{0}'.format(old_project_id)
+    resp = c.get_resp(url_to_append)
+    
+# =============================================================================
+# Add new project to logs
+# =============================================================================
+logs[params['new_project']['display_name']] = project_id
+with open(logs_path, 'w') as w:
+    json.dump(logs, w)
