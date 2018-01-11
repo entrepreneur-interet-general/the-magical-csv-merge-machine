@@ -14,8 +14,8 @@ import os
 from api_helpers import APIConnection
 
 # Path to configuration
-config_path = os.path.join('parameters', 'sirene.json')
-connection_config_path = os.path.join('parameters', 'local_connection_parameters.json')
+config_path = os.path.join('conf', 'rnsr.json')
+connection_config_path = os.path.join('conf', 'local_connection_parameters.json')
 
 # =============================================================================
 # Define how to connect to API
