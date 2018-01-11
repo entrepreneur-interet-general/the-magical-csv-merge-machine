@@ -1,0 +1,31 @@
+{
+          "new_project": {
+                        "description": "Répertoire National des Structures de Recherche",
+                        "display_name": "RNSR",
+                        "public": true
+                      },
+        
+            "file_path": "/home/m75380/Documents/eig/the-magical-csv-merge-machine/merge_machine/local_test_data/rnsr/rnsr_flat.csv",
+            
+            "columns_to_index": {
+				"Numéro national de structure": [],
+				 "Libellé": ["french", "n_grams", "integers", "city", "country"],
+				 "Sigle": ["n_grams", "standard", "french"],
+				 "État": [],
+				 "Année de création": ["integers"],
+				 "Année de fermeture": ["integers"],
+				 "Adresse postale": ["french", "n_grams", "integers"],
+				 "Ville postale": ["french", "n_grams", "city"],
+				 "Code postal": ["integers"],
+				 "Date de mise à jour": ["integers"],
+				 "Label": ["standard"],
+				 "Label numéro": ["standard", "integers"],
+				 "Libellé établissement tutelle": ["french", "n_grams", "integers", "city"],
+
+				 "ID EA": ["integers", "standard"], 
+				 "ID GDR": ["integers", "standard"], 
+				 "ID UMR": ["integers", "standard"],
+				 "ID UMRA": ["integers", "standard"],
+				 "ID UMRS": ["integers", "standard"]
+                 }
+}

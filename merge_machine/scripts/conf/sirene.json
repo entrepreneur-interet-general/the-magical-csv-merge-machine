@@ -1,0 +1,29 @@
+{
+          "new_project": {
+                        "description": "Base SIRENE",
+                        "display_name": "SIRENE",
+                        "public": true
+                      },
+        
+            "file_path": "/home/m75380/Documents/eig/the-magical-csv-merge-machine/merge_machine/local_test_data/sirene/sirene_filtered.csv",
+            
+            "columns_to_index": {
+                                     "CEDEX": [],
+                                     "ENSEIGNE": ["french", "n_grams", "integers", "city"],
+                                     "L1_DECLAREE": ["french", "n_grams", "integers", "city"],
+                                     "L1_NORMALISEE": ["french", "n_grams", "integers", "city"],
+                                     "L4_DECLAREE": ["french", "n_grams", "integers", "city"],
+                                     "L4_NORMALISEE": ["french", "n_grams", "integers", "city"],
+                                     "L6_DECLAREE": ["french", "n_grams", "integers", "city"],
+                                     "L6_NORMALISEE": ["french", "n_grams", "integers", "city"],
+                                     "LIBAPET": [],
+                                     "LIBCOM": ["french", "n_grams", "city"],
+                                     "NIC": [],
+                                     "NOMEN_LONG": ["french", "n_grams", "integers", "city"],
+                                     "PRODEN": [],
+                                     "PRODET": [],
+                                     "SIEGE": [],
+                                     "SIREN": [],
+                                     "SIRET": []
+                                }
+}

@@ -1,0 +1,17 @@
+{
+          "new_project": {
+                        "description": "Base Grid",
+                        "display_name": "GRID",
+                        "public": true
+                      },
+        
+            "file_path": "/home/m75380/Documents/eig/the-magical-csv-merge-machine/merge_machine/local_test_data/grids/grid.csv",
+            
+            "columns_to_index": {
+                                     "ID": ["integers"],
+				     "Name": ["standard", "french", "n_grams", "integers", "city", "country"], 
+				     "City": ["standard", "french", "n_grams", "city"], 
+				     "State": ["standard", "french", "n_grams"],
+				     "Country": ["standard", "french", "n_grams", "country"]
+                                }
+}
