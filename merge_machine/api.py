@@ -630,8 +630,10 @@ def read_config(project_type, project_id):
             or '__run_info.json' in file_name
     
     result = proj.read_config_data(data_params['module_name'], file_name)
-    return jsonify(result=result)
-
+    if result:
+        return jsonify(result=result)
+    else:
+        return jsonify(result=result), 404
 
 
 @app.route('/api/upload_config/<project_type>/<project_id>/', methods=['POST'])
