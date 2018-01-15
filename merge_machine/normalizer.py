@@ -558,8 +558,7 @@ class Normalizer(ESAbstractDataProject):
         # If columns_to_index is None (and project is link), fetch from metadata
         # TODO: cheap fix, move to linker
         column_tracker = self.metadata['column_tracker']
-        columns_to_index = {col: temp(col) if col in column_tracker['selected'] \
-                        else {} for col in column_tracker['original']}       
+        columns_to_index = {col: temp(col) for col in column_tracker['selected']}       
 
         # Remove all columns containing "__MODIFIED"
         columns_to_index = {key: vals for key, vals in columns_to_index.items()
