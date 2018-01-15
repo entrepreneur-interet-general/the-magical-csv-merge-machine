@@ -139,11 +139,14 @@ app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024 # Check that files ar
 app.config['ALLOWED_EXTENSIONS'] = ['csv', 'xls', 'xlsx', 'zip']
 
 REQUIRE_PASSWORD = False
+PROD = False
 
 # Redis connection
 q = dict()
 for q_name in VALID_QUEUES:
     q[q_name] = Queue(q_name, connection=conn, default_timeout=7200)
+
+
 
 #==============================================================================
 # HELPER FUNCTIONS
@@ -236,12 +239,9 @@ def _init_project(project_type,
     
     return proj
             
-
-
 #==============================================================================
 # Error handling
 #==============================================================================
-
 
 #@app.errorhandler(404)
 #def page_not_found(error):
@@ -253,37 +253,15 @@ def _init_project(project_type,
 #    app.logger.error('Method not allowed (POST or GET): %s', (error))
 #    return jsonify(error=True, message=error.description), 405
 
-def api_error_wrapper(func):
-    """
-    Decorator for API methods that will return the original error message if
-    no error occured and will return {error: True, message: "the error message"}
-    if an error is caught.
+@app.errorhandler(500)
+def server_error(error):
+    app.logger.error('Server Error:', (error))
+    return jsonify(error=True, message=error.__str__()), 500 
     
-    NB: set PROD to False to disable this
-    
-    TODO: Distinction between showable errors and non-showable
-    TODO: Add decorator to all API methods at once
-    """
-    PROD = True
-    
-    if PROD:
-        def wrapper(*args, **kwargs):
-            try:
-                res = func(*args, **kwargs)
-                return res
-            except Exception as e:
-                return jsonify(error=True, message=e.__str__()) 
-        return wrapper
-    else:
-        return func
-            
-
 
 @app.route('/api/err/')
-@api_error_wrapper
 def err():
-    raise Exception('Yo lo')
-
+    raise Exception('Yolo this an error')
 
 # =============================================================================
 # Security
@@ -1368,4 +1346,4 @@ def list_public_projects(project_type):
     return jsonify(list_of_projects)
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    app.run(host='127.0.0.1', port=5000, debug=not PROD)
