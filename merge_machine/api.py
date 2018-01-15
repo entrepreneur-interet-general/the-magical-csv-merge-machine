@@ -8,7 +8,6 @@ Created on Mon Feb  6 15:01:16 2017
 TODO:
     - Safe file name / not unique per date
     
-    - API: List of public referentials
     - API: List of finished modules for given project / source
     - API: List of loaded sources
     
@@ -17,8 +16,6 @@ TODO:
     
     - API: Error codes / remove error
     
-    - Use logging module
-    
     - Change metadata to use_public and ref_name to last used or smt. Data to
       use is specified on api call and not read from metadata (unless using last used)
     
@@ -26,8 +23,6 @@ TODO:
 
     - General error handling
     
-    
-    - ABSOLUTELY:  handle memory issues
     - Allocate memory by user/ by IP?
     
     - Study impact of training set size on match rate
@@ -46,10 +41,6 @@ TODO:
     
     - Avoid import in scheduled 
     - fix cancel job
-    
-    - DEPRECATE restriction with (done in elasticsearch)
-    
-    - delete index with project
 
     - https://blog.miguelgrinberg.com/post/restful-authentication-with-flask
 
@@ -98,11 +89,11 @@ curl -i http://127.0.0.1:5000/metadata/ -X POST -F "request_json=@sample_downloa
 USES: /python-memcached
 """
 
-import json
+import functools
+import hashlib
 import logging
 import os
 import tempfile
-import traceback
 import zipfile
     
 # Change current path to path of api.py
@@ -146,6 +137,8 @@ app.debug = True
 app.config['SECRET_KEY'] = open('secret_key.txt').read()
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024 # Check that files are not too big (10GB)
 app.config['ALLOWED_EXTENSIONS'] = ['csv', 'xls', 'xlsx', 'zip']
+
+REQUIRE_PASSWORD = False
 
 # Redis connection
 q = dict()
@@ -281,7 +274,8 @@ def api_error_wrapper(func):
             except Exception as e:
                 return jsonify(error=True, message=e.__str__()) 
         return wrapper
-    return func
+    else:
+        return func
             
 
 
@@ -291,6 +285,47 @@ def err():
     raise Exception('Yo lo')
 
 
+# =============================================================================
+# Security
+# =============================================================================
+
+def _real_pwd(string):
+    md5 = hashlib.md5()
+    md5.update(string.encode('utf-8'))
+    md5.update(app.config['SECRET_KEY'].encode('utf-8'))
+    md5.update('someotherstring'.encode('utf-8'))
+    return md5.hexdigest()
+
+def _protect_project(func):
+    """Check that the password passed through POST is valid.    
+    """
+    if not REQUIRE_PASSWORD:
+        return func
+    
+    @functools.wraps(func)
+    def wrapper(*argv, **kwargs):
+        
+        # Get user token
+        auth = request.authorization
+        if auth is None:
+            user_pwd = None
+        else:
+            auth.get('password')
+        
+        # Get real token
+        project_id = locals()['kwargs']['project_id']
+        real_pwd = _real_pwd(project_id)
+        
+        if user_pwd is None:
+            return jsonify(error=True, message='No credentials were provided.'), 401
+
+        if user_pwd != real_pwd:
+            return jsonify(error=True, message='The password provided is incorrect.'), 403
+    
+        return func(*argv, **kwargs)
+        
+    return wrapper
+    
 #==============================================================================
 # API
 #==============================================================================
@@ -347,6 +382,7 @@ def new_project(project_type):
                    project_id=proj.project_id)
 
 @app.route('/api/delete/<project_type>/<project_id>', methods=['GET'])
+@_protect_project
 def delete_project(project_type, project_id):
     """
     Delete an existing project (including all configuration, data and metadata)
@@ -383,6 +419,7 @@ def metadata(project_type, project_id):
     return resp
 
 @app.route('/api/set_skip/<project_type>/<project_id>', methods=['POST'])
+@_protect_project
 def set_skipped(project_type, project_id):
     """
     Set skip value for selected module
@@ -438,6 +475,7 @@ def get_last_written(project_type, project_id):
 
 @app.route('/api/download/<project_type>/<project_id>', methods=['GET', 'POST'])
 @cross_origin()
+@_protect_project
 def download(project_type, project_id):
     '''
     Download specific file from project.
@@ -638,6 +676,7 @@ def read_config(project_type, project_id):
 
 @app.route('/api/upload_config/<project_type>/<project_id>/', methods=['POST'])
 @cross_origin()
+@_protect_project
 def upload_config(project_type, project_id):
     """
     Writes the content of params
@@ -670,6 +709,7 @@ def upload_config(project_type, project_id):
 #==============================================================================
 
 @app.route('/api/normalize/select_columns/<project_id>', methods=['POST'])
+@_protect_project
 def add_selected_columns(project_id):
     """
     Select columns to modify in normalization project. 
@@ -690,6 +730,7 @@ def add_selected_columns(project_id):
 
 @app.route('/api/normalize/upload/<project_id>', methods=['POST'])
 @cross_origin()
+@_protect_project
 def upload(project_id):
     '''
     Uploads files to a normalization project. (NB: cannot upload directly to 
@@ -763,6 +804,7 @@ def upload(project_id):
 
 @app.route('/api/normalize/make_mini/<project_id>', methods=['POST'])
 @cross_origin()
+@_protect_project
 def make_mini(project_id):
     '''
     Create sample version of selected file (call just after upload).
@@ -795,6 +837,7 @@ def make_mini(project_id):
 #==============================================================================
 
 @app.route('/api/link/select_file/<project_id>', methods=['POST'])
+@_protect_project
 def select_file(project_id):
     '''    
     Choose a file to use as source or referential for merging
@@ -817,6 +860,7 @@ def select_file(project_id):
 
 @app.route('/api/link/add_column_matches/<project_id>/', methods=['POST'])
 @cross_origin()
+@_protect_project
 def add_column_matches(project_id):
     """
     Add pairs of columns to compare for linking.
@@ -837,6 +881,7 @@ def add_column_matches(project_id):
 
 @app.route('/api/link/add_column_certain_matches/<project_id>/', methods=['POST'])
 @cross_origin()
+@_protect_project
 def add_column_certain_matches(project_id):
     '''
     Specify certain column matches (exact match on a subset of columns equivalent 
@@ -879,6 +924,7 @@ def add_column_certain_matches(project_id):
 
 
 @app.route('/api/link/label_pair/<project_id>/', methods=['POST'])
+@_protect_project
 def label_pair(project_id):
     '''
     Assign a label to a (source_id, ref_id) pair
@@ -925,6 +971,7 @@ def current_state(project_id):
 
 
 @app.route('/api/link/labeller/update/<project_id>/', methods=['POST'])
+@_protect_project
 def update_labeller(project_id):
     '''
     Send an user input to the labeller and receive the updated labeller state    
@@ -956,6 +1003,7 @@ def update_labeller(project_id):
 
 
 @app.route('/api/link/labeller/update_filters/<project_id>/', methods=['POST'])
+@_protect_project
 def update_filters_labeller(project_id):
     '''
     Update filters for a labeller and receive the updated labeller state. 
@@ -986,6 +1034,7 @@ def update_filters_labeller(project_id):
                    result=encoder.encode(labeller.to_emit()))
 
 @app.route('/api/link/labeller/update_targets/<project_id>/', methods=['POST'])
+@_protect_project
 def update_targets_labeller(project_id):
     '''
     Update filters for a labeller and receive the updated labeller state. 
@@ -1020,6 +1069,7 @@ def update_targets_labeller(project_id):
                    result=encoder.encode(labeller.to_emit()))  
 
 @app.route('/api/link/labeller/complete_training/<project_id>/', methods=['GET'])
+@_protect_project
 def complete_training(project_id):
     '''
     # TODO: SOON deprecated 
@@ -1041,6 +1091,7 @@ def complete_training(project_id):
             
 
 @app.route('/api/link/labeller/add_search/<project_id>/', methods=['POST'])
+@_protect_project
 def add_search(project_id):
     '''
     # Perform search on specific user-specified terms
@@ -1076,6 +1127,7 @@ def add_search(project_id):
                    result=encoder.encode(labeller.to_emit()))
 
 @app.route('/api/link/labeller/clear_search/<project_id>/', methods=['GET'])
+@_protect_project
 def clear_search(project_id):
     '''
     Remove user search items from the list of next labeller proposals
@@ -1100,6 +1152,7 @@ def clear_search(project_id):
 
 @app.route('/api/es_fetch_by_id/<project_type>/<project_id>', methods=['GET', 'POST'])
 @cross_origin()
+@_protect_project
 def es_fetch_by_id(project_type, project_id):
     '''
     Fetch result from the existing ES index project_id
@@ -1177,6 +1230,7 @@ def _choose_queue(job_name, project_id, data_params):
 
 @app.route('/api/schedule/<job_name>/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
+@_protect_project
 def schedule_job(job_name, project_id):    
     '''
     Schedule module runs
