@@ -20,6 +20,9 @@ from results_analyzer import link_results_analyzer
 from es_connection import es
 from CONFIG import LINK_DATA_PATH
 from MODULES import LINK_MODULES, LINK_MODULE_ORDER, LINK_MODULE_ORDER_log
+from merge_machine.es_config import DEFAULT_ANALYZERS
+from LINKER_CONFIG import DEFAULT_ANALYZERS_TYPE
+
 
 class Linker(ESAbstractDataProject):
     MODULES = LINK_MODULES
@@ -327,6 +330,60 @@ class Linker(ESAbstractDataProject):
         else:
             raise ValueError('Value should be str, list or tuple')
 
+
+    def gen_default_columns_to_index(self):
+        '''Generate the dict specifying the analyzers to use for each column 
+        while indexing in Elasticsearch.
+            
+        Returns
+        -------
+        gen_default_columns_to_index: dict associating sets of str (values) to str (keys)
+            A dict indicating what Elasticsearch analyzers to use on each column
+            type during indexing.
+        '''
+        INDEX_ALL = False # Whether or not to index all selected columns of the file
+        
+        def temp(col):
+            """Return the type specific default analyzer for a column or return 
+            all default analyzers if type is not specified or could not be found.
+            """
+            return DEFAULT_ANALYZERS_TYPE.get(column_types.get(col), DEFAULT_ANALYZERS)
+        
+        # Try fetching referential column types
+        column_types = self.ref.read_config_data('recode_types', 'infered_config.json')
+
+        # Read column match data
+        column_matches = self.read_config_data('es_linker', 'column_matches.json')  
+        if not column_matches:
+            raise RuntimeError('No column matches to read from')
+
+        # Add default analyzer for columns that are exact matches
+        
+        if INDEX_ALL:
+            list_of_columns_exact = self.ref.metadata['column_tracker']['selected']
+            list_of_columns_exact = {x for x in list_of_columns_exact if '__' not in x}
+        else:
+            exact_matches = filter(lambda m: m.get('exact_only', False), column_matches)
+            list_of_columns_exact = {y for z in [[m['ref']] if isinstance(m['ref'], str) \
+                                    else m['ref'] for m in exact_matches] for y in z}
+            
+        columns_to_index = {col: {} for col in list_of_columns_exact}
+        
+        # Add analyzers for columns that are non-exact matches
+        # NB: Preserve order to not overwrite columns_to_index of non-exact
+        non_exact_matches = filter(lambda m: not m.get('exact_only', False), column_matches)
+        list_of_columns_non_exact = {y for z in [[m['ref']] if isinstance(m['ref'], str) \
+                                else m['ref'] for m in non_exact_matches] for y in z}
+        columns_to_index.update({col: temp(col) for col in list_of_columns_non_exact})
+        
+        print('columns_to_index:')
+        print(columns_to_index)
+        
+        return columns_to_index
+
+
+
+
     def _gen_es_labeller(self, columns_to_index=None, certain_column_matches=None):
         '''
         Return a es_labeller object
@@ -350,7 +407,9 @@ class Linker(ESAbstractDataProject):
         
         ref_table_name = self.ref.project_id
         if columns_to_index is None:
-            columns_to_index = self.ref.gen_default_columns_to_index()
+            columns_to_index = self.gen_default_columns_to_index()
+        
+        print(columns_to_index)
         
         labeller = ESLabeller(es, source, ref_table_name, col_matches, columns_to_index, certain_column_matches)
         

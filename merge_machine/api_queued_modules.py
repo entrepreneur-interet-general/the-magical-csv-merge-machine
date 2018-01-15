@@ -208,7 +208,7 @@ def _run_all_transforms(project_id, data_params, *argv):
 
     # Write transformations and logs
     proj.write_data()
-    return all_run_infos
+    return all_run_infos   
 
 
 def _create_es_index(project_id, data_params, module_params):
@@ -220,9 +220,10 @@ def _create_es_index(project_id, data_params, module_params):
     POST:
         - data_params: 
                         {
-                        project_type: (optional) defaults to link
-                        module_name:
-                        file_name: 
+                            link_project_id: (optional) ID of the associated link project
+                            project_type: (optional) defaults to link
+                            module_name:
+                            file_name: 
                         }
         - module_params: {
                             columns_to_index: 
@@ -255,18 +256,17 @@ def _create_es_index(project_id, data_params, module_params):
     if for_linking:    
         if project_type == 'link':
             proj_link = ESLinker(project_id)
-            proj = ESNormalizer(proj_link.ref.project_id)
-        
+            columns_to_index = proj_link.gen_default_columns_to_index()
+            
             if data_params is None:
                 module_name = proj_link.metadata['files']['ref']['module_name']
                 file_name = proj_link.metadata['files']['ref']['file_name']
                 
+            proj = ESNormalizer(proj_link.ref.project_id)
+                
         elif project_type == 'normalize':
             proj = ESNormalizer(project_id)
-            
-        # Generate default columns_to_index
-        if columns_to_index is None:
-            columns_to_index = proj.gen_default_columns_to_index()
+            assert columns_to_index is not None
 
     else:
         proj = ESLinker(project_id)
