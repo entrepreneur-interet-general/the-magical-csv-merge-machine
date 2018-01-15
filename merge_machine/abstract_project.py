@@ -179,7 +179,7 @@ class AbstractProject():
 
     def read_config_data(self, module_name, file_name):
         '''Read a json file with retry logic if a file is locked (empty dict 
-        if file is not found).
+        if file is not found). If the file doesn't exist, return an empty dict.
         '''
         NUM_RETRY = 10
         RETRY_INTERVAL = 0.1
