@@ -168,7 +168,7 @@ class AbstractDataProject(AbstractProject):
     def _get_header(self, module_name, file_name):
         #TODO: this is a cheap fix for a specific use. DO NOT USE
         file_path = self.path_to(module_name, file_name)
-        return list(pd.read_csv(file_path, encoding='utf-8').columns)
+        return list(pd.read_csv(file_path, encoding='utf-8', nrows=1).columns)
 
     def upload_init_data(self, file, file_name, user_given_name=None):
         raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
@@ -234,6 +234,16 @@ class AbstractDataProject(AbstractProject):
             raise Exception('No data in memory: use `load_data` (reload is \
                         mandatory after dedupe)')
     
+    @staticmethod
+    def _choose_dtype(col):
+        '''Load the correct type according to the column name'''
+        if any(x in col for x in ['__MODIFIED', '__IS_MATCH']):
+            return bool
+        elif col in ['__CONFIDENCE', '__ES_SCORE', '__THRESH']:
+            return float
+        else:
+            return str
+    
     def _static_load_data(self, file_path, nrows=None, columns=None): 
         '''
         Load a pandas DataFrame into memory from a csv in file_path. dtype will 
@@ -253,17 +263,8 @@ class AbstractDataProject(AbstractProject):
             columns = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
                                   nrows=0, usecols=columns).columns
 
-                          
-        def choose_dtype(col):
-            '''Load the correct type according to the column name'''
-            if any(x in col for x in ['__MODIFIED', '__IS_MATCH']):
-                return bool
-            elif col in ['__CONFIDENCE', '__ES_SCORE', '__THRESH']:
-                return float
-            else:
-                return str
             
-        dtype = {col: choose_dtype(col) for col in columns}
+        dtype = {col: self._choose_dtype(col) for col in columns}
 
         if nrows is not None:
             logging.debug('Nrows is: {0}'.format(nrows))
@@ -275,9 +276,9 @@ class AbstractDataProject(AbstractProject):
 
         return tab
         
+
     def load_data(self, module_name, file_name, nrows=None, columns=None):
-        '''
-        Load data as pandas DataFrame to memory. Overwritten in normalize
+        '''Load data as pandas DataFrame to memory. Overwritten in normalize
         
         Creates two properties for self:
             - mem_data: is a generator which generates pandas DataFrames
@@ -299,10 +300,6 @@ class AbstractDataProject(AbstractProject):
                               'columns': columns,
                               'data_was_transformed': False}
 
-    def reload(self):
-        '''
-        Loads data with the parameters 
-        '''
 
     def to_xls(self, module_name, file_name):
         '''
@@ -533,8 +530,7 @@ class AbstractDataProject(AbstractProject):
         self.run_info_buffer = dict()
         
     def write_data(self):
-        '''
-        Write data stored in memory to proper module.
+        '''Write data stored in memory to proper module.
         
         The data will be taken from self.mem_data_info. It will be written to 
         the path corresponding to module self.mem_data_info['module_name'] 
@@ -553,7 +549,10 @@ class AbstractDataProject(AbstractProject):
         # TODO: move this. This was done to avoid concat with init when no changes were made
         nrows = 0
         if os.path.isfile(file_path):
-            nrows = self.metadata['files'][self.mem_data_info['file_name']]['nrows']
+            try:
+                nrows = self.metadata['files'][self.mem_data_info['file_name']]['nrows']
+            except:
+                nrows = None
             logging.warning('File {0} already exists. Will not be re-written')
 
         else:
@@ -735,18 +734,73 @@ class ESAbstractDataProject(AbstractDataProject):
         res = es.msearch(bulk)
         return res
     
+    @staticmethod
+    def _ES_res_to_pandas(res, columns):
+        """Return the result of an elasticsearch query as a pandas DataFrame."""
+        
+        sources = [x['hits']['hits'][0]['_source'] for x in res['responses']]
+        if columns is not None:
+            sources = [{key: val for key, val in x.items() if key in columns} for x in sources]
+        ids = [x['hits']['hits'][0]['_id'] for x in res['responses']]
+        return pd.DataFrame(sources, index=ids)[columns]
+        
+        
+    def _from_ES_gen(self, num_rows, columns, chunksize):
+        for from_ in range(num_rows)[::chunksize]:
+            res = self.fetch_by_id(size=min(chunksize, num_rows-from_), from_=from_)
+            yield self._ES_res_to_pandas(res, columns)    
+
+    def from_ES(self, columns=None, chunksize=None):
+        """Load or generate pandas DataFrame from the ES associated to the 
+        project.
+        
+        Parameters
+        ----------
+        columns: list of str
+            The columns to load
+        chunksize:
+            Same as pandas `chunksize` argument in `read_csv`
+        
+        """
+        num_rows = ic.stats(self.index_name)['_all']['total']['docs']['count']
+    
+        if chunksize is None:
+            res = self.fetch_by_id(size=num_rows, from_=0)
+            return self._ES_res_to_pandas(res, columns)
+        
+        else:
+            # Return a generator. Code has to be separate to allow returning pandas.DataFrame
+            return self._from_ES_gen(num_rows, columns, chunksize)
+
+    def ES_to_csv(self, module_name, file_name, columns=None):
+        num_rows = ic.stats(self.index_name)['_all']['total']['docs']['count']
+        self.mem_data = self.from_ES(columns, chunksize=self.CHUNKSIZE)
+        self.mem_data_info = {'file_name': file_name,
+                              'module_name': module_name,
+                              'nrows': num_rows, 
+                              'columns': columns,
+                              'data_was_transformed': False}
+        self.write_data()
+
+
     def create_index(self, ref_path, columns_to_index, force=False):
-        '''
-        INPUT:
-            - ref_path: path to the file to index
-            - columns_to_index
+        '''Index a csv file in Elasticsearch.
+        
+        Parameters
+        ----------
+        ref_path: str
+            path to the csv file to index.
+        columns_to_index: dict like {col1: list_of_analyzers1, ...}
+            The analyzers to use for each column.
+        force: bool
+            Whether or not to re-create an existing index.
         '''
         
         # To solve http.client.HTTPException: got more than 100 headers
         import http
         http.client._MAXHEADERS = 1000
         
-        testing = True      
+        testing = True
         
         ref_gen = pd.read_csv(ref_path, 
                           usecols=columns_to_index.keys(),
@@ -757,7 +811,7 @@ class ESAbstractDataProject(AbstractDataProject):
             
         if not self.has_index():
             logging.info('Creating new index')
-            log = self._init_active_log('INIT', 'transform')
+            log = self._init_active_log('INIT', 'transform') # TODO: is this right ?
                     
             index_settings = es_insert.gen_index_settings(DEFAULT_ANALYZER, columns_to_index, INDEX_SETTINGS_TEMPLATE)
             
@@ -766,7 +820,7 @@ class ESAbstractDataProject(AbstractDataProject):
 
             self.ic.create(self.index_name, body=json.dumps(index_settings))    
             logging.warning('Inserting in index')
-            es_insert.index(es, ref_gen, self.index_name, testing)
+            es_insert.index(es, ref_gen, self.index_name, testing, 'index')
         
             log = self._end_active_log(log, error=False)
             logging.warning('Finished indexing')
@@ -775,6 +829,14 @@ class ESAbstractDataProject(AbstractDataProject):
         logging.info('Finished indexing')
         self.valid_index()
         self._write_log_buffer(written=False)
+    
+    def update_index(self, ref_gen):
+        """Add the elements in ref_gen to an existing index.
+        """
+        testing = True
+        logging.warning('Updating index')
+        es_insert.index(es, ref_gen, self.index_name, testing, action="update")
+        logging.warning('Finished updating')
     
     def delete_index(self):
         return ic.delete(self.index_name)

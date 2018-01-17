@@ -11,6 +11,7 @@ import os
 import time
 
 from merge_machine.es_labeller import Labeller as ESLabeller
+import numpy as np
 import pandas as pd
 
 from abstract_data_project import ESAbstractDataProject
@@ -505,7 +506,59 @@ class Linker(ESAbstractDataProject):
         self._end_active_log(log, error=False)  
         
         return complete_metrics    
+    
 
+
+
+# =============================================================================
+# Elasticsearch    
+# =============================================================================
+    
+    def update_results(self, labels):
+        '''Updates the merged table in Elasticsearch to take into account the
+        new labels.
+        '''
+        # TODO: source indices
+        
+        new_rows = []
+        columns = set()
+        for label in labels:
+            current_row = es.get(self.index_name, 'structure', label['source_id'])['_source']
+            if label['is_match']:                
+                if current_row['__ID_REF'] != label['ref_id']:
+                    raise NotImplementedError('Cannot update match to different label yet')
+                else:
+                    new_row = {key: val for key, val in current_row.items()}
+                    new_row['__IS_MATCH'] = True
+                    new_row['__CONFIDENCE'] = 999
+            else:
+                new_row = {col: val for col, val in current_row.items()}
+                
+                nan_cols = list(filter(lambda x: x[-5:]=='__REF', new_row.keys())) \
+                            + ['__CONFIDENCE', '__ES_SCORE', '__ID_QUERY', \
+                               '__ID_REF', '__IS_MATCH', '__THRESH']
+                
+                for col in nan_cols:
+                    new_row[col] = np.nan
+                
+            columns.update(new_row.keys())
+            new_rows.append((label['source_id'], new_row))
+            
+        print(new_rows)
+        if new_rows:
+            dtype = {col: self._choose_dtype(col) for col in columns}
+            tab = pd.DataFrame([x[1] for x in new_rows], index=[x[0] for x in new_rows])
+                
+            # Fix for dtype that is not working in DataFrame call
+            for k, v in dtype.items():
+                if v == str:
+                    tab[k].fillna('', inplace=True)
+                tab[k] = tab[k].astype(v)
+            
+            ref_gen = (x for x in [tab])
+            self.update_index(ref_gen)
+        
+    
 #    def create_es_index_ref(self, columns_to_index, force=False):
 #        '''#TODO: doc'''
 #        
@@ -598,6 +651,9 @@ class ESLinker(Linker):
     
 
 if __name__ == '__main__':
+    
+    assert False 
+    
     
     source_file_name = 'source.csv'
     source_user_given_name = 'my_source.csv'

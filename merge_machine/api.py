@@ -482,7 +482,6 @@ def download(project_type, project_id):
         module_params:
             - file_type: ['csv' or 'xls']
             - zip: False (returns a zipped version)
-    
     '''
     project_id = secure_filename(project_id)
 
@@ -521,6 +520,10 @@ def download(project_type, project_id):
 
     
     (module_name, file_name) = proj.get_last_written(module_name, file_name)
+    columns = proj._get_header(module_name, file_name)
+    
+    proj._remove(module_name, file_name)
+    proj.ES_to_csv(module_name, file_name, columns=columns)
 
     if module_name == 'INIT':
         return jsonify(error=True,
@@ -938,6 +941,7 @@ def label_pair(project_id):
     # TODO: add label_pair
     pass
 
+
 # =============================================================================
 # Labeller methods
 # =============================================================================
@@ -1136,6 +1140,28 @@ def clear_search(project_id):
     encoder = MyEncoder()
     return jsonify(error=False,
                    result=encoder.encode(labeller.to_emit()))
+
+
+
+@app.route('/api/link/update_result/<project_id>/', methods=['POST'])
+def update_results(project_id):
+    '''Update the results in Elasticsearch index.
+    
+    GET:
+        - project_id
+        
+    POST:
+        - module_params:
+            - labels: [{'source_id': ABC,  'ref_id': 'XYZ', 'is_match': bool}]
+            
+    '''
+    _, module_params = _parse_request()
+    
+    proj = ESLinker(project_id)
+    
+    proj.update_results(module_params['labels'])
+    
+    return jsonify(error=False)
 
 # =============================================================================
 # ES FETCH

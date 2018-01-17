@@ -83,8 +83,6 @@ class Normalizer(ESAbstractDataProject):
             string += '\n\nFile {0}:\n  Completed:\n  {1}\n  Not completed:\n  {2}'.format(file_name, completed, not_completed)                    
         return string
 
-
-
     def load_data(self, module_name, file_name, nrows=None, columns=None, restrict_to_selected=True):
         assert (columns is None) or (not restrict_to_selected)
         if restrict_to_selected:
