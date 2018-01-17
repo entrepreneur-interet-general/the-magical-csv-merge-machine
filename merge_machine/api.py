@@ -88,7 +88,7 @@ curl -i http://127.0.0.1:5000/metadata/ -X POST -F "request_json=@sample_downloa
 
 USES: /python-memcached
 """
-
+import json
 import functools
 import hashlib
 import logging
@@ -118,6 +118,24 @@ from my_json_encoder import MyEncoder
 from normalizer import ESNormalizer, MINI_PREFIX
 from linker import ESLinker
 
+
+# =============================================================================
+# PARAMETERS
+# =============================================================================
+
+SECRET_KEY = open('secret_key.txt').read()
+if os.path.isfile('config.json'):
+    config = json.load(open('config.json'))
+else:
+    config = {}
+
+HOST = config.get('HOST', '127.0.0.1')
+PORT = int(config.get('PORT', 5000))
+REQUIRE_PASSWORD = config.get('REQUIRE_PASSWORD', False)
+PROD = config.get('PROD', False)
+MAX_CONTENT_LENGTH = config.get('MAX_CONTENT_LENGTH', 10 * 1024 * 1024 * 1024)
+ALLOWED_EXTENSIONS = config.get('ALLOWED_EXTENSIONS', ['csv', 'xls', 'xlsx', 'zip'])
+
 #==============================================================================
 # INITIATE APPLICATION
 #==============================================================================
@@ -130,22 +148,17 @@ cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 #app.config['SERVER_NAME'] = '127.0.0.1:5000'
 app.config['SESSION_TYPE'] = "memcached"# 'memcached'
-
 Session(app)
 
-app.debug = True
-app.config['SECRET_KEY'] = open('secret_key.txt').read()
-app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024 # Check that files are not too big (10GB)
-app.config['ALLOWED_EXTENSIONS'] = ['csv', 'xls', 'xlsx', 'zip']
-
-REQUIRE_PASSWORD = False
-PROD = False
+app.config['SECRET_KEY'] = SECRET_KEY
+app.debug = not PROD
+app.config['MAX_CONTENT_LENGTH'] =  MAX_CONTENT_LENGTH
+app.config['ALLOWED_EXTENSIONS'] = ALLOWED_EXTENSIONS
 
 # Redis connection
 q = dict()
 for q_name in VALID_QUEUES:
     q[q_name] = Queue(q_name, connection=conn, default_timeout=7200)
-
 
 
 #==============================================================================
@@ -1346,4 +1359,8 @@ def list_public_projects(project_type):
     return jsonify(list_of_projects)
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000, debug=not PROD)
+    
+    # =============================================================================
+    # RUN APPLICATION        
+    # =============================================================================
+    app.run(host=HOST, port=PORT, debug=not PROD)

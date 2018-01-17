@@ -15,7 +15,7 @@ from api_helpers import APIConnection
 
 # Path to configuration
 config_path = os.path.join('conf', 'rnsr.json')
-connection_config_path = os.path.join('conf', 'local_connection_parameters.json')
+connection_config_path = os.path.join('conf', 'distant_connection_parameters.json')
 logs_path = 'logs.json'
 
 # =============================================================================
