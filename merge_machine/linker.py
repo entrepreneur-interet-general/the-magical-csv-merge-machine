@@ -531,7 +531,15 @@ class Linker(ESAbstractDataProject):
             current_row = es.get(self.index_name, 'structure', label['source_id'])['_source']
             if label['is_match']:                
                 if current_row['__ID_REF'] != label['ref_id']:
-                    raise NotImplementedError('Cannot update match to different label yet')
+                    new_ref = es.get(self.ref.project_id, 'structure', label['ref_id'])['_source']
+                    new_ref = {key + '__REF': val for key, val in new_ref.items()}
+                    new_row = {key: val for key, val in current_row.items()}
+                    new_row.update(new_ref)
+                    new_row['__IS_MATCH'] = True
+                    new_row['__CONFIDENCE'] = 999
+                    new_row['__ID_REF'] = label['ref_id']
+                    
+                    # TODO: what to do with __ES_SCORE, __ID_QUERY, __THRESH
                 else:
                     new_row = {key: val for key, val in current_row.items()}
                     new_row['__IS_MATCH'] = True
