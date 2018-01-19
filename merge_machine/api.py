@@ -1143,7 +1143,7 @@ def clear_search(project_id):
 
 
 
-@app.route('/api/link/update_result/<project_id>/', methods=['POST'])
+@app.route('/api/link/update_results/<project_id>/', methods=['POST'])
 def update_results(project_id):
     '''Update the results in Elasticsearch index.
     
