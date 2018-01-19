@@ -121,6 +121,11 @@ class Linker(ESAbstractDataProject):
         if (self.source is None) or (self.ref is None):
             raise RuntimeError('source or referential were not loaded (add_selected_project) and/or (load_project_to_merge)')
         
+        # Remove duplicates from columns matches
+        column_matches = [{'source': list(set(match['source'])), 
+                           'ref': list(set(match['ref']))} \
+                            for match in column_matches]
+        
         # Add matches
         self.upload_config_data(column_matches, 'es_linker', 'column_matches.json')
         

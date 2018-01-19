@@ -808,7 +808,19 @@ class ESAbstractDataProject(AbstractDataProject):
 
         if self.has_index() and (force or (not self.valid_index())):
             self.ic.delete(self.index_name)
-            
+        
+        # TODO: cheap fix change this
+        # This deletes the index if any column/analyzer is not present in index
+        # except if the project is public.
+        if self.has_index() and (not self.metadata['public']):
+            logging.warning('Deleting index because of missing analyzers')
+            mapping = ic.get_mapping(self.project_id)[self.project_id]['mappings']['structure']['properties']
+            for col, analyzers in columns_to_index.items():
+                if any(mapping.get(col, {}).get(a, None) is None for a in analyzers):
+                    print('Mapping is {0}\nCol: {1}\nAnalyzers:{2}')
+                    self.ic.delete(self.index_name)
+                    break
+        
         if not self.has_index():
             logging.info('Creating new index')
             log = self._init_active_log('INIT', 'transform') # TODO: is this right ?
@@ -820,7 +832,7 @@ class ESAbstractDataProject(AbstractDataProject):
 
             self.ic.create(self.index_name, body=json.dumps(index_settings))    
             logging.warning('Inserting in index')
-            es_insert.index(es, ref_gen, self.index_name, testing, 'index')
+            es_insert.index(es, ref_gen, self.index_name, testing, action='index')
         
             log = self._end_active_log(log, error=False)
             logging.warning('Finished indexing')
