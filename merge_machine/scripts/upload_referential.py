@@ -94,7 +94,6 @@ job_id = resp['job_id']
 url_to_append = '/queue/result/{0}'.format(job_id)
 resp = c.wait_get_resp(url_to_append, max_wait=10000)
 
-
 # =============================================================================
 # Load logs
 # =============================================================================
@@ -103,13 +102,21 @@ if os.path.isfile(logs_path):
 else:
     logs = dict()
 
+
+#==============================================================================
+# Fetch public projects
+#==============================================================================
+url_to_append = '/api/public_projects/normalize'
+resp = c.get_resp(url_to_append)
+
 # =============================================================================
 # Delete project with same display_name if necessary
 # =============================================================================
-old_project_id = logs.get(params['new_project']['display_name'])
-if old_project_id is not None:
-    url_to_append = '/api/delete/normalize/{0}'.format(old_project_id)
-    resp = c.get_resp(url_to_append)
+for metadata in filter(lambda x: x['display_name']==params['new_project']['display_name'], resp):
+    old_project_id = metadata['project_id']
+    if old_project_id != project_id:
+        url_to_append = '/api/delete/normalize/{0}'.format(old_project_id)
+        resp = c.get_resp(url_to_append)
     
 # =============================================================================
 # Add new project to logs
