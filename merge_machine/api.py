@@ -508,7 +508,6 @@ def download(project_type, project_id):
         module_name = secure_filename(module_name)
     if file_name is not None:
         file_name = secure_filename(file_name)
-        
     
     if module_params is None:
         file_type = 'csv'
@@ -517,11 +516,11 @@ def download(project_type, project_id):
     
     if file_type not in ['csv', 'xls', 'xlsx']:
         raise ValueError('Download file type should be csv, xls or xlsx')
-
     
     (module_name, file_name) = proj.get_last_written(module_name, file_name)
     columns = proj._get_header(module_name, file_name)
     
+    # Remove "remove each time"
     proj._remove(module_name, file_name)
     proj.ES_to_csv(module_name, file_name, columns=columns)
 
@@ -1211,14 +1210,13 @@ SCHEDULED_JOBS = {
                     'recode_types': {'project_type': 'normalize'}, 
                     'concat_with_init': {'project_type': 'normalize'}, 
                     'run_all_transforms': {'project_type': 'normalize'}, 
-                    'create_es_index': {'project_type': 'link'},
+                    'create_es_index': {'project_type': 'link', 'timeout': 7200},
                     'create_es_labeller': {'project_type': 'link', 
                                         'priority': 'high'}, 
-                    'es_linker': {'project_type': 'link'},
+                    'es_linker': {'project_type': 'link', 'timeout': 7200},
                     'infer_restriction': {'project_type': 'link', 
                                           'priority': 'high'}, 
                     'perform_restriction': {'project_type': 'link'},
-                    'linker': {'project_type': 'link'}, 
                     'link_results_analyzer': {'project_type': 'link'}
                     }
 
@@ -1243,6 +1241,10 @@ def _choose_queue(job_name, project_id, data_params):
             return 'high'
     
     return SCHEDULED_JOBS[job_name].get('priority', 'low')
+ 
+def _choose_timeout(job_name):
+    DEFAULT_TIMEOUT = 900
+    return SCHEDULED_JOBS[job_name].get('timeout', DEFAULT_TIMEOUT)
     
 
 @app.route('/api/schedule/<job_name>/<project_id>/', methods=['GET', 'POST'])
@@ -1281,7 +1283,8 @@ def schedule_job(job_name, project_id):
             args=(project_id, data_params, module_params), 
             ttl=24*3600, # Job can be queued for 24 hours max
             result_ttl=2*3600, # Result can be kept for 2 hours max
-            job_id=job_id, 
+            job_id=job_id,
+            timeout=_choose_timeout(job_name)
             #depends_on=project_id
     )        
     
