@@ -521,8 +521,13 @@ def download(project_type, project_id):
     columns = proj._get_header(module_name, file_name)
     
     # Remove "remove each time"
-    proj._remove(module_name, file_name)
-    proj.ES_to_csv(module_name, file_name, columns=columns)
+    if proj.metadata['log'][file_name]['upload_es_train'].get('was_modified', True):
+        proj._remove(module_name, file_name)
+        proj.ES_to_csv(module_name, file_name, 
+                       columns=list(filter(lambda x: '__MODIFIED' not in x, columns)))
+        # TODO: fix this: very dirty
+        proj.metadata['log'][file_name]['upload_es_train']['was_modified'] = False
+        proj._write_metadata()
 
     if module_name == 'INIT':
         return jsonify(error=True,

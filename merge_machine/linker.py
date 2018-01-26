@@ -567,6 +567,12 @@ class Linker(ESAbstractDataProject):
             ref_gen = (x for x in [tab])
             self.update_index(ref_gen)
         
+        # Dirty method to keep track of modifications
+        file_name = self.metadata['log'].keys()
+        assert len(file_name) == 1
+        file_name = list(file_name)[0]
+        self.metadata['log'][file_name]['upload_es_train']['was_modified'] = True
+        self._write_metadata()
     
 #    def create_es_index_ref(self, columns_to_index, force=False):
 #        '''#TODO: doc'''
