@@ -21,8 +21,7 @@ from results_analyzer import link_results_analyzer
 from es_connection import es
 from CONFIG import LINK_DATA_PATH
 from MODULES import LINK_MODULES, LINK_MODULE_ORDER, LINK_MODULE_ORDER_log
-from merge_machine.es_config import DEFAULT_ANALYZERS
-from LINKER_CONFIG import DEFAULT_ANALYZERS_TYPE
+from LINKER_CONFIG import DEFAULT_ANALYZERS, DEFAULT_ANALYZERS_TYPE
 
 
 class Linker(ESAbstractDataProject):
@@ -482,6 +481,7 @@ class Linker(ESAbstractDataProject):
         log = self._init_active_log(module_name, 'infer')
         
         complete_metrics = defaultdict(int) 
+        
         for data in self.mem_data:
             metrics = link_results_analyzer(data, params)
             
@@ -512,9 +512,6 @@ class Linker(ESAbstractDataProject):
         
         return complete_metrics    
     
-
-
-
 # =============================================================================
 # Elasticsearch    
 # =============================================================================
@@ -557,7 +554,6 @@ class Linker(ESAbstractDataProject):
             columns.update(new_row.keys())
             new_rows.append((label['source_id'], new_row))
             
-        print(new_rows)
         if new_rows:
             dtype = {col: self._choose_dtype(col) for col in columns}
             tab = pd.DataFrame([x[1] for x in new_rows], index=[x[0] for x in new_rows])

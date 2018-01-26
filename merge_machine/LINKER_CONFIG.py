@@ -72,9 +72,13 @@ analyzers_to_use = \
      'URL': 5,
      'Voie': 5}
 
+# The analzers to use to index each data type
 DEFAULT_ANALYZERS_TYPE = {key: c_a[val] for key, val in analyzers_to_use.items()}
 
-
+# Default analyzers (for columns that should match)
+DEFAULT_CUSTOM_ANALYZERS = {'case_insensitive_keyword', 'integers', 'n_grams', 'city', 'country'}
+DEFAULT_STOCK_ANALYZERS = {'french'}
+DEFAULT_ANALYZERS = DEFAULT_CUSTOM_ANALYZERS | DEFAULT_STOCK_ANALYZERS
 
 
 

@@ -262,7 +262,6 @@ class AbstractDataProject(AbstractProject):
         if columns is None:
             columns = pd.read_csv(file_path, encoding='utf-8', dtype=str, 
                                   nrows=0, usecols=columns).columns
-
             
         dtype = {col: self._choose_dtype(col) for col in columns}
 
