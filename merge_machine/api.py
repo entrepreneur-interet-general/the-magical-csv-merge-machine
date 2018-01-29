@@ -342,6 +342,7 @@ def ping_redis():
 #==============================================================================
 
 @app.route('/api/new/<project_type>', methods=['POST'])
+@cross_origin()
 def new_project(project_type):
     '''
     Create a new project:
@@ -410,6 +411,7 @@ def metadata(project_type, project_id):
     return resp
 
 @app.route('/api/set_skip/<project_type>/<project_id>', methods=['POST'])
+@cross_origin()
 @_protect_project
 def set_skipped(project_type, project_id):
     """
@@ -435,6 +437,7 @@ def set_skipped(project_type, project_id):
                    error=False)
 
 @app.route('/api/last_written/<project_type>/<project_id>', methods=['GET', 'POST'])
+@cross_origin()
 def get_last_written(project_type, project_id):
     """
     Get coordinates (module_name, file_name) of the last file written for a 
@@ -835,6 +838,7 @@ def make_mini(project_id):
 #==============================================================================
 
 @app.route('/api/link/select_file/<project_id>', methods=['POST'])
+@cross_origin()
 @_protect_project
 def select_file(project_id):
     '''    
@@ -922,6 +926,7 @@ def add_column_certain_matches(project_id):
 
 
 @app.route('/api/link/label_pair/<project_id>/', methods=['POST'])
+@cross_origin()
 @_protect_project
 def label_pair(project_id):
     '''
@@ -950,8 +955,8 @@ def label_pair(project_id):
 # Labeller methods
 # =============================================================================
 
-
 @app.route('/api/link/labeller/current/<project_id>/', methods=['GET'])
+@cross_origin()
 def current_state(project_id):
     '''
     Get the current state for an ES labeller.
@@ -970,6 +975,7 @@ def current_state(project_id):
 
 
 @app.route('/api/link/labeller/update/<project_id>/', methods=['POST'])
+@cross_origin()
 @_protect_project
 def update_labeller(project_id):
     '''
@@ -1002,6 +1008,7 @@ def update_labeller(project_id):
 
 
 @app.route('/api/link/labeller/update_filters/<project_id>/', methods=['POST'])
+@cross_origin()
 @_protect_project
 def update_filters_labeller(project_id):
     '''
@@ -1033,6 +1040,7 @@ def update_filters_labeller(project_id):
                    result=encoder.encode(labeller.to_emit()))
 
 @app.route('/api/link/labeller/update_targets/<project_id>/', methods=['POST'])
+@cross_origin()
 @_protect_project
 def update_targets_labeller(project_id):
     '''
@@ -1068,6 +1076,7 @@ def update_targets_labeller(project_id):
                    result=encoder.encode(labeller.to_emit()))  
 
 @app.route('/api/link/labeller/complete_training/<project_id>/', methods=['GET'])
+@cross_origin()
 @_protect_project
 def complete_training(project_id):
     '''
@@ -1090,6 +1099,7 @@ def complete_training(project_id):
             
 
 @app.route('/api/link/labeller/add_search/<project_id>/', methods=['POST'])
+@cross_origin()
 @_protect_project
 def add_search(project_id):
     '''
@@ -1126,6 +1136,7 @@ def add_search(project_id):
                    result=encoder.encode(labeller.to_emit()))
 
 @app.route('/api/link/labeller/clear_search/<project_id>/', methods=['GET'])
+@cross_origin()
 @_protect_project
 def clear_search(project_id):
     '''
@@ -1148,6 +1159,7 @@ def clear_search(project_id):
 
 
 @app.route('/api/link/update_results/<project_id>/', methods=['POST'])
+@cross_origin()
 def update_results(project_id):
     '''Update the results in Elasticsearch index.
     
@@ -1301,6 +1313,7 @@ def schedule_job(job_name, project_id):
     
 
 @app.route('/queue/result/<job_id>', methods=['GET'])
+@cross_origin()
 def get_job_result(job_id):
     '''
     Fetch the json output of a module run scheduled by schedule_job. Will return 
@@ -1328,6 +1341,7 @@ def get_job_result(job_id):
         return jsonify(completed=False), 202
 
 @app.route('/queue/cancel/<job_id>', methods=['GET'])
+@cross_origin()
 def cancel_job(job_id):
     '''
     Remove job from queue
@@ -1349,6 +1363,7 @@ def cancel_job(job_id):
                        completed=False), 404
     
 @app.route('/queue/num_jobs/<job_id>', methods=['GET'])
+@cross_origin()
 def count_jobs_in_queue_before(job_id):
     '''
     Returns the number of jobs preceding job_id or -1 if job is no longer in queue.
@@ -1364,6 +1379,7 @@ def count_jobs_in_queue_before(job_id):
     # TODO: check if better to return error
     
 @app.route('/queue/num_jobs/', methods=['GET'])
+@cross_origin()
 def count_jobs_in_queue():
     '''Returns the number of jobs enqueued'''
     # TODO: change for position in queue
@@ -1375,6 +1391,7 @@ def count_jobs_in_queue():
 #==============================================================================
 
 @app.route('/api/public_project_ids/<project_type>', methods=['GET'])
+@cross_origin()
 def list_public_project_ids(project_type):
     '''
     
@@ -1384,6 +1401,7 @@ def list_public_project_ids(project_type):
     return jsonify(list_of_project_ids)
 
 @app.route('/api/public_projects/<project_type>', methods=['GET'])
+@cross_origin()
 def list_public_projects(project_type):
     '''
     
