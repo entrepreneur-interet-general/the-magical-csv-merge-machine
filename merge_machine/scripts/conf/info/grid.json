@@ -1,0 +1,37 @@
+{
+"url": "https://www.grid.ac/",
+
+"columns": {
+
+"ID":{
+	"short": "Identifiant GRID (Global Research Identifier Database).",
+	"long": "",
+	"examples": ["grid.1001.0", "grid.1021.2"],
+	"prop_non_null":0
+	},
+"Name":{
+	"short": "Nom de l'établissement.",
+	"long": "",
+	"examples": ["Australian National University", "Deakin University"],
+	"prop_non_null":0
+	},
+"City":{
+	"short": "Ville d'implantation de l'établissement.",
+	"long": "",
+	"examples": ["London", "New York"],
+	"prop_non_null":0
+	},
+"State":{
+	"short": "État d'implantation de l'établissement.",
+	"long": "",
+	"examples": ["Victoria", "Southwark"],
+	"prop_non_null":0
+	},
+"Country":{
+	"short": "Pays d'implantation de l'établissement.",
+	"long": "",
+	"examples": ["United Kingdom"],
+	"prop_non_null":0
+	}
+}
+}

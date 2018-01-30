@@ -5,6 +5,7 @@
                         "public": true
                       },
         
+            "info_file_path": "/home/m75380/Documents/eig/the-magical-csv-merge-machine/merge_machine/scripts/conf/info/grid.json",
             "file_path": "/home/m75380/Documents/eig/the-magical-csv-merge-machine/merge_machine/local_test_data/grids/grid.csv",
             
             "columns_to_index": {

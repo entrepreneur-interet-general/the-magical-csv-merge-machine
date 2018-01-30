@@ -51,13 +51,11 @@ class Normalizer(ESAbstractDataProject):
 # Actual class
 #==============================================================================   
 
-    def __init__(self, project_id=None, create_new=False, description=None, display_name=None, public=False):
-        super().__init__(project_id, create_new, description, display_name=display_name, public=public)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-    def _create_metadata(self, description=None, display_name=None, public=False):
-        metadata = super()._create_metadata(description=description, 
-                                            display_name=display_name,
-                                            public=public)
+    def _create_metadata(self, *args, **kwargs):
+        metadata = super()._create_metadata(*args, **kwargs)
         # For dicts below, keys are file_names
         metadata['column_tracker'] = None
         metadata['files'] = dict() # Contains single file metadata

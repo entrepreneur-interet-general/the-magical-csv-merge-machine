@@ -54,18 +54,9 @@ class AbstractDataProject(AbstractProject):
     default_module_log = {'completed': False, 'skipped': False}    
     
     CHUNKSIZE = 3000
-    
-    def __init__(self, 
-                 project_id=None, 
-                 create_new=False, 
-                 description=None,
-                 display_name=None, 
-                 public=False):
-        super().__init__(project_id=project_id, 
-                          create_new=create_new, 
-                          description=description,
-                          display_name=display_name, 
-                          public=public)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)    
         # Initiate with no data in memory
         self.mem_data = None
         self.mem_data_info =  dict() # Information on data in memory

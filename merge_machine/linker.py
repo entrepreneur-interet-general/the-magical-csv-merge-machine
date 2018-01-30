@@ -29,15 +29,8 @@ class Linker(ESAbstractDataProject):
     MODULE_ORDER = LINK_MODULE_ORDER
     MODULE_ORDER_log = LINK_MODULE_ORDER_log
     
-    def __init__(self, 
-                 project_id=None, 
-                 create_new=False, 
-                 display_name=None,
-                 description=None,
-                 public=False):
-        
-        super().__init__(project_id, create_new, display_name=display_name, 
-                                         description=description, public=public)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         
         # Add source and ref if the were selected
         if (self.metadata['files']['source'] is not None) \
@@ -102,9 +95,9 @@ class Linker(ESAbstractDataProject):
             if self.metadata['files'][file_role] is None:
                 raise Exception('{0} is not defined for this linking project'.format(file_role))
     
-    def _create_metadata(self, description=None, display_name=None, public=False):
-        metadata = super()._create_metadata(description=description, display_name=display_name, public=public)
-        metadata['files'] = {'source': None, 'ref': None} # {'source': {public: False, project_id: "ABC123", file_name: "source.csv.csv"}, 'ref': None}
+    def _create_metadata(self, *args, **kwargs):
+        metadata = super()._create_metadata(*args, **kwargs)
+        metadata['files'] = {'source': None, 'ref': None}
         metadata['project_type'] = 'link'        
         return metadata   
 

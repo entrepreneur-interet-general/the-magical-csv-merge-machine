@@ -1,0 +1,97 @@
+{
+"url": "https://www.sirene.fr/static-resources/doc/dessin_L2_description_complete.pdf?version=1.14",
+
+"columns": {
+
+"SIREN":{
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+"NIC":{
+	"short": "Le NIC est un Numéro Interne de Classement qui permet de distinguer les établissements d'une même entreprise. Il est composé de 5 chiffres (inclus dans les organismes) (NB: SIRET=SIREN+NIC)",
+	"long": "Il est composé de quatre chiffres et d'un cinquième qui permet de contrôler la validité du n° SIRET.",
+	"examples": ["00056"],
+	"prop_non_null":0
+	},
+"L1_NORMALISEE":{
+	"short": "Cette variable désigne la première ligne de l'adressage de l'établissement (nom de l'établissement)",
+	"long": "",
+	"examples": ["GOLF MINIATURE DE QUEND PLAGE", "SARL RIGAULT ET CIE"],
+	"prop_non_null":0
+	},
+"L4_NORMALISEE":{
+	"short": "Cette variable désigne la quatrième ligne de l'adressage de l'établissement (numéro et rue)",
+	"long": "",
+	"examples": ["12 RUE HENRI BARBUSSE", "ZI LOUIS DELAPORTE", "RUE DU CHEVALIER DE LA BARRE"],
+	"prop_non_null":0
+	},
+"L6_NORMALISEE":{
+	"short": "Cette variable désigne la sixième ligne de l'adressage de l'établissement (CP et ville ou code CEDEX et ville)",
+	"long": "",
+	"examples": ["13004 MARSEILLE", "44354 GUERANDE CEDEX", "04370 BEAUVEZER"],
+	"prop_non_null":0
+	},
+"L1_DECLAREE":{
+	"short": "Cette variable désigne la première ligne de l'adressage déclaré pour l'établissement. Dans la majorité des cas, elle correspond à la raison sociale pour une personne morale ou à la civilité, le nom d'usage et le prénom pour l'entrepreneur individuel.",
+	"long": "",
+	"examples": ["MONSIEUR THIERRY JANOYER", "SOCIETE DES SUCRERIES DU MARQUENTERRE", "EMILE BARNEAUD ET FILS", "ETABLISSEMENTS DECAYEUX"],
+	"prop_non_null":0
+	},
+"L4_DECLAREE":{
+	"short": "Cette variable désigne la quatrième ligne de l'adressage déclaré pour l'établissement. C'est une donnée de l'adresse déclaré pour l'établissement : le numéro dans la voie, l'indicateur éventuel de répétition (Bis, Ter...), le type de voie et le libellé de voie y figurent.",
+	"long": "",
+	"examples": ["61 RUE MARX DORMOY", "24 RUE JULES GUESDE", "ZONE INDUSTRIELLE"],
+	"prop_non_null":0
+	},
+"L6_DECLAREE":{
+	"short": "Cette variable désigne la sixième ligne de l'adressage déclaré pour l'établissement. Elle correspond soit : - au code postal et au libellé de la localité - au code postal et au libellé du bureau distributeur - au code CEDEX et au libellé du CEDEX",
+	"long": "",
+	"examples": ["04000 DIGNE LES BAINS", "44500 LA BAULE ESCOUBLAC", "44000 NANTES"],
+	"prop_non_null":0
+	},
+"LIBCOM": {
+	"short": "Cette variable indique le libellé de la commune de localisation de l'établissement.",
+	"long": "",
+	"examples": [],
+	"prop_non_null":0
+	},
+"CEDEX": {
+	"short": "Cette variable contient le code CEDEX (Courrier d'Entreprise à Distribution EXceptionnelle) de l'établissement en cas de distribution postale particulière. Les codes CEDEX sont des éléments postaux permettant de préciser le bureau qui assure la distribution du courrier.",
+	"long": "",
+	"examples": ["44603", "80102"],
+	"prop_non_null":0
+	},
+"ENSEIGNE":{
+	"short": "C'est l'appellation désignant l'emplacement ou le local dans lequel est exercée l'activité. Elle permet à la clientèle d'identifier facilement l'établissement (enseigne ou nom de l'exploitation). Lorsqu'elle existe, l'enseigne est reprise dans la seconde ligne de l'adresse géopostale de l'établissement. Exemple : \"Coiff Land\" est l'enseigne du salon de coiffure détenu par l'entrepreneur individuel \"Madame Martin Justine\".",
+	"long": "",
+	"examples": ["TAHITI PERLES CREATION", null, "LE SYMPA SNACK"],
+	"prop_non_null":0
+	},
+"NOMEN_LONG":{
+	"short": "C'est la raison sociale pour une personne morale ou le nom pour l'entrepreneur individuel.",
+	"long": "Cette variable indique : - pour les entrepreneurs individuels :  le nom de l'entreprise formé par concaténation d'une partie des prénoms et du nom patronymique de l'entrepreneur individuel, du nom de conjoint ou du nom d'usage.  Afin de distinguer les noms patronymiques de conjoint ou d'usage et les prénoms, des caractères spéciaux (/ et *) sont ajoutés comme suit :  ¤ nom patronymique et prénom :  MARTIN*BERNARD/  ¤ nom patronymique, nom d'usage et prénoms :  PUGE*CHARLOT/RAYMONDE CAMILLE/ - pour les personnes morales : la dénomination longue.",
+	"examples": ["JANOYER*THIERRY/", "SOCIETE DES SUCRERIES DU MARQUENTERRE", "HERNAS CARTONNAGE"],
+	"prop_non_null":0
+	},
+"LIBAPET":{
+	"short": "Cette variable correspond au libellé du code d'activité de l'établissement. Chacun des établissements d'une entreprise se voit attribuer par l'INSEE, lors de son inscription au répertoire SIRENE, un code caractérisant son activité principale, appelé code APE (Activité Principale Exercée). Les établissements d'une même entreprise peuvent avoir des activités différentes.",
+	"long": "Des",
+	"examples": ["Fabrication d'articles de joaillerie et bijouterie", "Location de terrains et d'autres biens immobiliers", "Débits de boissons"],
+	"prop_non_null":0
+	},
+"PRODEN":{
+	"short": "Cette variable renseigne sur le caractère productif ou non de l'entreprise c'est à dire s'il participe ou non au système productif.",
+	"long": "Le caractère productif est déterminé en fonction de la catégorie juridique et de l'activité, et dans certains cas de l'effectif. Il se rapproche de la notion du caractère marchand de la comptabilité nationale. Il peut exister des incohérences entre le caractère productif au niveau de l'établissement et de l'entreprise, lorsque l'APE de l'entreprise est différente de toutes les APE de ses établissements.",
+	"examples": ["O", "N"],
+	"prop_non_null":0
+	},
+"PRODET":{
+	"short": "Cette variable renseigne sur le caractère productif ou non de l'établissement c'est à dire s'il participe ou non au système productif.",
+	"long": "Le caractère productif est déterminé en fonction de la catégorie juridique et de l'activité, et dans certains cas de l'effectif. Il se rapproche de la notion du caractère marchand de la comptabilité nationale.",
+	"examples": [],
+	"prop_non_null":0
+	},
+}
+}

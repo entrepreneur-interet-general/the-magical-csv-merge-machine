@@ -129,7 +129,7 @@ if os.path.isfile('config.json'):
 else:
     config = {}
 
-HOST = config.get('HOST', '127.0.0.1')
+HOST = config.get('HOST', '0.0.0.0')
 PORT = int(config.get('PORT', 5000))
 REQUIRE_PASSWORD = config.get('REQUIRE_PASSWORD', False)
 PROD = config.get('PROD', False)
@@ -354,6 +354,7 @@ def new_project(project_type):
         - (description): project description
         - (display_name): name to show to user
         - (public): make project freely available
+        - (info): additional data concerning the project
     
     '''
     _check_project_type(project_type)
@@ -361,14 +362,18 @@ def new_project(project_type):
     description = request.json.get('description', '')
     display_name = request.json.get('display_name', '')
     public = request.json.get('public', False)
+    info = request.json.get('info', None)
     
     if public and (not description):
         raise Exception('Public projects should have a description')
 
+    if (info is not None) and (not public):
+        raise Exception('Only public projects can have additional information')
+
     if project_type == 'normalize':
-        proj = ESNormalizer(create_new=True, description=description, display_name=display_name, public=public)
+        proj = ESNormalizer(create_new=True, description=description, display_name=display_name, public=public, other_info=info)
     else:
-        proj = ESLinker(create_new=True, description=description, display_name=display_name, public=public)
+        proj = ESLinker(create_new=True, description=description, display_name=display_name, public=public, other_info=info)
         
     return jsonify(error=False, 
                    project_id=proj.project_id)

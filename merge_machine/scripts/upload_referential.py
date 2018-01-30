@@ -14,8 +14,8 @@ import os
 from api_helpers import APIConnection
 
 # Path to configuration
-config_path = os.path.join('conf', 'rnsr.json')
-connection_config_path = os.path.join('conf', 'distant_connection_parameters.json')
+config_path = os.path.join('conf', 'grid.json')
+connection_config_path = os.path.join('conf', 'local_connection_parameters.json')
 logs_path = 'logs.json'
 
 # =============================================================================
@@ -42,6 +42,10 @@ params['new_project']['description'] += ' ({0})'.format(datetime.now().isoformat
 #==============================================================================
 # Create new normalization project
 #==============================================================================
+# Get additional info if available
+if os.path.isfile(params.get('info_file_path', '')):
+    params['new_project']['info'] = json.load(open(params['info_file_path']))
+
 url_to_append = '/api/new/normalize'
 body = params['new_project']
 resp = c.post_resp(url_to_append, body)

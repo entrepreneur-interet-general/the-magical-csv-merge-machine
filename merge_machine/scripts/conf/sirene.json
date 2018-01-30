@@ -5,6 +5,7 @@
                         "public": true
                       },
         
+            "info_file_path": "/home/m75380/Documents/eig/the-magical-csv-merge-machine/merge_machine/scripts/conf/info/sirene.json",
             "file_path": "/home/m75380/Documents/eig/the-magical-csv-merge-machine/merge_machine/local_test_data/sirene/sirene_filtered.csv",
             
             "columns_to_index": {

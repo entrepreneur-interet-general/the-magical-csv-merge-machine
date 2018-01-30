@@ -1,0 +1,99 @@
+{
+"url": "https://www.grid.ac/",
+
+"columns": {
+
+"Numéro national de structure":{
+	"short": "Numéro du Référentiel National des Structures de Recherche.",
+	"long": "",
+	"prop_non_null":0
+	},
+"Libellé":{
+	"short": "Libéllé de l'organisme.",
+	"long": "",
+	"prop_non_null":0
+	},
+"État":{
+	"short": "Etat de la structure (active ou non).",
+	"long": "",
+	"prop_non_null":0
+	},
+"Année de création":{
+	"short": "Année de création de l'organisme.",
+	"long": "",
+	"prop_non_null":0
+	},
+"Année de fermeture":{
+	"short": "Année de fermeture de l'organisme.",
+	"long": "",
+	"prop_non_null":0
+	},
+"Adresse postale":{
+	"short": "Adresse postal de l'organisme.",
+	"long": "",
+	"prop_non_null":0
+	},
+"Ville postale":{
+	"short": "Ville de l'organisme.",
+	"long": "",
+	"examples": ["TOULOUSE CEDEX 9", "FUTUROSCOPE-CHASSENEUIL"],
+	"prop_non_null":0
+	},
+"Code postal":{
+	"short": "Code postal de la ville de l'organisme.",
+	"long": "",
+	"prop_non_null":0
+	},
+"Date de mise à jour":{
+	"short": "Date de la mise à jour de cette ligne de données.",
+	"long": "",
+	"prop_non_null":0
+	},
+"Label numéro":{
+	"short": "Concaténation de différents labels (code UMR, EA) associés à l'organisme.",
+	"long": "",
+	"prop_non_null":0
+	},
+"Libellé établissement tutelle":{
+	"short": "Libellé d'établissements tutelles de l'organisme.",
+	"long": "",
+	"prop_non_null":0
+	},
+"Sigle établissement tutelle":{
+	"short": "Sigles d'établissements tutelles de l'organisme.",
+	"long": "",
+	"prop_non_null":0
+	},
+"Responsables":{
+	"short": "Noms des responsables de l'organisme.",
+	"long": "",
+	"prop_non_null":0
+	},
+"ID EA":{
+	"short": "Identifiant EA de l'organisme.",
+	"long": "",
+	"prop_non_null":0
+	},
+"ID GDR":{
+	"short": "Identifiant GDR de l'organisme.",
+	"long": "",
+	"prop_non_null":0
+	},
+"ID UMR":{
+	"short": "Identifiant UMR de l'organisme.",
+	"long": "",
+	"prop_non_null":0
+	},
+"ID UMRA":{
+	"short": "Identifiant UMRA de l'organisme.",
+	"long": "",
+	"prop_non_null":0
+	},
+"ID UMRS":{
+	"short": "Identifiant UMRS de l'organisme.",
+	"long": "",
+	"prop_non_null":0
+	}
+
+}
+}
