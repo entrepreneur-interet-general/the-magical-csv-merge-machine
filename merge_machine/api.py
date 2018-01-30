@@ -129,8 +129,8 @@ if os.path.isfile('config.json'):
 else:
     config = {}
 
-HOST = config.get('HOST', '127.0.0.1')
-PORT = int(config.get('PORT', 5000))
+HOST = config.get('HOST', '0.0.0.0')
+PORT = int(config.get('PORT', 8080))
 REQUIRE_PASSWORD = config.get('REQUIRE_PASSWORD', False)
 PROD = config.get('PROD', False)
 MAX_CONTENT_LENGTH = config.get('MAX_CONTENT_LENGTH', 10 * 1024 * 1024 * 1024)
