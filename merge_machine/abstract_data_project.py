@@ -37,11 +37,13 @@ import os
 import time
 
 from merge_machine import es_insert
-from merge_machine.es_config import DEFAULT_ANALYZER, INDEX_SETTINGS_TEMPLATE
+from merge_machine.es_config import ANALYZERS
+from merge_machine.helpers import _gen_index_settings_from_analyzers
 import numpy as np
 import pandas as pd
 
 from abstract_project import AbstractProject, NOT_IMPLEMENTED_MESSAGE
+from LINKER_CONFIG import DEFAULT_ANALYZER, DEFAULT_CUSTOM_ANALYZERS
 from es_connection import es, ic
 
 MINI_PREFIX = 'MINI__'
@@ -815,7 +817,8 @@ class ESAbstractDataProject(AbstractDataProject):
             logging.info('Creating new index')
             log = self._init_active_log('INIT', 'transform') # TODO: is this right ?
                     
-            index_settings = es_insert.gen_index_settings(DEFAULT_ANALYZER, columns_to_index, INDEX_SETTINGS_TEMPLATE)
+            index_settings_template = _gen_index_settings_from_analyzers([ANALYZERS[x] for x in DEFAULT_CUSTOM_ANALYZERS])
+            index_settings = es_insert.gen_index_settings(DEFAULT_ANALYZER, columns_to_index, index_settings_template)
             
             logging.warning('Creating index')
             logging.warning(index_settings)

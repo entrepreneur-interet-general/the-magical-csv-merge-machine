@@ -1,6 +1,6 @@
 {
 "PROTOCOL": "http://",
-"HOST": "51.15.221.77:5000",
+"HOST": "51.15.221.77:8080",
 "PRINT": true,
 "PRINT_CHAR_LIMIT":10000
 }

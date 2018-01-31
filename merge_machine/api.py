@@ -503,6 +503,9 @@ def download(project_type, project_id):
     file_type = module_params.get('file_type', 'csv')
     zip_ = module_params.get('zip', False)
     
+    print('data_params', data_params)
+    print('module_params', module_params)
+    
     if file_type != 'csv':
         raise NotImplementedError('file_type can only be csv')
         
