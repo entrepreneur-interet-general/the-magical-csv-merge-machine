@@ -5,27 +5,9 @@ Created on Mon Apr 24 19:18:44 2017
 
 @author: leo
 
-AbstractDataProject
-
-METHODS:
-    
-    - _init_active_log(self, module_name, module_type)
-    - _end_active_log(self, log, error=False)
-    - _check_mem_data(self)
-    - load_data(self, module_name, file_name, nrows=None, columns=None)
-    - get_header(self, module_name, file_name)
-    - get_sample(self, sampler_module_name, params, sample_params)
-    - _write_log_buffer(self, written)
-    - _write_run_info_buffer(self)
-    - write_data(self)
-    - clear_memory(self)
-    - infer(self, module_name, params)
-
-
 https://www.elastic.co/guide/en/elasticsearch/reference/current/vm-max-map-count.html
 https://www.elastic.co/guide/en/elasticsearch/guide/current/heap-sizing.html
 # ES can fail, try increasing heap size in jvm config file: /etc/elasticsearch/jvm.options
-
 """
 from collections import defaultdict
 import copy
@@ -37,13 +19,12 @@ import os
 import time
 
 from merge_machine import es_insert
-from merge_machine.es_config import ANALYZERS
-from merge_machine.helpers import _gen_index_settings_from_analyzers
+from merge_machine.analyzers import ANALYZERS
 import numpy as np
 import pandas as pd
 
 from abstract_project import AbstractProject, NOT_IMPLEMENTED_MESSAGE
-from LINKER_CONFIG import DEFAULT_ANALYZER, DEFAULT_CUSTOM_ANALYZERS
+from LINKER_CONFIG import DEFAULT_ANALYZER
 from es_connection import es, ic
 
 MINI_PREFIX = 'MINI__'
@@ -817,13 +798,12 @@ class ESAbstractDataProject(AbstractDataProject):
             logging.info('Creating new index')
             log = self._init_active_log('INIT', 'transform') # TODO: is this right ?
                     
-            index_settings_template = _gen_index_settings_from_analyzers([ANALYZERS[x] for x in DEFAULT_CUSTOM_ANALYZERS])
-            index_settings = es_insert.gen_index_settings(DEFAULT_ANALYZER, columns_to_index, index_settings_template)
-            
             logging.warning('Creating index')
-            logging.warning(index_settings)
-
-            self.ic.create(self.index_name, body=json.dumps(index_settings))    
+            es_insert.create_index(self.es, self.index_name, columns_to_index,
+                                   default_analyzer=DEFAULT_ANALYZER, 
+                                   analyzer_definitions=ANALYZERS, force=force)
+            
+            
             logging.warning('Inserting in index')
             es_insert.index(es, ref_gen, self.index_name, testing, action='index')
         
