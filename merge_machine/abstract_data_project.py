@@ -707,23 +707,56 @@ class ESAbstractDataProject(AbstractDataProject):
         res = es.msearch(bulk)
         return res
     
-    @staticmethod
-    def _ES_res_to_pandas(res, columns):
-        """Return the result of an elasticsearch query as a pandas DataFrame."""
+    def _ES_res_to_pandas(self, res, columns, thresh=None):
+        """Return the result of an elasticsearch query as a pandas DataFrame.
+        
+        Parameters
+        ----------
+        res: list
+            Result of a bulk Elasticsearch query.
+        columns: list of str
+            Columns to load
+        thresh: None or float
+             If thresh is not None, filter out all data from the referential if
+             the __CONFIDENCE is not above the threshold
+        
+        """
         
         sources = [x['hits']['hits'][0]['_source'] for x in res['responses']]
         if columns is not None:
-            sources = [{key: val for key, val in x.items() if key in columns} for x in sources]
+            if isinstance(columns, list):
+                sources = [{key: val for key, val in x.items() if key in columns} for x in sources]
+            elif callable(columns):
+                sources = [{key: val for key, val in x.items() if columns(key)} for x in sources]
+                assert sources
+                columns = list(sources[0].keys())
+            else:
+                raise TypeError('Variable "columns" should be list or callable or None.')
+                
+                
+        dtype = {col: self._choose_dtype(col) for col in columns}
+        
         ids = [x['hits']['hits'][0]['_id'] for x in res['responses']]
-        return pd.DataFrame(sources, index=ids)[columns]
+
+        tab = pd.DataFrame(sources, index=ids)[columns]
+        # Workaround for pandas bug: https://stackoverflow.com/a/38750433/7856919
+        for k, v in dtype.items():
+            tab[k] = tab[k].astype(v)
+        
+        if thresh is not None:
+            # Select rows that are not above the threshold 
+            sel = ~(tab['__CONFIDENCE'] >= thresh)
+            columns_to_remove = [x for x in tab.columns if '__' in x]
+            tab.loc[sel, columns_to_remove] = pd.np.nan
+        return tab
         
         
-    def _from_ES_gen(self, num_rows, columns, chunksize):
+    def _from_ES_gen(self, num_rows, columns, chunksize, thresh=None):
         for from_ in range(num_rows)[::chunksize]:
             res = self.fetch_by_id(size=min(chunksize, num_rows-from_), from_=from_)
-            yield self._ES_res_to_pandas(res, columns)    
+            yield self._ES_res_to_pandas(res, columns, thresh)    
 
-    def from_ES(self, columns=None, chunksize=None):
+    def from_ES(self, columns=None, chunksize=None, thresh=None):
         """Load or generate pandas DataFrame from the ES associated to the 
         project.
         
@@ -733,21 +766,23 @@ class ESAbstractDataProject(AbstractDataProject):
             The columns to load
         chunksize:
             Same as pandas `chunksize` argument in `read_csv`
-        
+        thresh: None or float
+             If thresh is not None, filter out all data from the referential if
+             the __CONFIDENCE is not above the threshold        
         """
         num_rows = ic.stats(self.index_name)['_all']['total']['docs']['count']
     
         if chunksize is None:
             res = self.fetch_by_id(size=num_rows, from_=0)
-            return self._ES_res_to_pandas(res, columns)
+            return self._ES_res_to_pandas(res, columns, thresh)
         
         else:
             # Return a generator. Code has to be separate to allow returning pandas.DataFrame
-            return self._from_ES_gen(num_rows, columns, chunksize)
+            return self._from_ES_gen(num_rows, columns, chunksize, thresh)
 
-    def ES_to_csv(self, module_name, file_name, columns=None):
+    def ES_to_csv(self, module_name, file_name, columns=None, thresh=None):
         num_rows = ic.stats(self.index_name)['_all']['total']['docs']['count']
-        self.mem_data = self.from_ES(columns, chunksize=self.CHUNKSIZE)
+        self.mem_data = self.from_ES(columns, chunksize=self.CHUNKSIZE, thresh=thresh)
         self.mem_data_info = {'file_name': file_name,
                               'module_name': module_name,
                               'nrows': num_rows, 
@@ -790,7 +825,7 @@ class ESAbstractDataProject(AbstractDataProject):
             mapping = ic.get_mapping(self.project_id)[self.project_id]['mappings']['structure']['properties']
             for col, analyzers in columns_to_index.items():
                 if any(mapping.get(col, {}).get(a, None) is None for a in analyzers):
-                    print('Mapping is {0}\nCol: {1}\nAnalyzers:{2}')
+                    print('Mapping is: {0}\nCol: {1}\nAnalyzers:{2}'.format(mapping, col, analyzers))
                     self.ic.delete(self.index_name)
                     break
         

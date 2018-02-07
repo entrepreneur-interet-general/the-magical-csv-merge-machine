@@ -22,10 +22,6 @@ from CONFIG import NORMALIZE_DATA_PATH
 from MODULES import NORMALIZE_MODULES, NORMALIZE_MODULE_ORDER, NORMALIZE_MODULE_ORDER_log # TODO: think about these...
 
 
-
-
-
-
 class Normalizer(ESAbstractDataProject):
     """
     Abstract class to deal with data, data transformation, and metadata.
@@ -149,10 +145,7 @@ class Normalizer(ESAbstractDataProject):
                             for col in column_names]
 
     def _clean_header(self, tab_part):
-        try:
-            tab_part.columns = self._clean_column_names(tab_part.columns)
-        except:
-            import pdb; pdb.set_trace()
+        tab_part.columns = self._clean_column_names(tab_part.columns)
         return tab_part
 
     @staticmethod
@@ -200,7 +193,6 @@ class Normalizer(ESAbstractDataProject):
                 break
        
         else:
-            import pdb; pdb.set_trace()
             raise Exception('Separator and/or Encoding not detected. Try uploading' \
                           + ' a csv with "," as separator with utf-8 encoding')                
 
