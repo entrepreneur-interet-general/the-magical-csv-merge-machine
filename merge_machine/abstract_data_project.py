@@ -186,8 +186,13 @@ class AbstractDataProject(AbstractProject):
                }
         return log
     
-    def set_skip(self, module_name, file_name, skip_value):
-        '''Sets the "skipped value to True in log'''
+    def set_log_property(self, module_name, file_name, property_, value):
+        '''Set a property in the log to the property value indicated (use this)
+        for skip and completed in particualar'''
+        
+        if property_ not in ['skipped', 'completed']:
+            raise ValueError('Only "skipped" and "completed" can be set')
+        assert isinstance(value, bool)
         
         # Set skipped for MINI version / full version of file
         file_names = [file_name]
@@ -199,7 +204,7 @@ class AbstractDataProject(AbstractProject):
     
         # Set values
         for file_name in file_names:
-            self.metadata['log'][file_name][module_name]['skipped'] = skip_value
+            self.metadata['log'][file_name][module_name][property_] = value
         self._write_metadata()
         
     def _check_mem_data(self):

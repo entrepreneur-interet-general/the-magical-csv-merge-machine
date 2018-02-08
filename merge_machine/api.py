@@ -436,10 +436,38 @@ def set_skipped(project_type, project_id):
     data_params, module_params = _parse_request()
     
     proj = _init_project(project_type, project_id)
-    proj.set_skip(data_params['module_name'], data_params['file_name'], 
-                  module_params.get('skip_value', True))
+    proj.set_log_property(data_params['module_name'], data_params['file_name'], 
+                          'skipped', module_params.get('skip_value', True))
     return jsonify(project_id=project_id, 
                    error=False)
+
+@app.route('/api/set_log_property/<project_type>/<project_id>', methods=['POST'])
+@cross_origin()
+@_protect_project
+def set_log_property(project_type, project_id):
+    """
+    Set a log property (skipped or completed) to a given bool value.
+    
+    GET:
+        - project_type: "link" or "normalize"
+        - project_type
+        
+    POST:
+        data_params:
+            - module_name
+            - file_name
+        module_params:
+            - property: "skipped" or "completed"
+            - value: bool (defaults to True) 
+    """
+    data_params, module_params = _parse_request()
+    
+    proj = _init_project(project_type, project_id)
+    proj.set_log_property(data_params['module_name'], data_params['file_name'], 
+                          data_params['property'], module_params.get('value', True))
+    return jsonify(project_id=project_id, 
+                   error=False)    
+
 
 @app.route('/api/last_written/<project_type>/<project_id>', methods=['GET', 'POST'])
 @cross_origin()
@@ -1135,6 +1163,8 @@ def add_search(project_id):
             return cols
         elif isinstance(cols, list):
             return tuple(cols)
+        
+    print('Received custom search:', module_params['search'])
     pms = {temp(search['columns']): search['values_to_search'] for search in module_params['search']}
     labeller.add_custom_search(pms, module_params.get('max_num_results', 15))
     
