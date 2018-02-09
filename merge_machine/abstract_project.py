@@ -70,10 +70,10 @@ class AbstractProject():
             
         else:
             self.project_id = project_id
-            try:
-                self.metadata = self.read_metadata()
-            except:
-                raise Exception('Project with id {0} could not be loaded'.format(project_id))
+            #try:
+            self.metadata = self.read_metadata()
+            #            except:
+            #                raise Exception('Project with id {0} could not be loaded'.format(project_id))
         
 
     def read_full_config(self, exclude_modules=['INIT'], exclude_files=['run_info.json']):

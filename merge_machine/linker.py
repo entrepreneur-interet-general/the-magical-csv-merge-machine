@@ -279,7 +279,7 @@ class Linker(ESAbstractDataProject):
 
     def es_linker(self, module_params):
         module_params['index_name'] = ESNormalizer(self.ref.project_id).index_name
-        
+
         s = self.metadata['files']['source']
         
         self.source.load_data(s['module_name'], s['file_name'])
@@ -292,6 +292,7 @@ class Linker(ESAbstractDataProject):
 
         log, run_info = self.transform('es_linker', module_params)        
         
+        print('DEF:', self.mem_data.columns)
         return log, run_info
 
     #==========================================================================

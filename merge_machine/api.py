@@ -284,7 +284,6 @@ def _real_pwd(string):
     md5 = hashlib.md5()
     md5.update(string.encode('utf-8'))
     md5.update(app.config['SECRET_KEY'].encode('utf-8'))
-    md5.update('someotherstring'.encode('utf-8'))
     return md5.hexdigest()
 
 def _protect_project(func):
