@@ -59,7 +59,6 @@ class AbstractProject():
                 raise Exception('Project already exists. Choose a new path or \
                                 delete the existing: {}'.format(path_to_proj))
             else:
-                print(path_to_proj)
                 os.makedirs(path_to_proj)
             
             # Create metadata
@@ -190,7 +189,6 @@ class AbstractProject():
         file_path = self.path_to(module_name=module_name, 
                                  file_name=file_name)
         if os.path.isfile(file_path):
-            
             for _ in range(NUM_RETRY):
                 try:
                     with open(file_path, 'r') as f:

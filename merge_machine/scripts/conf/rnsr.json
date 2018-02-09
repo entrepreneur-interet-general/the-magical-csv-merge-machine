@@ -9,7 +9,7 @@
             
             "columns_to_index": {
 				"Numéro national de structure": [],
-				 "Libellé": ["french", "n_grams", "integers", "city", "country"],
+				 "Libellé": ["french", "n_grams", "integers", "city"],
 				 "Sigle": ["n_grams", "standard", "french"],
 				 "État": [],
 				 "Année de création": ["integers"],
