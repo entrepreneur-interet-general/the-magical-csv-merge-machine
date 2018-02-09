@@ -885,7 +885,10 @@ def add_column_matches(project_id):
         - column_matches: [list object] column matches (see doc in original function)
     """
     column_matches = request.json['column_matches']
-    proj = ESLinker(project_id=project_id)
+    if len(column_matches) > 5:
+        return jsonify(error=True, message="The API does not allow to select more than 5 column pairs to match"), 500
+    
+    proj = ESLinker(project_id=project_id)    
     proj.add_col_matches(column_matches)
     return jsonify(error=False)
     
