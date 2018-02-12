@@ -463,7 +463,7 @@ def set_log_property(project_type, project_id):
     
     proj = _init_project(project_type, project_id)
     proj.set_log_property(data_params['module_name'], data_params['file_name'], 
-                          data_params['property'], module_params.get('value', True))
+                          module_params['property'], module_params.get('value', True))
     return jsonify(project_id=project_id, 
                    error=False)    
 
