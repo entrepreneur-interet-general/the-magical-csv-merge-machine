@@ -390,9 +390,6 @@ class Linker(ESAbstractDataProject):
         
         return columns_to_index
 
-
-
-
     def _gen_es_labeller(self, columns_to_index=None, certain_column_matches=None):
         '''
         Return a es_labeller object
@@ -427,6 +424,10 @@ class Linker(ESAbstractDataProject):
         # TODO: Add pre-load for 3 first queries
     
         return labeller
+
+    def _has_labeller(self):
+        file_path = self.path_to('es_linker', 'labeller.json')
+        return os.path.isfile(file_path)
     
     def labeller_to_json(self, labeller):
         '''Write a Labeller object as a json in the appropriate directory. This

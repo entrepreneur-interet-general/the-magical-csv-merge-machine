@@ -282,7 +282,7 @@ def _create_es_index(project_id, data_params, module_params):
     return
 
 
-def _create_es_labeller(project_id, *argv):
+def _create_es_labeller(project_id, _, module_params):
     '''
     Create an "es" labeller and pickle to project
     
@@ -291,11 +291,18 @@ def _create_es_labeller(project_id, *argv):
     
     ARGUMENTS (POST):
         - data_params: none
-        - module_params: none
+        - module_params: 
+            force: (false) Set to true if 
     '''
     proj = ESLinker(project_id=project_id)
-    labeller = proj._gen_es_labeller()
-    proj.labeller_to_json(labeller)
+    
+    if module_params is None:
+        module_params = {}
+    
+    print('proj has labeller:', proj._has_labeller())
+    if not proj._has_labeller() or module_params.get('force', False):
+        labeller = proj._gen_es_labeller()
+        proj.labeller_to_json(labeller)
     return
 
 def _infer_restriction(project_id, _, module_params):
