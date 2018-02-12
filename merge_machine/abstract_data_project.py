@@ -196,7 +196,7 @@ class AbstractDataProject(AbstractProject):
         
         # Set skipped for MINI version / full version of file
         file_names = [file_name]
-        if self.metadata['has_mini']:
+        if 'has_mini' in self.metadata and self.metadata['has_mini']:
             if self._is_mini(file_name):
                 file_names.append(self._og_from_mini(file_name))
             else:
