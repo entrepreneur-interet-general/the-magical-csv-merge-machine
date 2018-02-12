@@ -109,11 +109,14 @@ class Linker(ESAbstractDataProject):
         INPUT:
             - column_matches: json file as dict
         '''
+        
+        # Remove labeller if it exists
+        if self._has_labeller():
+            self._remove_labeller()
+        
         # TODO: add checks on file
         if (self.source is None) or (self.ref is None):
             raise RuntimeError('source or referential were not loaded (add_selected_project) and/or (load_project_to_merge)')
-        
-
         
         # Remove duplicates from columns matches
         column_matches = [{'source': list(set(match['source'])), 
@@ -426,8 +429,15 @@ class Linker(ESAbstractDataProject):
         return labeller
 
     def _has_labeller(self):
+        '''Check for json of labeller.'''
         file_path = self.path_to('es_linker', 'labeller.json')
         return os.path.isfile(file_path)
+    
+    def _remove_labeller(self):
+        '''Remove json version of labeller.'''
+        if self._has_labeller():
+            self._remove('es_linker', 'labeller.json')
+            
     
     def labeller_to_json(self, labeller):
         '''Write a Labeller object as a json in the appropriate directory. This

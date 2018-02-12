@@ -104,8 +104,7 @@ class AbstractDataProject(AbstractProject):
         return os.path.isfile(self.path_to(module_name, file_name))
 
     def clean_after(self, module_name, file_name, delete_current_module=True):
-        '''
-        Removes all occurences of file (file_name) and transformations
+        '''Removes all occurences of file (file_name) and transformations
         at and after the given module (module_name) based on the order in 
         self.MODULE_ORDER
         
