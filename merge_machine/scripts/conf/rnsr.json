@@ -8,7 +8,7 @@
             "file_path": "/home/m75380/Documents/eig/the-magical-csv-merge-machine/merge_machine/local_test_data/rnsr/rnsr_flat.csv",
             
             "columns_to_index": {
-				"Numéro national de structure": [],
+				 "Numéro national de structure": [],
 				 "Libellé": ["french", "n_grams", "integers", "city"],
 				 "Sigle": ["n_grams", "standard", "french"],
 				 "État": [],
