@@ -19,7 +19,6 @@ from admin import Admin
 from normalizer import ESNormalizer
 from linker import ESLinker
 
-
 VALID_QUEUES = ['high', 'low']
 
 import CONFIG

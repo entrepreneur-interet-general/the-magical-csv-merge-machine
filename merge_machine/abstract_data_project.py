@@ -814,23 +814,26 @@ class ESAbstractDataProject(AbstractDataProject):
         http.client._MAXHEADERS = 1000
         
         testing = True
-        
+
         ref_gen = pd.read_csv(ref_path, 
                           usecols=columns_to_index.keys(),
                           dtype=str, chunksize=self.es_insert_chunksize)
-
-        if self.has_index() and (force or (not self.valid_index())):
-            self.ic.delete(self.index_name)
         
+        if self.has_index() and (force or (not self.valid_index())):
+            print('[create_index] Deleting index')
+            self.ic.delete(self.index_name)
+    
         # TODO: cheap fix change this
         # This deletes the index if any column/analyzer is not present in index
         # except if the project is public.
+        
         if self.has_index() and (not self.metadata['public']):
             logging.warning('Deleting index because of missing analyzers')
             mapping = ic.get_mapping(self.project_id)[self.project_id]['mappings']['structure']['properties']
             for col, analyzers in columns_to_index.items():
                 if any(mapping.get(col, {}).get(a, None) is None for a in analyzers):
                     print('Mapping is: {0}\nCol: {1}\nAnalyzers:{2}'.format(mapping, col, analyzers))
+                    print('[create_index] Deleting index because of analyzers')
                     self.ic.delete(self.index_name)
                     break
         
@@ -849,8 +852,10 @@ class ESAbstractDataProject(AbstractDataProject):
         
             log = self._end_active_log(log, error=False)
             logging.warning('Finished indexing')
+            time.sleep(5) # TODO: why is this necessary?
         else:
             logging.info('Index already exists')
+        
         logging.info('Finished indexing')
         self.valid_index()
         self._write_log_buffer(written=False)

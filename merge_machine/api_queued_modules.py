@@ -18,6 +18,22 @@ from normalizer import ESNormalizer
 from linker import ESLinker
     
     
+def timeit(method):
+    """"""
+    def timed(*args, **kw):
+        ts = time.time()
+        result = method(*args, **kw)
+        te = time.time()
+        if 'log_time' in kw:
+            name = kw.get('log_name', method.__name__.upper())
+            kw['log_time'][name] = int((te - ts) * 1000)
+        else:
+            logging.info('[timer] %r  %2.2f ms' % (method.__name__, (te - ts) * 1000))
+        return result
+    return timed
+
+
+@timeit
 def _infer_mvs(project_id, data_params, module_params):
     '''
     Runs the infer_mvs module
@@ -43,7 +59,7 @@ def _infer_mvs(project_id, data_params, module_params):
     proj._write_log_buffer(False)
     return result
 
-
+@timeit
 def _replace_mvs(project_id, data_params, module_params):
     '''
     Runs the mvs replacement module
@@ -68,6 +84,7 @@ def _replace_mvs(project_id, data_params, module_params):
     proj.write_data()
     return run_info
 
+@timeit
 def _infer_types(project_id, data_params, module_params):
     '''
     Runs the infer_types module
@@ -93,7 +110,7 @@ def _infer_types(project_id, data_params, module_params):
     proj._write_log_buffer(False)
     return result
 
-
+@timeit
 def _recode_types(project_id, data_params, module_params):
     '''
     Runs the recoding module
@@ -119,6 +136,7 @@ def _recode_types(project_id, data_params, module_params):
 
     return run_info
 
+@timeit
 def _es_linker(project_id, data_params, module_params):
     '''
     Runs the recoding module
@@ -149,7 +167,7 @@ def _es_linker(project_id, data_params, module_params):
 
     return run_info
 
-
+@timeit
 def _concat_with_init(project_id, data_params, *argv):
     '''
     Concatenate transformed columns with original file 
@@ -185,6 +203,7 @@ def _concat_with_init(project_id, data_params, *argv):
     proj.write_data()
     return run_info
 
+@timeit
 def _run_all_transforms(project_id, data_params, *argv):
     '''
     Run all transformations that were already (based on presence of 
@@ -210,7 +229,7 @@ def _run_all_transforms(project_id, data_params, *argv):
     proj.write_data()
     return all_run_infos   
 
-
+@timeit
 def _create_es_index(project_id, data_params, module_params):
     '''
     Create an Elasticsearch index for the selected file
@@ -278,10 +297,9 @@ def _create_es_index(project_id, data_params, module_params):
         
     file_path = proj.path_to(module_name, file_name)
     proj.create_index(file_path, columns_to_index, force)
-    time.sleep(5) # TODO: why is this necessary?
     return
 
-
+@timeit
 def _create_es_labeller(project_id, _, module_params):
     '''
     Create an "es" labeller and pickle to project
@@ -304,6 +322,7 @@ def _create_es_labeller(project_id, _, module_params):
         proj.labeller_to_json(labeller)
     return
 
+@timeit
 def _infer_restriction(project_id, _, module_params):
     '''
     Runs the training data and infers possible restrictions that can be made
@@ -331,6 +350,7 @@ def _infer_restriction(project_id, _, module_params):
     proj._write_log_buffer(False)
     return result
 
+@timeit
 def _perform_restriction(project_id, _, module_params):
     '''
     Creates a restricted version of the file set as reference in the link
@@ -349,8 +369,8 @@ def _perform_restriction(project_id, _, module_params):
     
     return run_info
 
-
 # In test_linker
+@timeit
 def _dedupe_linker(project_id, *argv):
     '''
     Runs deduper module. Contrary to other modules, linker modules, take
@@ -395,6 +415,7 @@ def _dedupe_linker(project_id, *argv):
 
     return {}
 
+@timeit
 def _link_results_analyzer(project_id, data_params, module_params):
     '''
     Runs the link results analyzer module

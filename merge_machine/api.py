@@ -1304,7 +1304,6 @@ def _choose_timeout(job_name):
     DEFAULT_TIMEOUT = 900
     return SCHEDULED_JOBS[job_name].get('timeout', DEFAULT_TIMEOUT)
     
-
 @app.route('/api/schedule/<job_name>/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
 @_protect_project
