@@ -317,7 +317,9 @@ def _create_es_labeller(project_id, _, module_params):
     if module_params is None:
         module_params = {}
     
+    print('ES_labeller module_params:', module_params)
     if not proj._has_labeller() or module_params.get('force', False):
+        print('yes here')
         labeller = proj._gen_es_labeller()
         proj.labeller_to_json(labeller)
     return
