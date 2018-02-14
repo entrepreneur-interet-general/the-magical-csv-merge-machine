@@ -9,11 +9,11 @@ Created on Fri Jan  5 13:12:39 2018
 LANG = "french" # french, english, standard
 
 # Compound analyzers 
-c_a = {0: {'{0}', 'n_grams', 'integers', 'city', 'country'}, # General establishment / address
-       1: {'{0}', 'n_grams', 'city'}, # city
-       2: {'{0}', 'n_grams', 'country'}, # country
-       3: {'{0}', 'n_grams', 'integers'}, # Non geographical text
-       4: {'{0}', 'n_grams'}, # Non geographical, non numerical text
+c_a = {0: {'{0}_estab', 'n_grams', 'integers', 'city', 'country'}, # General establishment / address
+       1: {'{0}_estab', 'n_grams', 'city'}, # city
+       2: {'{0}_estab', 'n_grams', 'country'}, # country
+       3: {'{0}_estab', 'n_grams', 'integers'}, # Non geographical text
+       4: {'{0}_estab', 'n_grams'}, # Non geographical, non numerical text
        5: {'n_grams', 'integers'}, # Code / ID / phone
        6: {}, # Exact match
        }
@@ -76,11 +76,11 @@ analyzers_to_use = \
 DEFAULT_ANALYZERS_TYPE = {key: c_a[val] for key, val in analyzers_to_use.items()}
 
 # Default analyzer (for non-matching columns)
-DEFAULT_ANALYZER = 'case_insensitive_keyword'
+DEFAULT_ANALYZER = 'special_keyword'
 
 # Default analyzers (for columns that should match)
-DEFAULT_CUSTOM_ANALYZERS = {'case_insensitive_keyword', 'integers', 'n_grams', 'city', 'country'}
-DEFAULT_STOCK_ANALYZERS = {'french'}
+DEFAULT_CUSTOM_ANALYZERS = {'special_keyword', 'integers', 'n_grams', 'city', 'country', 'french_estab'}
+DEFAULT_STOCK_ANALYZERS = set([])
 DEFAULT_ANALYZERS = DEFAULT_CUSTOM_ANALYZERS | DEFAULT_STOCK_ANALYZERS
 
 
