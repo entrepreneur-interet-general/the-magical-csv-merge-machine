@@ -7,6 +7,7 @@ Created on Wed Dec  6 19:43:08 2017
 
 Script to add SIRENE to API
 """
+import argparse
 from datetime import datetime
 import json
 import os
@@ -25,7 +26,6 @@ logs_path = 'logs.json'
 # =============================================================================
 # Get arguments from argparse
 # =============================================================================
-import argparse
 parser = argparse.ArgumentParser(description='Upload and index' \
                                  + ' referential to the API service.')
 parser.add_argument('--conf', 
@@ -132,7 +132,6 @@ if os.path.isfile(logs_path):
     logs = json.load(open(logs_path))
 else:
     logs = dict()
-
 
 #==============================================================================
 # Fetch public projects

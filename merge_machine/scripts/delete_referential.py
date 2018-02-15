@@ -13,11 +13,9 @@ import os
 
 from api_helpers import APIConnection
 
-
 # =============================================================================
 # Paths to configuration files
 # =============================================================================
-
 # Default
 display_name = 'test_ref.csv'
 project_id = None
@@ -32,7 +30,7 @@ logs_path = 'logs.json'
 parser = argparse.ArgumentParser(description='Delete a reference from  its' \
                                 + ' project_id or display name')
 parser.add_argument('--name', 
-                    help='Display name of the file to delete',
+                    help='Display name of the file(s) to delete',
                     default=display_name)
 parser.add_argument('--proj-id', 
                     help='Project id of the file to delete (use instead of ' \
