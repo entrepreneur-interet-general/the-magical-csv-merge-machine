@@ -13,10 +13,31 @@ import os
 
 from api_helpers import APIConnection
 
-# Path to configuration
+# Default paths to configuration
 config_path = os.path.join('conf', 'rnsr.json')
 connection_config_path = os.path.join('conf', 'local_connection_parameters.json')
 logs_path = 'logs.json'
+
+# Get arguments from argparse
+import argparse
+parser = argparse.ArgumentParser(description='Upload and index' \
+                                 + ' referential to the API service.')
+parser.add_argument('--conf', 
+                    help='Path to the json configuration file that' \
+                    + ' with information on the file to upload',
+                    default=config_path)
+parser.add_argument('--conn', 
+                    help='Path to the json configuration file that' \
+                    + ' with information on the connection to the API',
+                    default=connection_config_path)
+parser.add_argument('--logs', 
+                    help='Path to the json log file',
+                    default=logs_path)
+args = parser.parse_args()
+
+config_path = args.conf
+connection_config_path = args.conn
+logs_path = args.logs
 
 # =============================================================================
 # Define how to connect to API
