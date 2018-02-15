@@ -7,14 +7,19 @@ Created on Wed Dec  6 19:43:08 2017
 
 Script to add SIRENE to API
 """
-from datetime import datetime
+import argparse
 import json
 import os
 
 from api_helpers import APIConnection
 
-# Project id or display name to delete
-display_name = 'RNSR'
+
+# =============================================================================
+# Paths to configuration files
+# =============================================================================
+
+# Default
+display_name = 'test_ref.csv'
 project_id = None
 
 # Path to configuration
@@ -22,8 +27,36 @@ connection_config_path = os.path.join('conf', 'local_connection_parameters.json'
 logs_path = 'logs.json'
 
 # =============================================================================
+# Get arguments from argparse
+# =============================================================================
+parser = argparse.ArgumentParser(description='Delete a reference from  its' \
+                                + ' project_id or display name')
+parser.add_argument('--name', 
+                    help='Display name of the file to delete',
+                    default=display_name)
+parser.add_argument('--proj-id', 
+                    help='Project id of the file to delete (use instead of ' \
+                        + 'display_name). ',
+                    default=project_id)
+parser.add_argument('--conn', 
+                    help='Path to the json configuration file that' \
+                    + ' with information on the connection to the API',
+                    default=connection_config_path)
+parser.add_argument('--logs', 
+                    help='Path to the json log file',
+                    default=logs_path)
+args = parser.parse_args()
+
+display_name = args.name
+project_id = args.proj_id
+connection_config_path = args.conn
+logs_path = args.logs
+
+# =============================================================================
 # Check that we are selecting either by project_id or by display name
 # =============================================================================
+if project_id is not None:
+    display_name = None
 assert int(display_name is None) + int(project_id is None) == 1
 
 # =============================================================================
@@ -45,15 +78,24 @@ if os.path.isfile(logs_path):
 else:
     logs = dict()
 
-# =============================================================================
-# Delete project with same display_name or project id
-# =============================================================================
-if display_name is not None:
-    project_id = logs[display_name]
-    
-url_to_append = '/api/delete/normalize/{0}'.format(project_id)
+#==============================================================================
+# Fetch public projects
+#==============================================================================
+url_to_append = '/api/public_projects/normalize'
 resp = c.get_resp(url_to_append)
-    
+
+# =============================================================================
+# Delete projects
+# =============================================================================
+if display_name is None:
+    url_to_append = '/api/delete/normalize/{0}'.format(project_id)
+    resp = c.get_resp(url_to_append)
+else:
+    for metadata in filter(lambda x: x['display_name']==display_name, resp):
+        old_project_id = metadata['project_id']
+        url_to_append = '/api/delete/normalize/{0}'.format(old_project_id)
+        resp = c.get_resp(url_to_append)
+        
 # =============================================================================
 # Remove old project from logs if present
 # =============================================================================
@@ -64,6 +106,7 @@ if display_name is None:
         display_name = display_name[0]
 
 if display_name:
-    del logs[display_name]
-    with open(logs_path, 'w') as w:
-        json.dump(logs, w)
+    if display_name in logs:
+        del logs[display_name]
+        with open(logs_path, 'w') as w:
+            json.dump(logs, w)
