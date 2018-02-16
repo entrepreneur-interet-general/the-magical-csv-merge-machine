@@ -13,15 +13,21 @@ import sys
 main_dir_path = os.path.split(os.path.abspath(os.path.dirname(__file__)))[0]
 sys.path.append(main_dir_path)
 os.chdir(main_dir_path)
+print(main_dir_path)
 
-from admin import Admin
+try:
+    from admin import Admin
+except ImportError as e:
+    raise ImportError(e.__str__() + '\ntry running from same directory as file')    
     
 if __name__ == '__main__':
     
     import argparse
     
-    parser = argparse.ArgumentParser(description='Clean up projects based on '
-                                     'time of last use or creation')
+    parser = argparse.ArgumentParser(description='List or delete projects based on '
+                             'time of last use or creation. This script will'
+                             ' also delete loose normalization project and indices.',
+                             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
     parser.add_argument('request', 
                         type=str,
@@ -72,8 +78,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     #args = parser.parse_args('list link -pa all -hfn 24 -w before'.split())
-    
-    
     
     # Actual requests
     admin = Admin()
