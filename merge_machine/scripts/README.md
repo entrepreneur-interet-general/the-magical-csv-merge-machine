@@ -4,7 +4,7 @@ Use this folder to put scripts to manage the API.
 
 - `api_helpers.py` contains the `APIConnection` class that provides tools to help with API interaction.
 
-- `admin.py` (has cli) contains methods to list and delete projects, based on their type (link, normalize), creation or last use date as well as tools to delete unused Elasticsearch indices and link projects for which the associated normalization projects no longer exist.
+- `manage_data.py` (has cli) contains methods to list and delete projects, based on their type (link, normalize), creation or last use date as well as tools to delete unused Elasticsearch indices and link projects for which the associated normalization projects no longer exist.
 
 - `upload_referential.py` (has cli) connect to the API to upload and index files in Elasticsearch, creating public referentials. Configuration files (api connection, and proper way tu upload files) can be found in the `conf` directory. The newly created project ID is referenced by `display_name` in `logs.json`.
 
