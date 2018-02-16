@@ -68,9 +68,13 @@ class AbstractProject():
                                                   other_info=other_info)
             self._write_metadata()
             
-        else:
+        else:           
             self.project_id = project_id
-            #try:
+            path_to_proj = self.path_to()
+            if not os.path.isdir(path_to_proj):
+                raise RuntimeError('Project with ID {} does not exist.'.format(project_id))
+            
+            
             self.metadata = self.read_metadata()
             #            except:
             #                raise Exception('Project with id {0} could not be loaded'.format(project_id))
