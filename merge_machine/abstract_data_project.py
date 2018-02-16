@@ -744,15 +744,24 @@ class ESAbstractDataProject(AbstractDataProject):
         ids = [x['hits']['hits'][0]['_id'] for x in res['responses']]
 
         tab = pd.DataFrame(sources, index=ids)[columns]
+        
         # Workaround for pandas bug: https://stackoverflow.com/a/38750433/7856919
         for k, v in dtype.items():
-            tab[k] = tab[k].astype(v)
+            if v == bool:
+                tab[k] = tab[k].astype(str) == 'True'
+            else:
+                tab[k] = tab[k].astype(v)
         
         if thresh is not None:
             # Select rows that are not above the threshold 
             sel = ~(tab['__CONFIDENCE'] >= thresh)
             columns_to_remove = [x for x in tab.columns if '__' in x]
             tab.loc[sel, columns_to_remove] = pd.np.nan
+            
+        # Dirty fix for np.nan that transforms dtype bool into float.
+        tab['__IS_MATCH'].fillna(False, inplace=True)
+        tab['__IS_MATCH'] = tab['__IS_MATCH'].astype(bool)    
+
         return tab
         
         
@@ -815,9 +824,11 @@ class ESAbstractDataProject(AbstractDataProject):
         
         testing = True
 
+        dtype = {col: self._choose_dtype(col) for col in columns_to_index.keys()}
+
         ref_gen = pd.read_csv(ref_path, 
                           usecols=columns_to_index.keys(),
-                          dtype=str, chunksize=self.es_insert_chunksize)
+                          dtype=dtype, chunksize=self.es_insert_chunksize)
         
         if self.has_index() and (force or (not self.valid_index())):
             print('[create_index] Deleting index')
