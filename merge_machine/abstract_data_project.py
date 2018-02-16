@@ -540,9 +540,10 @@ class AbstractDataProject(AbstractProject):
                 try:
                     # Enumerate to know whether or not to write header (i==0)
                     for i, part_tab in enumerate(self.mem_data):
-                        print('GHI:', part_tab.columns)
+                        if i == 0:
+                            columns = part_tab.columns
                         logging.debug('At part {0}'.format(i))
-                        part_tab.to_csv(w, encoding='utf-8', 
+                        part_tab[columns].to_csv(w, encoding='utf-8', 
                                              index=False,  
                                              header=i==0)
                                              #quoting=csv.QUOTE_NONNUMERIC)
