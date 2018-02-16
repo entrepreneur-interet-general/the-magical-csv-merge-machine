@@ -738,7 +738,6 @@ class ESAbstractDataProject(AbstractDataProject):
             else:
                 raise TypeError('Variable "columns" should be list or callable or None.')
                 
-                
         dtype = {col: self._choose_dtype(col) for col in columns}
         
         ids = [x['hits']['hits'][0]['_id'] for x in res['responses']]
