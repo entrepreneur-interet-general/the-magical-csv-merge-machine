@@ -8,28 +8,12 @@ Created on Fri Mar  3 10:37:58 2017
 import argparse
 import json
 import os
-#import sys
 
-# Change directory to main folder to be able to access methods
-#main_dir_path = os.path.split(os.path.abspath(os.path.dirname(__file__)))[0]
-#sys.path.append(main_dir_path)
-#os.chdir(main_dir_path)
-#print(main_dir_path)
-#
-#try:
-#    from admin import Admin
-#except ImportError as e:
-#    raise ImportError(e.__str__() + '\ntry running from same directory as file')    
-    
 from api_helpers import APIConnection
 
 # =============================================================================
 # Paths to configuration files
 # =============================================================================
-# Default
-display_name = 'test_ref.csv'
-project_id = None
-
 # Path to configuration
 connection_config_path = os.path.join('conf', 'local_connection_parameters.json')
 logs_path = 'logs.json'
