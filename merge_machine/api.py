@@ -1444,11 +1444,102 @@ def list_public_project_ids(project_type):
 @cross_origin()
 def list_public_projects(project_type):
     '''
-    
     '''
     admin = Admin()
     list_of_projects = admin.list_projects(project_type, project_access='public')
     return jsonify(list_of_projects)
+
+@app.route('/api/admin/list_projects/<project_type>', methods=['POST'])
+@_protect_project
+@cross_origin()
+def list_projects_by_time(project_type):
+    '''List projects with various filters.
+    
+    GET:
+        - project_type
+        
+    POST:
+        - module_params:
+            project_access: str (either "all", "public", or "private")
+                Whether to list all projects or only those that are public or 
+                non-public (private)
+            action: str (either "created" or "last_used")
+                When using temporal filters, whether to use as variable the 
+                creation date or the date of last use.
+            when: str (either "before" or "after")
+                Whether to select the elements before or after the cutoff date
+                (both are inclusive, but proba of equality is very slim).
+            hours_from_now: int
+                How many hours before current time are we looking at.
+    '''
+    _, module_params = _parse_request()
+    
+    admin = Admin()
+    res = admin.list_projects_by_time(project_type,
+                             project_access=module_params['project_access'],
+                             action=module_params['action'], 
+                             when=module_params['when'], 
+                             hours_from_now=module_params['hours_from_now'])
+    return jsonify(*res)
+     
+@app.route('/api/admin/remove_projects/<project_type>', methods=['POST'])
+@_protect_project
+@cross_origin()   
+def remove_projects(project_type):
+    '''Remove multiple projects based on various filters.
+    
+    GET:
+        - project_type
+        
+    POST:
+        - module_params:
+            project_access: str (either "all", "public", or "private")
+                Whether to list all projects or only those that are public or 
+                non-public (private)
+            action: str (either "created" or "last_used")
+                When using temporal filters, whether to use as variable the 
+                creation date or the date of last use.
+            when: str (either "before" or "after")
+                Whether to select the elements before or after the cutoff date
+                (both are inclusive, but proba of equality is very slim).
+            hours_from_now: int
+                How many hours before current time are we looking at.
+    '''
+    _, module_params = _parse_request()
+    
+    admin = Admin()
+    res = admin.remove_project_by_time(project_type,
+                             project_access=module_params['project_access'],
+                             action=module_params['action'], 
+                             when=module_params['when'], 
+                             hours_from_now=module_params['hours_from_now'])
+    return jsonify(*res)
+    
+@app.route('/api/admin/delete_unused_indices', methods=['GET'])
+@_protect_project
+@cross_origin()   
+def delete_unused_indices():
+    '''Delete Elasticsearch indices which are no longer linked to a 
+    normalization or link project.
+    
+    GET:
+        - project_type
+    '''
+    admin = Admin()
+    res = admin.delete_unused_indices()
+    return jsonify(error=False, indices_deleted=res)
+
+@app.route('/api/admin/delete_loose_links', methods=['GET'])
+@_protect_project
+@cross_origin()           
+def delete_loose_links():
+    '''Delete link projects for which one of the normalization projects no 
+    longer exists.   
+    '''
+    admin = Admin()
+    res = admin.delete_loose_links()
+    return jsonify(error=False, projects_deleted=res)
+
 
 if __name__ == '__main__':
     

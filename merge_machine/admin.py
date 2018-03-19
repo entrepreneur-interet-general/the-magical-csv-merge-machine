@@ -114,6 +114,9 @@ class Admin():
         Parameters
         ----------
         project_type: str (either "normalize" or "link")
+        project_access: str (either "all", "public", or "private")
+            Whether to list all projects or only those that are public or 
+            non-public (private)
         action: str (either "created" or "last_used")
             When using temporal filters, whether to use as variable the creation
             date or the date of last use.
@@ -165,12 +168,15 @@ class Admin():
         '''
         Delete link projects for which a normalization project is non existant or not defined
         '''
+        res = []
         for proj_metadata in self.list_projects('link'):
             if (proj_metadata['files']['source'] is None) \
                 or (proj_metadata['files']['ref'] is None) \
                 or ((proj_metadata['files']['source']['project_id'] not in self.normalize_project_ids)) \
                 or ((proj_metadata['files']['ref']['project_id'] not in self.normalize_project_ids)):
                 self.remove_project('link', proj_metadata['project_id'])
+                res.append(proj_metadata['project_id'])
+        return res
 
 # =============================================================================
 # Elasticsearch
@@ -192,11 +198,12 @@ class Admin():
     
     def delete_unused_indices(self, exclude={'123vivalalgerie', '123vivalalgerie2', '123vivalalgerie3', '123vivalalgerie4'}):
         '''
-        Delete ES indices whose name are not present among the normalisation
-        projects names.
+        Delete ES indices whose name are not present among the normalisation or
+        link projects names.
         '''
         indices_to_delete =  self.list_elasticsearch_indices() \
                             - self.list_project_ids('normalize') \
+                            - self.list_project_ids('link') \
                             - exclude
-        self.delete_indices(indices_to_delete)
+        return self.delete_indices(indices_to_delete)
  
