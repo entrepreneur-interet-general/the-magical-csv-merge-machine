@@ -142,7 +142,7 @@ def _es_linker(project_id, data_params, module_params):
     Runs the recoding module
     
     ARGUMENTS (GET):
-        project_id: ID for "normalize" project
+        project_id: ID for "link" project
 
     ARGUMENTS (POST):
         - data_params: 
@@ -157,6 +157,8 @@ def _es_linker(project_id, data_params, module_params):
                 "threshold": minimum value of score for this query_template for a match
                 "must": terms to filter by field (AND: will include ONLY IF ALL are in text)
                 "must_not": terms to exclude by field from search (OR: will exclude if ANY is found)
+                "exact_pairs": (optional)
+                "non_matching_pairs": (optional)
                 }
     '''
     # Problem: what project are we talking about? what ID? 
@@ -260,7 +262,7 @@ def _create_es_index(project_id, data_params, module_params):
     for_linking = module_params.get('for_linking', True)
     
     if (not for_linking) and (columns_to_index is not None):
-        raise ValueError('columns_to_index and for_linking cannot be not None and False')
+        raise ValueError('columns_to_index and for_linking cannot be NOT None and False')
 
     if (data_params is not None) and ('project_type' in data_params):
         project_type = data_params['project_type']
@@ -292,11 +294,10 @@ def _create_es_index(project_id, data_params, module_params):
         if data_params is None:
             module_name, file_name = proj.get_last_written()
             
-        if columns_to_index is None:
-            columns_to_index = {col: {} for col in proj._get_header(module_name, file_name)}
+        columns_to_index = {col: {} for col in proj._get_header(module_name, file_name)}
         
     file_path = proj.path_to(module_name, file_name)
-    proj.create_index(file_path, columns_to_index, force)
+    proj.create_index(file_path, columns_to_index, force, proj.get('public', False))
     return
 
 @timeit

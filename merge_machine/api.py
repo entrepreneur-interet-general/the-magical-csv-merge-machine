@@ -378,7 +378,7 @@ def new_project(project_type):
                    project_id=proj.project_id)
 
 @app.route('/api/delete/<project_type>/<project_id>', methods=['GET'])
-@_protect_project
+#@_protect_project
 def delete_project(project_type, project_id):
     """
     Delete an existing project (including all configuration, data and metadata)
@@ -416,7 +416,7 @@ def metadata(project_type, project_id):
 
 @app.route('/api/set_skip/<project_type>/<project_id>', methods=['POST'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def set_skipped(project_type, project_id):
     """
     Set skip value for selected module
@@ -442,7 +442,7 @@ def set_skipped(project_type, project_id):
 
 @app.route('/api/set_log_property/<project_type>/<project_id>', methods=['POST'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def set_log_property(project_type, project_id):
     """
     Set a log property (skipped or completed) to a given bool value.
@@ -501,7 +501,7 @@ def get_last_written(project_type, project_id):
 
 @app.route('/api/download/<project_type>/<project_id>', methods=['GET', 'POST'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def download(project_type, project_id):
     '''
     Download specific file from project.
@@ -713,7 +713,7 @@ def read_config(project_type, project_id):
 
 @app.route('/api/upload_config/<project_type>/<project_id>/', methods=['POST'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def upload_config(project_type, project_id):
     """
     Writes the content of params
@@ -746,7 +746,7 @@ def upload_config(project_type, project_id):
 #==============================================================================
 
 @app.route('/api/normalize/select_columns/<project_id>', methods=['POST'])
-@_protect_project
+#@_protect_project
 def add_selected_columns(project_id):
     """
     Select columns to modify in normalization project. 
@@ -767,7 +767,7 @@ def add_selected_columns(project_id):
 
 @app.route('/api/normalize/upload/<project_id>', methods=['POST'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def upload(project_id):
     '''
     Uploads files to a normalization project. (NB: cannot upload directly to 
@@ -841,7 +841,7 @@ def upload(project_id):
 
 @app.route('/api/normalize/make_mini/<project_id>', methods=['POST'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def make_mini(project_id):
     '''
     Create sample version of selected file (call just after upload).
@@ -875,7 +875,7 @@ def make_mini(project_id):
 
 @app.route('/api/link/select_file/<project_id>', methods=['POST'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def select_file(project_id):
     '''    
     Choose a file to use as source or referential for merging
@@ -898,7 +898,7 @@ def select_file(project_id):
 
 @app.route('/api/link/add_column_matches/<project_id>/', methods=['POST'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def add_column_matches(project_id):
     """
     Add pairs of columns to compare for linking.
@@ -922,7 +922,7 @@ def add_column_matches(project_id):
 
 @app.route('/api/link/add_column_certain_matches/<project_id>/', methods=['POST'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def add_column_certain_matches(project_id):
     '''
     Specify certain column matches (exact match on a subset of columns equivalent 
@@ -966,7 +966,7 @@ def add_column_certain_matches(project_id):
 
 @app.route('/api/link/label_pair/<project_id>/', methods=['POST'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def label_pair(project_id):
     '''
     Assign a label to a (source_id, ref_id) pair
@@ -1015,7 +1015,7 @@ def current_state(project_id):
 
 @app.route('/api/link/labeller/update/<project_id>/', methods=['POST'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def update_labeller(project_id):
     '''
     Send an user input to the labeller and receive the updated labeller state    
@@ -1048,7 +1048,7 @@ def update_labeller(project_id):
 
 @app.route('/api/link/labeller/update_filters/<project_id>/', methods=['POST'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def update_filters_labeller(project_id):
     '''
     Update filters for a labeller and receive the updated labeller state. 
@@ -1080,7 +1080,7 @@ def update_filters_labeller(project_id):
 
 @app.route('/api/link/labeller/update_targets/<project_id>/', methods=['POST'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def update_targets_labeller(project_id):
     '''
     Update filters for a labeller and receive the updated labeller state. 
@@ -1116,7 +1116,7 @@ def update_targets_labeller(project_id):
 
 @app.route('/api/link/labeller/complete_training/<project_id>/', methods=['GET'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def complete_training(project_id):
     '''
     # TODO: SOON deprecated 
@@ -1139,7 +1139,7 @@ def complete_training(project_id):
 
 @app.route('/api/link/labeller/add_search/<project_id>/', methods=['POST'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def add_search(project_id):
     '''
     # Perform search on specific user-specified terms
@@ -1178,7 +1178,7 @@ def add_search(project_id):
 
 @app.route('/api/link/labeller/clear_search/<project_id>/', methods=['GET'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def clear_search(project_id):
     '''
     Remove user search items from the list of next labeller proposals
@@ -1226,7 +1226,7 @@ def update_results(project_id):
 
 @app.route('/api/es_fetch_by_id/<project_type>/<project_id>', methods=['GET', 'POST'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def es_fetch_by_id(project_type, project_id):
     '''
     Fetch result from the existing ES index project_id
@@ -1306,7 +1306,7 @@ def _choose_timeout(job_name):
 
 @app.route('/api/schedule/<job_name>/<project_id>/', methods=['GET', 'POST'])
 @cross_origin()
-@_protect_project
+#@_protect_project
 def schedule_job(job_name, project_id):    
     '''
     Schedule module runs

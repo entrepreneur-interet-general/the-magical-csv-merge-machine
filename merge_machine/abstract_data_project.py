@@ -805,8 +805,14 @@ class ESAbstractDataProject(AbstractDataProject):
         self.write_data()
 
 
-    def create_index(self, ref_path, columns_to_index, force=False):
+    def create_index(self, ref_path, columns_to_index, force=False, no_delete=False):
         '''Index a csv file in Elasticsearch.
+        
+        Unless force is set to True, this method will check if an index already
+        exists with a mapping that includes that requested by columns_to_index.
+        If not it will delete the existing index and fully re-index
+        
+        # TODO: look into re-indexing a single column
         
         Parameters
         ----------
@@ -815,7 +821,9 @@ class ESAbstractDataProject(AbstractDataProject):
         columns_to_index: dict like {col1: list_of_analyzers1, ...}
             The analyzers to use for each column.
         force: bool
-            Whether or not to re-create an existing index.
+            Force deleting any existing index in all cases.
+        no_delete: bool
+            Prevent deleting if set to True unless force is also set to True.
         '''
         
         # To solve http.client.HTTPException: got more than 100 headers
@@ -825,7 +833,6 @@ class ESAbstractDataProject(AbstractDataProject):
         testing = True
 
         dtype = {col: self._choose_dtype(col) for col in columns_to_index.keys()}
-
         ref_gen = pd.read_csv(ref_path, 
                           usecols=columns_to_index.keys(),
                           dtype=dtype, chunksize=self.es_insert_chunksize)
@@ -833,18 +840,14 @@ class ESAbstractDataProject(AbstractDataProject):
         if self.has_index() and (force or (not self.valid_index())):
             print('[create_index] Deleting index')
             self.ic.delete(self.index_name)
-    
-        # TODO: cheap fix change this
-        # This deletes the index if any column/analyzer is not present in index
-        # except if the project is public.
         
-        if self.has_index() and (not self.metadata['public']):
-            logging.warning('Deleting index because of missing analyzers')
+        if self.has_index() and (not no_delete):
             mapping = ic.get_mapping(self.project_id)[self.project_id]['mappings']['structure']['properties']
             for col, analyzers in columns_to_index.items():
-                if any(mapping.get(col, {}).get(a, None) is None for a in analyzers):
+                if any(mapping.get(col, {}).get(a) is None for a in analyzers):
                     print('Mapping is: {0}\nCol: {1}\nAnalyzers:{2}'.format(mapping, col, analyzers))
                     print('[create_index] Deleting index because of analyzers')
+                    logging.warning('create_index] Deleting index because of missing analyzers')
                     self.ic.delete(self.index_name)
                     break
         

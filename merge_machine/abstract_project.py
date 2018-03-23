@@ -5,18 +5,6 @@ Created on Fri Apr 21 19:48:22 2017
 
 @author: leo
 
-Abstract project
-
-METHODS:
-    - _gen_id()
-    - _path_to(self, data_path, module_name='', file_name='')
-    - upload_config_data(self, config_dict, module_name, file_name)
-    - read_config_data(self, module_name, file_name)    
-    - read_metadata(self)
-    - _write_metadata(self)
-    - remove(self, module_name='', file_name='')
-    - delete_project(self)
-
 # TODO: custom error:
     - Hidden error
     - Return to user

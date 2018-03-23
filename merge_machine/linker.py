@@ -345,23 +345,28 @@ class Linker(ESAbstractDataProject):
 
     def gen_default_columns_to_index(self):
         '''Generate the dict specifying the analyzers to use for each column 
-        while indexing in Elasticsearch.
+        while indexing in Elasticsearch. 
+        
+        This method only takes into account the reference file as to avoid 
+        re-indexing when using the same reference with a different source. This 
+        could change if partial re-indexing is implemented.
             
         Returns
         -------
-        gen_default_columns_to_index: dict associating sets of str (values) to str (keys)
+        columns_to_index: dict associating sets of str (values) to str (keys)
             A dict indicating what Elasticsearch analyzers to use on each column
             type during indexing.
         '''
         INDEX_ALL = False # Whether or not to index all selected columns of the file
         
-        def temp(col):
+        def temp(column_types, col):
             """Return the type specific default analyzer for a column or return 
             all default analyzers if type is not specified or could not be found.
             """
             return DEFAULT_ANALYZERS_TYPE.get(column_types.get(col), DEFAULT_ANALYZERS)
         
         # Try fetching referential column types
+        # TODO: dangerous if config was not confirmed by user...
         column_types = self.ref.read_config_data('recode_types', 'infered_config.json')
 
         # Read column match data
@@ -386,7 +391,7 @@ class Linker(ESAbstractDataProject):
         non_exact_matches = filter(lambda m: not m.get('exact_only', False), column_matches)
         list_of_columns_non_exact = {y for z in [[m['ref']] if isinstance(m['ref'], str) \
                                 else m['ref'] for m in non_exact_matches] for y in z}
-        columns_to_index.update({col: temp(col) for col in list_of_columns_non_exact})
+        columns_to_index.update({col: temp(column_types, col) for col in list_of_columns_non_exact})
         
         print('columns_to_index:')
         print(columns_to_index)
@@ -394,8 +399,7 @@ class Linker(ESAbstractDataProject):
         return columns_to_index
 
     def _gen_es_labeller(self, columns_to_index=None, certain_column_matches=None):
-        '''
-        Return a es_labeller object
+        '''Return a es_labeller object.
         '''
         self._check_select()
         
@@ -419,6 +423,9 @@ class Linker(ESAbstractDataProject):
             columns_to_index = self.gen_default_columns_to_index()
         
         print(columns_to_index)
+        
+        # TODO: Check that reference is indexed
+        # TODO: Restrict columns to index to columns present in reference.
         
         labeller = ESLabeller(es, source, ref_table_name, col_matches, columns_to_index, certain_column_matches)
         
