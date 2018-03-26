@@ -297,7 +297,7 @@ def _create_es_index(project_id, data_params, module_params):
         columns_to_index = {col: {} for col in proj._get_header(module_name, file_name)}
         
     file_path = proj.path_to(module_name, file_name)
-    proj.create_index(file_path, columns_to_index, force, proj.get('public', False))
+    proj.create_index(file_path, columns_to_index, force, proj.metadata.get('public', False))
     return
 
 @timeit
