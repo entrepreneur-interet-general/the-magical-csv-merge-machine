@@ -1232,6 +1232,8 @@ def update_results(project_id):
 #@_protect_project
 def es_fetch_by_id(project_type, project_id):
     '''
+    /!\ DEPRECATED USE es_fetch /!\
+    
     Fetch result from the existing ES index project_id
     https://www.elastic.co/guide/en/elasticsearch/guide/current/pagination.html
     
@@ -1255,10 +1257,54 @@ def es_fetch_by_id(project_type, project_id):
     
     proj = _init_project(project_type=project_type, project_id=project_id)  
     
-    res = proj.fetch_by_id(size, from_)
-    
+    res = proj.fetch_by_id(size, from_)   
+    res = proj.fetch_by_sort('__CONFIDENCE', 'desc', size, from_)
     return jsonify(res)
     
+
+@app.route('/api/es_fetch/<project_type>/<project_id>', methods=['GET', 'POST'])
+@cross_origin()
+#@_protect_project
+def es_fetch(project_type, project_id):
+    '''
+    Fetch result from the existing ES index project_id
+    https://www.elastic.co/guide/en/elasticsearch/guide/current/pagination.html
+    
+    By default it will paginate based on the document ID order
+    
+    GET:
+        - project_type
+        - project_id
+    POST:
+        - data_params: None
+        - module_params:
+            - (size): size of sample
+            - (from): where to start
+            - (field): field to sort on (defaults to "_id", the original file order)
+            - (order): "desc" or "asc"
+    
+    '''
+    
+    _, module_params = _parse_request()
+    
+    if module_params is None:
+        module_params = {}
+    size = module_params.get('size', 10)
+    from_ = module_params.get('from', 0)
+    field = module_params.get('field', '_id')
+    order = module_params.get('order', 'desc')
+
+    # For now only _id and __CONFIDENCE are sortable
+    assert field in ['_id', '__CONFIDENCE']
+    
+    proj = _init_project(project_type=project_type, project_id=project_id)  
+    
+    if field == '_id':
+        res = proj.fetch_by_id(size, from_)
+    else:
+        res = proj.fetch_by_sort(field, order, size, from_)
+    return jsonify(res)
+
 
 #==============================================================================
 # SCHEDULER

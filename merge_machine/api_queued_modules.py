@@ -293,8 +293,12 @@ def _create_es_index(project_id, data_params, module_params):
         proj = ESLinker(project_id)
         if data_params is None:
             module_name, file_name = proj.get_last_written()
-            
-        columns_to_index = {col: {} for col in proj._get_header(module_name, file_name)}
+        
+        # Type non str columns or use the default string analyzer 
+        types_dict = {float: 'float', bool: 'boolean'}
+        columns_to_index = {col: types_dict.get(proj._choose_dtype(col), {}) \
+                            for col in proj._get_header(module_name, file_name)}
+        
         
     file_path = proj.path_to(module_name, file_name)
     proj.create_index(file_path, columns_to_index, force, proj.metadata.get('public', False))

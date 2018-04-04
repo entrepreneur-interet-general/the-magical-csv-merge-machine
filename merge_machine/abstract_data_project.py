@@ -713,6 +713,27 @@ class ESAbstractDataProject(AbstractDataProject):
         res = es.msearch(bulk)
         return res
     
+    def fetch_by_sort(self, field, order='desc', size=5, from_=0):
+        '''For an index table'''
+        
+        # TODO: choose whether to show empty at the end or treat as 0
+        
+        body = {'from': from_,
+                'size': size,
+                'sort': [{
+                        field: {
+                                #"missing": "_last",
+                                "missing": ("_last" if order=='desc' else '_first'),
+                                "order": order
+                            }
+                        }]
+                }
+        res = es.search(index=self.index_name, doc_type='structure', body=body)
+        
+        # Reformating for output to match fetch_by_id
+        res = {'responses': [{'hits': {'hits': [val]}} for val in res['hits']['hits']]}
+        return res
+    
     def _ES_res_to_pandas(self, res, columns, thresh=None):
         """Return the result of an elasticsearch query as a pandas DataFrame.
         
@@ -818,8 +839,8 @@ class ESAbstractDataProject(AbstractDataProject):
         ----------
         ref_path: str
             path to the csv file to index.
-        columns_to_index: dict like {col1: list_of_analyzers1, ...}
-            The analyzers to use for each column.
+        columns_to_index: dict like {col1: list_of_analyzers1, float_col: 'float' ...}
+            The analyzers (or type if not string) to use for each column.
         force: bool
             Force deleting any existing index in all cases.
         no_delete: bool
@@ -841,9 +862,11 @@ class ESAbstractDataProject(AbstractDataProject):
             print('[create_index] Deleting index')
             self.ic.delete(self.index_name)
         
+        columns_to_index_str = {key: val for key, val in columns_to_index.items() \
+                                if not isinstance(val, str)}
         if self.has_index() and (not no_delete):
             mapping = ic.get_mapping(self.project_id)[self.project_id]['mappings']['structure']['properties']
-            for col, analyzers in columns_to_index.items():
+            for col, analyzers in columns_to_index_str.items():
                 if any(mapping.get(col, {}).get(a) is None for a in analyzers):
                     print('Mapping is: {0}\nCol: {1}\nAnalyzers:{2}'.format(mapping, col, analyzers))
                     print('[create_index] Deleting index because of analyzers')
