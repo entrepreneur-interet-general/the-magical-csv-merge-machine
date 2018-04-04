@@ -378,7 +378,7 @@ class Linker(ESAbstractDataProject):
         columns_to_index.update({col: temp(column_types, col) for col in list_of_columns_non_exact})
         
         # Add all columns that were selected
-        for col in self.metadata['column_tracker']['selected']:
+        for col in self.ref.metadata['column_tracker']['selected']:
             columns_to_index.setdefault(col, {})
         
         print('columns_to_index:')
