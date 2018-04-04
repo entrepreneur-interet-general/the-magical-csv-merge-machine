@@ -517,6 +517,7 @@ def download(project_type, project_id):
         module_params:
             - file_type: ['csv' or 'xls']
             - zip: False (returns a zipped version)
+            - thresh: 1 (threshold on __CONFIDENCE)
     '''
     project_id = secure_filename(project_id)
 
@@ -549,8 +550,10 @@ def download(project_type, project_id):
     
     if module_params is None:
         file_type = 'csv'
+        thresh = 1
     else:
         file_type = module_params.get('file_type', 'csv')
+        thresh = module_params.get('thresh', 1)
     
     if file_type not in ['csv', 'xls', 'xlsx']:
         raise ValueError('Download file type should be csv, xls or xlsx')
@@ -563,7 +566,7 @@ def download(project_type, project_id):
         proj._remove(module_name, file_name)
         proj.ES_to_csv(module_name, file_name, 
                        columns=list(filter(lambda x: '__MODIFIED' not in x, columns)),
-                       thresh=1)
+                       thresh=thresh)
         # TODO: fix this: very dirty
         proj.metadata['log'][file_name]['upload_es_train']['was_modified'] = False
         proj._write_metadata()
