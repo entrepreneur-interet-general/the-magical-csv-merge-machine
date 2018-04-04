@@ -517,7 +517,7 @@ def download(project_type, project_id):
         module_params:
             - file_type: ['csv' or 'xls']
             - zip: False (returns a zipped version)
-            - thresh: 1 (threshold on __CONFIDENCE)
+            - thresh: 1 (threshold on __CONFIDENCE for results of linking)
     '''
     project_id = secure_filename(project_id)
 
