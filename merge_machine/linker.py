@@ -178,22 +178,6 @@ class Linker(ESAbstractDataProject):
         if not config:
             config = []
         return config    
-    
-    def add_cols_to_return(self, file_role, columns):
-        '''
-        columns is a list of columns in the referential that we want to 
-        return during download
-        '''
-        # Check that both projects are finished
-        for file_role in ['source', 'ref']:
-            file_name = self.metadata['files'][file_role]['file_name']
-            if not self.__dict__[file_role].metadata['complete'][file_name]:
-                raise Exception('Cannot select columns: complete {0} project \
-                                ({1}) before...'.format(file_role, self.__dict__[file_role].project_id))
-        
-        # Write columns to return to config
-        config_file_name = 'columns_to_return_{0}.json'.format(file_role)
-        self.upload_config_data(columns, 'es_linker', config_file_name)
         
     def read_cols_to_return(self, file_role):
         config_file_name = 'columns_to_return_{0}.json'.format(file_role)
@@ -392,6 +376,10 @@ class Linker(ESAbstractDataProject):
         list_of_columns_non_exact = {y for z in [[m['ref']] if isinstance(m['ref'], str) \
                                 else m['ref'] for m in non_exact_matches] for y in z}
         columns_to_index.update({col: temp(column_types, col) for col in list_of_columns_non_exact})
+        
+        # Add all columns that were selected
+        for col in self.metadata['column_tracker']['selected']:
+            columns_to_index.setdefault(col, {})
         
         print('columns_to_index:')
         print(columns_to_index)
