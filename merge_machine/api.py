@@ -239,6 +239,8 @@ def _init_project(project_type,
     '''
     _check_project_type(project_type)
 
+    project_id = secure_filename(project_id)
+
     if project_type == 'link':
         proj = ESLinker(project_id=project_id, 
                           create_new=create_new, 
@@ -251,7 +253,16 @@ def _init_project(project_type,
                               description=description)
     
     return proj
-            
+
+def _init_project_decorator(func):
+    """Use this to initialize the appropriate project to be dealt with by API."""
+    @functools.wraps(func)
+    def temp(project_type, project_id):
+        proj = _init_project(project_type, project_id)
+        return func(proj)
+    return temp
+        
+        
 #==============================================================================
 # Error handling
 #==============================================================================
@@ -275,6 +286,7 @@ def server_error(error):
 @app.route('/api/err/')
 def err():
     raise Exception('Yolo this an error')
+
 
 # =============================================================================
 # Security
@@ -399,8 +411,9 @@ def delete_project(project_type, project_id):
 
 
 @app.route('/api/metadata/<project_type>/<project_id>', methods=['GET'])
+@_init_project_decorator
 @cross_origin()
-def metadata(project_type, project_id):
+def metadata(proj):
     '''
     Fetch metadata for project ID
     
@@ -408,16 +421,17 @@ def metadata(project_type, project_id):
         - project_type: "link" or "normalize"
         - project_id
     '''
-    proj = _init_project(project_type, project_id=project_id)
+    # proj = _init_project(project_type, project_id=project_id)
     resp = jsonify(error=False,
                    metadata=proj.metadata, 
                    project_id=proj.project_id)
     return resp
 
 @app.route('/api/set_skip/<project_type>/<project_id>', methods=['POST'])
+@_init_project_decorator
 @cross_origin()
 #@_protect_project
-def set_skipped(project_type, project_id):
+def set_skipped(proj):
     """
     Set skip value for selected module
     
@@ -433,17 +447,15 @@ def set_skipped(project_type, project_id):
             - skip_value: (true)
     """
     data_params, module_params = _parse_request()
-    
-    proj = _init_project(project_type, project_id)
     proj.set_log_property(data_params['module_name'], data_params['file_name'], 
                           'skipped', module_params.get('skip_value', True))
-    return jsonify(project_id=project_id, 
-                   error=False)
+    return jsonify(error=False)
 
 @app.route('/api/set_log_property/<project_type>/<project_id>', methods=['POST'])
+@_init_project_decorator
 @cross_origin()
 #@_protect_project
-def set_log_property(project_type, project_id):
+def set_log_property(proj):
     """
     Set a log property (skipped or completed) to a given bool value.
     
@@ -460,17 +472,15 @@ def set_log_property(project_type, project_id):
             - value: bool (defaults to True) 
     """
     data_params, module_params = _parse_request()
-    
-    proj = _init_project(project_type, project_id)
     proj.set_log_property(data_params['module_name'], data_params['file_name'], 
                           module_params['property'], module_params.get('value', True))
-    return jsonify(project_id=project_id, 
-                   error=False)    
+    return jsonify(error=False)    
 
 
 @app.route('/api/last_written/<project_type>/<project_id>', methods=['GET', 'POST'])
+@_init_project_decorator
 @cross_origin()
-def get_last_written(project_type, project_id):
+def get_last_written(proj):
     """
     Get coordinates (module_name, file_name) of the last file written for a 
     given project.
@@ -487,22 +497,20 @@ def get_last_written(project_type, project_id):
                             for file written before the chosen module (with an 
                             order specified by MODULE_ORDER)
     """
-    proj = _init_project(project_type, project_id)
     (module_name, file_name) = proj.get_last_written(request.json.get('module_name'), 
                           request.json.get('file_name'), 
                           request.json.get('before_module'))
-    
-    print(project_type, project_id, module_name, file_name)
-    return jsonify(project_type=project_type, 
-                   project_id=project_id, 
+    return jsonify(project_type=proj.metadata['project_type'], 
+                   project_id=proj.metadata['project_id'], 
                    module_name=module_name, 
                    file_name=file_name)
 
 
 @app.route('/api/download/<project_type>/<project_id>', methods=['GET', 'POST'])
+@_init_project_decorator
 @cross_origin()
 #@_protect_project
-def download(project_type, project_id):
+def download(proj):
     '''
     Download specific file from project.
     
@@ -519,9 +527,7 @@ def download(project_type, project_id):
             - zip: False (returns a zipped version)
             - thresh: 1 (threshold on __CONFIDENCE for results of linking)
     '''
-    project_id = secure_filename(project_id)
 
-    proj = _init_project(project_type, project_id)
     data_params, module_params = _parse_request()
     
     if data_params is None:
@@ -603,8 +609,9 @@ API_SAMPLE_NAMES = ['standard', 'sample_mvs', 'sample_types']
 #API_SAMPLE_NAMES = NORMALIZE_MODULES['sample'].keys() + LINK_MODULES['sample'].keys()
 
 @app.route('/api/sample/<project_type>/<project_id>', methods=['POST'])
+@_init_project_decorator
 @cross_origin()
-def get_sample(project_type, project_id):
+def get_sample(proj):
     '''
     Generate a sample.
     
@@ -628,8 +635,7 @@ def get_sample(project_type, project_id):
                             'num_rows': number of rows to return (default 50) (does not apply for non standard samplers)
                             'randomize': (default True) If false, will return first values
                             }
-    '''
-    proj = _init_project(project_type=project_type, project_id=project_id)    
+    '''   
     data_params, all_params = _parse_request() # TODO: add size limit on params
     
     print(data_params)
@@ -678,10 +684,11 @@ def project_exists(project_type, project_id):
         return jsonify(exists=False)
 
 @app.route('/api/download_config/<project_type>/<project_id>/', methods=['POST'])
+@_init_project_decorator
 @cross_origin()
-def read_config(project_type, project_id):
+def read_config(proj):
     """
-    Reads content of a config file
+    Reads content of a config file.
     
     GET:
         - project_type: "link" or "normalize"
@@ -693,8 +700,7 @@ def read_config(project_type, project_id):
                 "file_name": file to fetch
                 }    
     """
-    # TODO: do not expose ?
-    proj = _init_project(project_type=project_type, project_id=project_id)    
+    # TODO: do not expose ? 
     data_params, _ = _parse_request() # TODO: add size limit on params
     
     file_name = data_params['file_name']
@@ -711,13 +717,14 @@ def read_config(project_type, project_id):
     if result:
         return jsonify(result=result)
     else:
-        return jsonify(result=result), 404
+        return jsonify(result=result, message="Config is empty"), 404
 
 
 @app.route('/api/upload_config/<project_type>/<project_id>/', methods=['POST'])
+@_init_project_decorator
 @cross_origin()
 #@_protect_project
-def upload_config(project_type, project_id):
+def upload_config(proj):
     """
     Writes the content of params
     
@@ -732,8 +739,7 @@ def upload_config(project_type, project_id):
                 }
         - module_params: parameters to write
     """
-    # TODO: do not expose ?
-    proj = _init_project(project_type=project_type, project_id=project_id)    
+    # TODO: do not expose ?  
     data_params, params = _parse_request() # TODO: add size limit on params
     
     file_name = data_params['file_name']
@@ -1228,9 +1234,10 @@ def update_results(project_id):
 # =============================================================================
 
 @app.route('/api/es_fetch_by_id/<project_type>/<project_id>', methods=['GET', 'POST'])
+@_init_project_decorator
 @cross_origin()
 #@_protect_project
-def es_fetch_by_id(project_type, project_id):
+def es_fetch_by_id(proj):
     '''
     /!\ DEPRECATED USE es_fetch /!\
     
@@ -1255,7 +1262,6 @@ def es_fetch_by_id(project_type, project_id):
     size = module_params.get('size', 10)
     from_ = module_params.get('from', 0)
     
-    proj = _init_project(project_type=project_type, project_id=project_id)  
     
     res = proj.fetch_by_id(size, from_)   
     res = proj.fetch_by_sort('__CONFIDENCE', 'desc', size, from_)
@@ -1263,9 +1269,10 @@ def es_fetch_by_id(project_type, project_id):
     
 
 @app.route('/api/es_fetch/<project_type>/<project_id>', methods=['GET', 'POST'])
+@_init_project_decorator
 @cross_origin()
 #@_protect_project
-def es_fetch(project_type, project_id):
+def es_fetch(proj):
     '''
     Fetch result from the existing ES index project_id
     https://www.elastic.co/guide/en/elasticsearch/guide/current/pagination.html
@@ -1296,8 +1303,6 @@ def es_fetch(project_type, project_id):
 
     # For now only _id and __CONFIDENCE are sortable
     assert field in ['_id', '__CONFIDENCE']
-    
-    proj = _init_project(project_type=project_type, project_id=project_id)  
     
     if field == '_id':
         res = proj.fetch_by_id(size, from_)
