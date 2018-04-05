@@ -269,7 +269,7 @@ def _init_project_decorator(func):
             return jsonify(error=True, message=not_found_msg.format(project_type, project_id)), 404
         return func(proj)
     return temp
-        
+
         
 #==============================================================================
 # Error handling
@@ -762,30 +762,33 @@ def upload_config(proj):
 # NORMALIZE API METHODS (see also SCHEDULER)
 #==============================================================================
 
-@app.route('/api/normalize/select_columns/<project_id>', methods=['POST'])
+@app.route('/api/<project_type>/select_columns/<project_id>', methods=['POST'])
+@_init_project_decorator
 #@_protect_project
-def add_selected_columns(project_id):
+def add_selected_columns(proj):
     """
     Select columns to modify in normalization project. 
     
     /!\ If column selection includes new columns 
     
     GET:
+        - project_type: must be "normalize"
         - project_id
 
     POST: 
         - columns: [list of columns]
         
     """
+    assert proj.metadata['project_type'] == 'normalize'
     selected_columns = request.json['columns']
-    proj = ESNormalizer(project_id=project_id)
     proj.add_selected_columns(selected_columns)    
     return jsonify(error=False)
 
-@app.route('/api/normalize/upload/<project_id>', methods=['POST'])
+@app.route('/api/<project_type>/upload/<project_id>', methods=['POST'])
+@_init_project_decorator
 @cross_origin()
 #@_protect_project
-def upload(project_id):
+def upload(proj):
     '''
     Uploads files to a normalization project. (NB: cannot upload directly to 
     a link type project). 
@@ -793,6 +796,7 @@ def upload(project_id):
     Also creates the mini version of the project
     
     GET:
+        - project_type: must be "normalize"
         - project_id: ID of the normalization project
         
     POST:
@@ -805,8 +809,7 @@ def upload(project_id):
             - sample_size
             - randomize
     '''
-    # Load project
-    proj = ESNormalizer(project_id=project_id) 
+    assert proj.metadata['project_type'] == 'normalize'
     _, module_params = _parse_request()   
     if module_params is None:
         module_params = {}
@@ -856,14 +859,16 @@ def upload(project_id):
 #    return jsonify({'filename': filename})
 
 
-@app.route('/api/normalize/make_mini/<project_id>', methods=['POST'])
+@app.route('/api/<project_type>/make_mini/<project_id>', methods=['POST'])
+@_init_project_decorator
 @cross_origin()
 #@_protect_project
-def make_mini(project_id):
+def make_mini(proj):
     '''
     Create sample version of selected file (call just after upload).
     
     GET:
+        - project_type: must be "normalize"
         - project_id
     POST:
         - data_params: 
@@ -876,8 +881,8 @@ def make_mini(project_id):
                             randomize:
                         }
     '''
-    data_params, module_params = _parse_request()   
-    proj = ESNormalizer(project_id=project_id)
+    assert proj.metadata['project_type'] == 'normalize'
+    data_params, module_params = _parse_request()
     
     proj.load_data(data_params['module_name'], data_params['file_name'])
     proj.make_mini(module_params)
@@ -890,22 +895,24 @@ def make_mini(project_id):
 # LINK API METHODS (see also SCHEDULER)
 #==============================================================================
 
-@app.route('/api/link/select_file/<project_id>', methods=['POST'])
+@app.route('/api/<project_type>/select_file/<project_id>', methods=['POST'])
+@_init_project_decorator
 @cross_origin()
 #@_protect_project
-def select_file(project_id):
+def select_file(proj):
     '''    
     Choose a file to use as source or referential for merging
     send {file_role: "source", project_id: "ABCYOUANDME", public: False}
     
     GET:
+        - project_type: must be "link"
         - project_id: ID for the "link" project
         
     POST:
         - file_role: "ref" or "source". Role of the normalized file for linking
         - project_id: ID of the "normalize" project to use for linking
     '''
-    proj = ESLinker(project_id)
+    assert proj.metadata['project_type'] == 'link'
     params = request.json
     proj.add_selected_project(file_role=params['file_role'], 
                            public=params.get('public', False),
@@ -913,34 +920,37 @@ def select_file(project_id):
     return jsonify(error=False)
 
 
-@app.route('/api/link/add_column_matches/<project_id>/', methods=['POST'])
+@app.route('/api/<project_type>/add_column_matches/<project_id>/', methods=['POST'])
+@_init_project_decorator
 @cross_origin()
 #@_protect_project
-def add_column_matches(project_id):
+def add_column_matches(proj):
     """
     Add pairs of columns to compare for linking.
     
     wrapper around ESLinker.add_col_matches
     
     GET: 
+        - project_type: must be "link"
         - project_id: ID for the "link" project
         
     POST:
         - column_matches: [list object] column matches (see doc in original function)
     """
+    assert proj.metadata['project_type'] == 'link'
     column_matches = request.json['column_matches']
     if len(column_matches) > 5:
         return jsonify(error=True, message="The API does not allow to select more than 5 column pairs to match"), 500
-    
-    proj = ESLinker(project_id=project_id)    
+ 
     proj.add_col_matches(column_matches)
     return jsonify(error=False)
     
 
-@app.route('/api/link/add_column_certain_matches/<project_id>/', methods=['POST'])
+@app.route('/api/<project_type>/add_column_certain_matches/<project_id>/', methods=['POST'])
+@_init_project_decorator
 @cross_origin()
 #@_protect_project
-def add_column_certain_matches(project_id):
+def add_column_certain_matches(proj):
     '''
     Specify certain column matches (exact match on a subset of columns equivalent 
     to entity identity). This is used to test performances.
@@ -948,14 +958,15 @@ def add_column_certain_matches(project_id):
     wrapper around ESLinker.add_col_certain_matches
     
     GET:
+        - project_type: must be "link"
         - project_id: ID for "link" project
         
     POST:
         - column_certain_matches: {dict object}: (see doc in original function)
     
     '''
+    assert proj.metadata['project_type'] == 'link'
     column_matches = request.json['column_certain_matches']
-    proj = ESLinker(project_id=project_id)
     proj.add_col_certain_matches(column_matches)
     return jsonify(error=False)
 
@@ -1272,7 +1283,6 @@ def es_fetch_by_id(proj):
     
     
     res = proj.fetch_by_id(size, from_)   
-    res = proj.fetch_by_sort('__CONFIDENCE', 'desc', size, from_)
     return jsonify(res)
     
 
