@@ -256,9 +256,17 @@ def _init_project(project_type,
 
 def _init_project_decorator(func):
     """Use this to initialize the appropriate project to be dealt with by API."""
+    
+    not_found_msg = "Could not load the {} project with Id {} . The most likely" \
+                    " reason is that it does not / no longer exists. It could" \
+                    " also be corrupt"
+    
     @functools.wraps(func)
     def temp(project_type, project_id):
-        proj = _init_project(project_type, project_id)
+        try:
+            proj = _init_project(project_type, project_id)
+        except RuntimeError:
+            return jsonify(error=True, message=not_found_msg.format(project_type, project_id)), 404
         return func(proj)
     return temp
         
