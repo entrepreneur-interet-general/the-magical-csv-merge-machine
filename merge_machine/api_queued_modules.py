@@ -295,7 +295,7 @@ def _create_es_index(project_id, data_params, module_params):
             module_name, file_name = proj.get_last_written()
         
         # Type non str columns or use the default string analyzer 
-        types_dict = {float: 'float', bool: 'boolean'}
+        types_dict = {float: 'float', bool: 'boolean', int: 'integer'}
         columns_to_index = {col: types_dict.get(proj._choose_dtype(col), {}) \
                             for col in proj._get_header(module_name, file_name)}
         

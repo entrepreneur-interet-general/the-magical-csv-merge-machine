@@ -219,6 +219,8 @@ class AbstractDataProject(AbstractProject):
             return bool
         elif col in ['__CONFIDENCE', '__ES_SCORE', '__THRESH']:
             return float
+        elif col in ['__ID_QUERY']:
+            return float # Change when possible
         else:
             return str
     
