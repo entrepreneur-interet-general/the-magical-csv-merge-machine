@@ -120,7 +120,8 @@ class Linker(ESAbstractDataProject):
         
         # Remove duplicates from columns matches
         column_matches = [{'source': list(set(match['source'])), 
-                           'ref': list(set(match['ref']))} \
+                           'ref': list(set(match['ref'])),
+                           'exact_only': match.get('exact_only', False)} \
                             for match in column_matches]
         
         # Remove matches with missing columns on one side or the othre
