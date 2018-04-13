@@ -1,0 +1,170 @@
+{
+"url": "https://www.data.gouv.fr/fr/datasets/repertoire-national-des-associations-rna/",
+
+"columns": {
+
+
+				"id": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+				 "siret": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+				 "nature": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+				 "groupement": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+				 "titre": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+				 "titre_court": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+				 "objet": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+				 "objet_social": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+				 "adrs_numvoie": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+				 "adrs_repetition": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+				 "adrs_typevoie": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+				 "adrs_libvoie": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+                 "adrs_distrib": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+                 "adrs_codeinsee": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+                 "adrs_codepostal": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+                 "adrs_libcommune": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+                 "adrg_declarant": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+                 "adrg_complemid": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+                 "adrg_complemgeo": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+                 "adrg_libvoie": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+                 "adrg_distrib": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+                 "adrg_codepostal": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+                 "adrg_achemine": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+                 "adrg_pays": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+                 "dir_civilite": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+                 "telephone": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	},
+				 "email": {
+	"short": "Le numéro SIREN est le numéro unique d'identification attribué à chaque entreprise par l'INSEE. (NB: SIRET=SIREN+NIC)",
+	"long": "Ce numéro est un simple numéro d'ordre, composé de 8 chiffres plus 1 chiffre de contrôle permettant de vérifier sa validité. Il est attribué une seule fois et n'est supprimé du répertoire qu'au moment de la disparition de la personne juridique (décès ou cessation de toute activité pour un entrepreneur individuel, dissolution pour une personne morale). Il ne sera plus jamais utilisé pour immatriculer une autre unité SIREN. ",
+	"examples": ["552100554"],
+	"prop_non_null":0
+	}
+}
+}
