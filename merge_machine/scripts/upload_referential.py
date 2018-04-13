@@ -22,12 +22,17 @@ from api_helpers import APIConnection
 config_path = os.path.join('conf', 'sirene.json')
 connection_config_path = os.path.join('conf', 'local_connection_parameters.json')
 logs_path = 'logs.json'
+file_path = None
 
 # =============================================================================
 # Get arguments from argparse
 # =============================================================================
 parser = argparse.ArgumentParser(description='Upload and index' \
                                  + ' referential to the API service.')
+parser.add_argument('--file-path', 
+                    help='Path to the file to upload. If not passed, the path' \
+                    + ' will be read from "conf"',
+                    default=file_path)
 parser.add_argument('--conf', 
                     help='Path to the json configuration file that' \
                     + ' with information on the file to upload',
@@ -41,6 +46,7 @@ parser.add_argument('--logs',
                     default=logs_path)
 args = parser.parse_args()
 
+file_path = args.file_path
 config_path = args.conf
 connection_config_path = args.conn
 logs_path = args.logs
@@ -82,7 +88,8 @@ project_id = resp['project_id']
 # Upload new file
 #==============================================================================
 url_to_append = '/api/normalize/upload/{0}'.format(project_id)
-file_path = params['file_path']
+if file_path is None:
+    file_path = params['file_path']
 with open(file_path, 'rb') as f:
     resp = c.post_resp(url_to_append, 
                      body, 
