@@ -869,9 +869,10 @@ class ESAbstractDataProject(AbstractDataProject):
         if self.has_index() and (not no_delete):
             mapping = ic.get_mapping(self.project_id)[self.project_id]['mappings']['structure']['properties']
             for col, analyzers in columns_to_index_str.items():
-                if any(mapping.get(col, {}).get(a) is None for a in analyzers):
+                if any(mapping.get(col, {'fields': None})['fields'].get(a) is None for a in analyzers):
                     print('Mapping is: {0}\nCol: {1}\nAnalyzers:{2}'.format(mapping, col, analyzers))
                     print('[create_index] Deleting index because of analyzers')
+                    print('Missing:\n', [(col, a) for a in analyzers if mapping.get(col, {'fields': None})['fields'].get(a) is None])
                     logging.warning('create_index] Deleting index because of missing analyzers')
                     self.ic.delete(self.index_name)
                     break
