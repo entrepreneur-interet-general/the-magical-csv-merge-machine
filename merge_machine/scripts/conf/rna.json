@@ -5,35 +5,35 @@
                         "public": true
                       },
         
-            "file_path": "/home/m75380/Documents/eig/the-magical-csv-merge-machine/merge_machine/local_test_data/rna/rna_waldec_20180103.csv",
-            
+            "file_path": "/home/leo/Documents/eig/the-magical-csv-merge-machine/merge_machine/local_test_data/rna/rna_import_20180403.csv",
+
             "columns_to_index": {
 				"id": [],
 				 "siret": [],
-				 "nature": ["n_grams", "standard", "french"],
+				 "nature": ["n_grams", "standard", "french_estab"],
 				 "groupement": [],
-				 "titre": ["french", "n_grams", "integers", "city", "country"],
-				 "titre_court": ["french", "n_grams", "integers", "city", "country"],
+				 "titre": ["french_estab", "n_grams", "integers", "city", "country"],
+				 "titre_court": ["french_estab", "n_grams", "integers", "city", "country"],
 				 "objet": [],
 				 "objet_social": ["integers"],
 				 "adrs_numvoie": ["integers"],
 				 "adrs_repetition": ["integers"],
 				 "adrs_typevoie": ["standard", "integers"],
-				 "adrs_libvoie": ["french", "n_grams", "integers", "city"],
+				 "adrs_libvoie": ["french_estab", "n_grams", "integers", "city"],
                  "adrs_distrib": ["standard", "n_grams"],
-                 "adrs_codeinsee": ["french", "n_grams"],
+                 "adrs_codeinsee": ["french_estab", "n_grams"],
                  "adrs_codepostal": ["standard", "n_grams"],
-                 "adrs_libcommune": ["french", "n_grams"],
+                 "adrs_libcommune": ["french_estab", "n_grams"],
                  "adrg_declarant": ["standard", "n_grams"],
-                 "adrg_complemid": ["french", "n_grams"],
+                 "adrg_complemid": ["french_estab", "n_grams"],
                  "adrg_complemgeo": ["standard", "n_grams"],
-                 "adrg_libvoie": ["french", "n_grams"],
+                 "adrg_libvoie": ["french_estab", "n_grams"],
                  "adrg_distrib": ["standard", "n_grams"],
-                 "adrg_codepostal": ["french", "n_grams"],
+                 "adrg_codepostal": ["french_estab", "n_grams"],
                  "adrg_achemine": ["standard", "n_grams"],
-                 "adrg_pays": ["french", "n_grams"],
+                 "adrg_pays": ["french_estab", "n_grams"],
                  "dir_civilite": ["standard", "n_grams"],
-                 "telephone": ["french", "n_grams"],
+                 "telephone": ["french_estab", "n_grams"],
 				 "email": ["integers", "standard"]
                  }
 }

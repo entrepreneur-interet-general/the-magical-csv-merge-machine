@@ -10,9 +10,9 @@
             
             "columns_to_index": {
                                      "ID": ["integers"],
-				     "Name": ["standard", "french", "n_grams", "integers", "city", "country"], 
-				     "City": ["standard", "french", "n_grams", "city"], 
-				     "State": ["standard", "french", "n_grams"],
-				     "Country": ["standard", "french", "n_grams", "country"]
+				     "Name": ["standard", "french_estab", "n_grams", "integers", "city", "country"], 
+				     "City": ["standard", "french_estab", "n_grams", "city"], 
+				     "State": ["standard", "french_estab", "n_grams"],
+				     "Country": ["standard", "french_estab", "n_grams", "country"]
                                 }
 }
