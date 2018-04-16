@@ -1257,8 +1257,7 @@ def update_results(project_id):
 @cross_origin()
 #@_protect_project
 def es_fetch_by_id(proj):
-    '''
-    /!\ DEPRECATED USE es_fetch /!\
+    ''' /!\ DEPRECATED USE es_fetch /!\
     
     Fetch result from the existing ES index project_id
     https://www.elastic.co/guide/en/elasticsearch/guide/current/pagination.html
@@ -1271,7 +1270,6 @@ def es_fetch_by_id(proj):
         - module_params:
             - (size): size of sample
             - (from): where to start
-    
     '''
     
     _, module_params = _parse_request()
@@ -1317,13 +1315,13 @@ def es_fetch(proj):
     size = module_params.get('size', 10)
     from_ = module_params.get('from', 0)
     field = module_params.get('field', '_id')
-    order = module_params.get('order', 'desc')
+    order = module_params.get('order', 'asc')
 
     # For now only _id and __CONFIDENCE are sortable
     assert field in ['_id', '__CONFIDENCE']
     
     if field == '_id':
-        res = proj.fetch_by_id(size, from_)
+        res = proj.fetch_by_id(size, from_, order)
     else:
         res = proj.fetch_by_sort(field, order, size, from_)
     return jsonify(res)

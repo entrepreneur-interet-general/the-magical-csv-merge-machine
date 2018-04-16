@@ -702,10 +702,14 @@ class ESAbstractDataProject(AbstractDataProject):
         super().__init__(*argv, **kwargs)
         self.index_name = self.project_id
     
-    def fetch_by_id(self, size=5, from_=0):
+    def fetch_by_id(self, size=5, from_=0, order='asc'):
         '''For an indexed table'''
         
-        ids = range(from_, from_+size)
+        if order == 'asc':
+            ids = range(from_, from_+size)
+        else:
+            num_rows = ic.stats(self.index_name)['_all']['total']['docs']['count']
+            ids = range(num_rows - 1 - from_, num_rows - 1 - from_ - size, -1)
         
         bulk = ''
         for id_ in ids:
@@ -715,7 +719,7 @@ class ESAbstractDataProject(AbstractDataProject):
         res = es.msearch(bulk)
         return res
     
-    def fetch_by_sort(self, field, order='desc', size=5, from_=0):
+    def fetch_by_sort(self, field, order='asc', size=5, from_=0):
         '''For an index table'''
         
         # TODO: choose whether to show empty at the end or treat as 0
